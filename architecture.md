@@ -718,8 +718,7 @@ repeat while `pendingLevelUps > 0`.
   `uiBlocked()`. Miss either one and the screen either won't close or will leak taps to the map.
 
 #### 6.11.1 Fonts (Batch 12)
-Three files the owner uploaded into `fonts/`: `title.ttf` (the wordmark), `sub.ttf` (the
-tagline), `buttons.ttf` (the title's buttons). Each is registered with `@font-face` under a
+Three files the owner uploaded into `fonts/`: `title.ttf` (the wordmark), `sub.ttf` (the tagline), `buttons.ttf` (the title's buttons). `title.ttf` is *Isometra* and `buttons.ttf` is *Jacquard 12*, both SIL Open Font Licence. Each is registered with `@font-face` under a
 neutral internal name — `UwTitle` / `UwSub` / `UwBtn` — so a font already installed on the
 phone can never shadow it, and with `font-weight:400 900` declared so the browser uses the
 font's **real glyphs** at any weight instead of synthesising a fake bold, which goes muddy

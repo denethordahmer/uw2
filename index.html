@@ -636,7 +636,10 @@ body{
 }
 #titleTagline{ margin:10px 0 0;font-family:"UwSub", system-ui, sans-serif;font-size:14px;color:#7f94a8;text-align:center;letter-spacing:.02em; }
 #titleButtons{ display:flex;flex-direction:column;gap:14px;width:100%;margin-top:7vh; }
-#titleButtons .btn{ width:100%;max-width:none;margin:0;font-family:"UwBtn", system-ui, sans-serif;font-size:15px;letter-spacing:.06em;padding:14px 16px; }
+/* letter-spacing is deliberately 0 here: buttons.ttf is Jacquard 12, a pixel-grid font, and
+   tracking knocks it off the grid, which makes it render soft. For the same reason it looks
+   crispest at a size that is a multiple of its 12px design grid (12px or 24px). */
+#titleButtons .btn{ width:100%;max-width:none;margin:0;font-family:"UwBtn", system-ui, sans-serif;font-size:15px;letter-spacing:0;padding:14px 16px; }
 #titleSettingsPane{
   display:none;flex-direction:column;gap:12px;width:100%;max-width:360px;
   background:#0e141a;border:1px solid #24303c;border-radius:14px;padding:16px;
