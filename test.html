@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>underward — test</title>
+<style>
+  body{background:#0b0f14;color:#d7e3ee;font-family:system-ui,sans-serif;padding:20px;font-size:15px;line-height:1.5;}
+  h1{font-size:22px;margin:0 0 4px;}
+  .sub{color:#7f94a8;font-size:13px;margin-bottom:18px;}
+  .section{margin:18px 0;padding:14px 16px;border:1px solid #2a3440;border-radius:12px;background:#121920;}
+  .section h2{margin:0 0 10px;font-size:16px;color:#7ee0ff;}
+  .pass{color:#7ee08a;font-weight:700;}
+  .fail{color:#ff7a7a;font-weight:700;}
+  .warn{color:#ffd75e;font-weight:700;}
+  code{background:#1a2530;padding:1px 6px;border-radius:5px;font-size:13px;}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin-top:8px;}
+  td,th{border:1px solid #2a3440;padding:6px 9px;text-align:left;vertical-align:top;}
+  th{color:#9fb3c5;font-weight:700;}
+  .dup{color:#ff7a7a;}
+  .missing{color:#ff9a7a;}
+  #results{max-width:780px;margin:0 auto;}
+</style>
+</head>
+<body>
+<div id="results">
+  <h1>underward · test</h1>
+  <div class="sub">Loads every script in current index.html order, checks ownership/duplicates, then runs functional checks: movement/rest regression, null-G safety, floor generation, and content registries. Must be served over http (GitHub Pages), not opened from disk.</div>
+  <div id="console"></div>
+</div>
+
+<div style="display:none" id="fixtures">
+  <canvas id="canvas" width="800" height="600"></canvas>
+  <canvas id="minimap" width="170" height="170"></canvas>
+  <canvas id="charCanvas" width="200" height="260"></canvas>
+
+  <div id="hud">
+    <span id="hudHp"></span><span id="hudAtk"></span><span id="hudTou"></span>
+    <span id="hudAgi"></span><span id="hudLuc"></span><span id="hudFloor"></span>
+    <span id="hudEnergy"></span><span id="hudGold"></span><span id="hudShards"></span>
+    <div id="restDots"></div>
+    <button id="minimapBtn"></button><button id="gearBtn"></button><button id="invBtn"></button>
+  </div>
+
+  <div id="abilityBar"></div>
+  <div id="minimapWrap"></div>
+  <div id="combatVignette"></div>
+
+  <div id="logPanel"><button id="logExpandBtn"></button><div id="combatLog"></div></div>
+  <div id="logWindow"><div id="logWindowHeader"><button id="logWindowClose"></button></div><div id="logWindowContent"></div></div>
+
+  <div id="floorCard"><div id="floorCardInner"><span id="floorCardNum"></span><span id="floorCardName"></span></div></div>
+  <div id="bossIntroOverlay"><div id="bossIntroCard"><span id="bossIntroWarning"></span><span id="bossIntroName"></span><span id="bossIntroTitle"></span><span id="bossIntroFlavour"></span></div></div>
+
+  <div id="stairsPrompt"><div id="stairsCard"><button id="stairsYes"></button><button id="stairsNo"></button></div></div>
+
+  <div id="itemCardOverlay"><div id="itemCard">
+    <div id="icHeader"><div><div id="icName"></div><div id="icTier"></div></div><button id="icCloseBtn"></button></div>
+    <div id="icFlavour"></div><div id="icStats"></div>
+    <div id="icButtons"><button id="icPrimaryBtn"></button><button id="icSecondaryBtn"></button></div>
+  </div></div>
+
+  <div id="inventoryScreen"><div class="inv-header"><button id="invCloseBtn2"></button></div>
+    <div id="equipRack"></div><div id="invCarriedGrid"></div></div>
+
+  <div id="levelupScreen"><div id="levelupChoices"></div></div>
+
+  <div id="shopScreen"><span id="shopGold"></span><span id="shopGreeting"></span>
+    <div id="shopStock"></div><button id="shopHealBtn"></button><button id="shopLeaveBtn"></button></div>
+
+  <div id="titleScreen"><h1 id="titleWord" data-text="underward"></h1><div id="titleButtons"><button id="titleContinueBtn"></button><button id="titleSettingsBtn"></button></div><div id="titleSettingsPane"><button id="titleMuteBtn"></button><input type="range" id="titleVolumeSlider"><input type="range" id="titleMusicSlider"><button id="titleHapticsBtn"></button><button id="titleSettingsClose"></button></div></div>
+
+  <div id="hubScreen"><span id="hubShards"></span><div id="hubTabs"></div>
+    <div class="shop" id="shop"></div><div id="treePanel"></div><button id="startBtn"></button></div>
+
+  <div id="victoryScreen"><span id="victoryShards"></span><div id="victorySummary"></div>
+    <button id="victoryContinue"></button><button id="victoryHub"></button></div>
+
+  <!-- h1 kept: showEndScreen() does deathScreen.querySelector("h1") -->
+  <div id="deathScreen"><h1>YOU DIED</h1><div id="deathInfo"></div><div id="deathQuote"></div>
+    <div id="deathSummary"></div><span id="deathShards"></span><button id="deathBtn"></button></div>
+
+  <!-- Keep this mirroring index.html's pause card exactly. ui.js looks up every
+       id here at load time, so an element added to the game but not here shows up
+       as a "missing element" (§9) even though the game itself is perfectly fine. -->
+  <div id="pauseMenu"><div id="pauseCard">
+    <button id="muteBtn"></button>
+    <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.55">
+    <input type="range" id="musicSlider" min="0" max="1" step="0.05" value="0.30">
+    <button id="hapticsBtn" class="pause-toggle">ON</button>
+    <button id="pauseRetreatBtn"></button>
+    <button id="pauseCloseBtn"></button>
+  </div></div>
+
+  <div id="debugPanel">
+    <select id="dbgFloor"></select>
+    <button id="dbgGo"></button><button id="dbgGold"></button><button id="dbgShards"></button>
+    <button id="dbgHeal"></button><button id="dbgLowHp"></button><button id="dbgPoison"></button>
+    <button id="dbgBleed"></button><button id="dbgBurn"></button><button id="dbgWeaken"></button>
+    <button id="dbgElite"></button><button id="dbgXP"></button><button id="dbgShop"></button>
+    <button id="dbgVictory"></button><button id="dbgDeath"></button><button id="dbgRender"></button>
+    <button id="dbgDump"></button><button id="dbgReset"></button>
+  </div>
+</div>
+
+<script>
+/* ── stubs for canvas (Android/headless safe) ─────────────────── */
+function makeCtx(){
+  var gradient = { addColorStop: function(){} };
+  return new Proxy(function(){}, {
+    get: function(t, p){
+      if (p === "createLinearGradient" || p === "createRadialGradient" || p === "createPattern") return function(){ return gradient; };
+      if (p === "measureText") return function(){ return { width: 0 }; };
+      if (p === "canvas") return {};
+      return function(){};
+    },
+    set: function(t, p, v){ t[p] = v; return true; }
+  });
+}
+var canvases = document.querySelectorAll("canvas");
+for (var c = 0; c < canvases.length; c++) canvases[c].getContext = function(){ return makeCtx(); };
+window.requestAnimationFrame = function(){};
+window.cancelAnimationFrame = function(){};
+
+/* ── output helpers ───────────────────────────────────────────── */
+var outBox = document.getElementById("console");
+function out(html){ outBox.insertAdjacentHTML("beforeend", html); }
+function sec(title){
+  var id = "sec" + (sec.n = (sec.n || 0) + 1);
+  out('<div class="section"><h2>' + title + '</h2><div id="' + id + '"></div></div>');
+  return document.getElementById(id);
+}
+
+/* ── load order (mirrors index.html — 27 files) ──────────────── */
+var FILES = [
+  "js/config.js",
+  "js/content/con-monsters.js",
+  "js/content/con-items.js",
+  "js/content/con-biomes.js",
+  "js/content/con-traits.js",
+  "js/content/con-progression.js",
+  "js/save.js",
+  "js/attrs.js",
+  "js/items.js",
+  "js/sprites.js",
+  "js/content/con-bosssprites.js",
+  "js/state.js",
+  "js/levels.js",
+  "js/traits.js",
+  "js/combat.js",
+  "js/movement.js",
+  "js/rewards.js",
+  "js/effects.js",
+  "js/sfx.js",
+  "js/log.js",
+  "js/render.js",
+  "js/pathfind.js",
+  "js/input.js",
+  "js/ui.js",
+  "js/menu.js",
+  "js/progression.js",
+  "js/main.js"
+];
+
+// overlays that must be closed before the uiBlocked test, in case an earlier
+// section left one open (e.g. showBossIntro fires on floors 10 and 20)
+var ALL_OVERLAYS = ["titleScreen","hubScreen","deathScreen","inventoryScreen","shopScreen","victoryScreen",
+  "stairsPrompt","bossIntroOverlay","itemCardOverlay","logWindow","pauseMenu","levelupScreen"];
+
+// ── Expected ownership for functions that moved during the migration. ──
+// §3 alone cannot tell a misfiled function from a correctly filed one: it only
+// checks that the name exists SOMEWHERE. This map is the ownership assertion.
+// If a key here goes red, either a move was reverted or a definition was
+// duplicated into the wrong file.
+var EXPECT_OWNER = {
+  "Delve.move.tryAct":            ["tryAct", "js/movement.js"],
+  "Delve.move.tryActOnStep":      ["tryActOnStep", "js/movement.js"],
+  "Delve.move.tryRest":           ["tryRest", "js/movement.js"],
+  "Delve.move.smashBarrel":       ["smashBarrel", "js/movement.js"],
+  "Delve.move.collectGold":       ["collectGold", "js/movement.js"],
+  "Delve.move.descend":           ["descend", "js/movement.js"],
+  "Delve.move.promptStairs":      ["promptStairs", "js/movement.js"],
+  "Delve.rewards.convertGold":    ["convertGold", "js/rewards.js"],
+  "Delve.rewards.killRewards":    ["killRewards", "js/rewards.js"],
+  "Delve.rewards.floorClearBonus":["floorClearBonus", "js/rewards.js"],
+  "Delve.rewards.makeElite":      ["makeElite", "js/rewards.js"],
+  "Delve.rewards.monsterStats":   ["monsterStats", "js/rewards.js"],
+  "Delve.rewards.applyBossBonus": ["applyBossBonus", "js/rewards.js"],
+  "Delve.combat.rowFor":          ["rowFor", "js/combat.js"],
+  "Delve.combat.onHitEffectFor":  ["onHitEffectFor", "js/combat.js"],
+  "Delve.combat.startCombat":     ["startCombat", "js/combat.js"],
+  "Delve.combat.killMonster":     ["killMonster", "js/combat.js"],
+  "Delve.combat.triggerVictory":  ["triggerVictory", "js/combat.js"],
+  "Delve.combat.endRun":          ["endRun", "js/combat.js"],
+  "Delve.render.drawPaperDoll":   ["drawPaperDoll", "js/render.js"],
+  "Delve.render.markVisited":     ["markVisited", "js/render.js"],
+  "Delve.render.renderMinimap":   ["renderMinimap", "js/render.js"],
+  "Delve.items.makeShopStock":    ["makeShopStock", "js/items.js"],
+  "Delve.items.shopHealCost":     ["shopHealCost", "js/items.js"],
+  "Delve.items.isShopFloor":      ["isShopFloor", "js/items.js"],
+  "Delve.items.healCost":         ["healCost", "js/items.js"],
+  "Delve.levels.genFloor":        ["genFloor", "js/levels.js"],
+  "Delve.levels.genBossFloor":    ["genBossFloor", "js/levels.js"],
+  "Delve.levels.openChest":       ["openChest", "js/levels.js"],
+  "Delve.state.rng":              ["rng", "js/state.js"],
+  "Delve.state.mdist":            ["mdist", "js/state.js"],
+  "Delve.state.newRun":           ["newRun", "js/state.js"],
+  "Delve.state.recordStat":       ["recordStat", "js/state.js"]
+};
+
+var ownership = {};
+var dupes = {};
+var errors = [];
+var parityFailures = 0;
+var extraFailures = 0;
+var bossSpriteFailures = 0;
+var floorFailures = 0;
+var movementFailures = 0;
+var domFailures = 0;
+var ownershipFailures = 0;
+var missing = [];
+
+/* ── 0. Load every file IN ORDER with per-file diff ───────────── */
+var s0 = sec("0. Load order &amp; ownership");
+FILES.forEach(function(file){
+  var before = Object.keys(window.Delve || {});
+  var loaded = false;
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", file + "?v=" + Date.now(), false);
+    xhr.send();
+    if (xhr.status !== 200 && xhr.status !== 0){
+      errors.push(file + " — HTTP " + xhr.status);
+      s0.insertAdjacentHTML("beforeend", '<div class="fail">✗ ' + file + ' — HTTP ' + xhr.status + ' (missing at this path?)</div>');
+    } else {
+      (new Function(xhr.responseText))();
+      loaded = true;
+    }
+  } catch (err){
+    errors.push(file + " — " + err.message);
+    s0.insertAdjacentHTML("beforeend",
+      '<div class="fail">✗ ' + file + ' — <b>' + err.message + '</b></div>');
+  }
+  if (loaded){
+    var after = Object.keys(window.Delve || {});
+    var added = [];
+    after.forEach(function(k){
+      if (before.indexOf(k) < 0){
+        added.push(k);
+        if (ownership[k]) (dupes[k] = dupes[k] || []).push(file);
+        else ownership[k] = file;
+      }
+    });
+    s0.insertAdjacentHTML("beforeend",
+      '<div class="pass">✓ ' + file + ' <span style="color:#9fb3c5">(' + added.length + ' new)</span></div>');
+  }
+});
+
+s0.insertAdjacentHTML("beforeend",
+  '<div style="color:#9fb3c5;font-size:13px;margin-top:6px">loaded ' + FILES.length +
+  ' files · ' + Object.keys(ownership).length + ' Delve.* symbols</div>');
+
+if (typeof window.Delve.draw === "function") window.Delve.draw = function(){};
+
+/* ── 1. index.html script tag parity (duplicate-aware) ────────── */
+var s1 = sec("1. index.html script tag parity");
+try {
+  var idxText = null;
+  try {
+    var ix = new XMLHttpRequest();
+    ix.open("GET", "index.html?v=" + Date.now(), false);
+    ix.send();
+    if (ix.status === 200 || ix.status === 0) idxText = ix.responseText;
+  } catch(eIdx){ idxText = null; }
+
+  if (!idxText){
+    s1.innerHTML = '<div class="warn">Could not read index.html (serve over http). Parity not verified.</div>';
+  } else {
+    // Strip HTML comments so a commented-out script tag cannot count, then read
+    // only real <script src="..."> attributes. Any path prefix (e.g.
+    // "/underward/js/config.js") is normalised down to "js/config.js".
+    var stripped = idxText.replace(/<!--[\s\S]*?-->/g, "");
+    var refs = [];
+    var scriptRe = /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
+    var sm;
+    while ((sm = scriptRe.exec(stripped)) !== null){
+      var src = sm[1].split("?")[0];
+      var at = src.indexOf("js/");
+      if (at >= 0) refs.push(src.slice(at));
+    }
+
+    var seen = {}, live = [], repeated = [];
+    refs.forEach(function(f){
+      if (seen[f]) repeated.push(f);
+      else { seen[f] = 1; live.push(f); }
+    });
+
+    var mismatch = (live.length !== FILES.length);
+    if (!mismatch){
+      for (var fi = 0; fi < live.length; fi++){
+        if (live[fi] !== FILES[fi]){ mismatch = true; break; }
+      }
+    }
+
+    var head = '<div style="color:#9fb3c5;font-size:13px;margin-bottom:6px">' +
+      'script tags found: ' + refs.length + ' · unique: ' + live.length +
+      ' · expected: ' + FILES.length + '</div>';
+
+    if (repeated.length){
+      var uniqRep = [];
+      repeated.forEach(function(r){ if (uniqRep.indexOf(r) < 0) uniqRep.push(r); });
+      head += '<div class="fail">✗ Duplicated in index.html: ' + uniqRep.join(", ") +
+        ' — each script must appear exactly once.</div>';
+    }
+
+    if (!mismatch && !repeated.length){
+      s1.innerHTML = head + '<div class="pass">✓ index.html loads exactly these ' + live.length +
+        ' scripts, in this order — FILES[] matches live.</div>';
+    } else {
+      parityFailures = 1;
+      s1.innerHTML = head + '<div class="fail">FILES[] has drifted from index.html.</div>' +
+        '<table><tr><th>#</th><th>test.html FILES[]</th><th>index.html (first occurrence)</th></tr>';
+      var maxN = Math.max(live.length, FILES.length);
+      for (var n = 0; n < maxN; n++){
+        var a = FILES[n] || "—", b = live[n] || "—";
+        var cls = (a === b) ? "" : ' class="dup"';
+        s1.innerHTML += '<tr' + cls + '><td>' + n + '</td><td>' + a + '</td><td>' + b + '</td></tr>';
+      }
+      s1.innerHTML += '</table>';
+    }
+  }
+} catch (err){
+  parityFailures = 1;
+  s1.innerHTML = '<div class="fail">Parity check aborted: ' + err.message + '</div>';
+}
+
+/* ── 2. Duplicate definitions ────────────────────────────────── */
+var s2 = sec("2. Duplicate definitions");
+var dupKeys = Object.keys(dupes);
+if (!dupKeys.length) s2.innerHTML = '<div class="pass">✓ No duplicates — single ownership holds.</div>';
+else {
+  s2.innerHTML = '<div class="warn">Re-defined (last file wins):</div><table><tr><th>Key</th><th>First defined in</th><th>Re-defined by</th></tr>';
+  dupKeys.forEach(function(k){
+    s2.innerHTML += '<tr><td class="dup">' + k + '</td><td>' + ownership[k] + '</td><td>' + dupes[k].join(", ") + '</td></tr>';
+  });
+  s2.innerHTML += '</table>';
+}
+
+/* ── 3. Required functions, objects & OWNERSHIP ──────────────── */
+var s3 = sec("3. Required functions, objects &amp; ownership");
+var REQUIRED_FN = [
+  "newRun","genFloor","genBossFloor","openChest","maxHp","atk","dmgRed","dodge","crit",
+  "luckPts","agiPts","touPts","strPts","baseAtk","baseLuck",
+  "equipItem","unequipItem","useConsumable","itemStatLines","itemBuffs",
+  "makeItem","rollTier","pickupItem","playerSpeed","wardOf",
+  "killRewards","floorClearBonus","makeElite","startCombat","endCombat",
+  "tryAct","tryActOnStep","smashBarrel","collectGold",
+  "triggerVictory","tryRest","descend","promptStairs","die","retreat","convertGold",
+  "applyBossBonus","recordStat","addFloater","updateHUD","renderMinimap","drawPaperDoll",
+  "refreshHub","openInventory","openShop","buildShop","makeShopStock","shopHealCost",
+  "applyEffect","applyPlayerEffect","tickPlayerEffects","statusColor",
+  "registerBossSprite","rebuildSprites","castAbility","addXP","addAbility",
+  "logXP","logKill","logSystem","logFloor","hasProgression","markRunTrait",
+  "injectHubAbilities","persist","isShopFloor","healCost","getWard","getMonsterBand",
+  "findPath","stepPath","uiBlocked","rowFor","onHitEffectFor","markVisited","isTorchTile"
+];
+// Non-function globals. `save` lives here, NOT in REQUIRED_FN — Delve.save is
+// the DATA object, so a typeof==="function" check could never pass.
+var REQUIRED_OBJ = [
+  "CONFIG","save","T","TIERS","SLOT_DEFS","itemDefs","potionDefs","SPR","_hooks"
+];
+
+var missingFn = REQUIRED_FN.filter(function(k){ return typeof window.Delve[k] !== "function"; });
+var missingObj = REQUIRED_OBJ.filter(function(k){ return !window.Delve[k]; });
+missing = missingFn.concat(missingObj);
+
+// Ownership assertion — the check §3 could not make before.
+var ownerBad = [];
+Object.keys(EXPECT_OWNER).forEach(function(label){
+  var key = EXPECT_OWNER[label][0], want = EXPECT_OWNER[label][1];
+  var got = ownership[key];
+  if (got !== want) ownerBad.push(label + " → " + (got || "NOT DEFINED") + " (expected " + want + ")");
+});
+ownershipFailures = ownerBad.length;
+
+if (!missing.length && !ownerBad.length){
+  s3.innerHTML = '<div class="pass">✓ All ' + REQUIRED_FN.length + ' required functions and ' +
+    REQUIRED_OBJ.length + ' required objects present; all ' + Object.keys(EXPECT_OWNER).length +
+    ' checked symbols are owned by the expected file.</div>';
+} else {
+  s3.innerHTML = '';
+  if (missingFn.length)  s3.innerHTML += '<div class="fail">Missing functions:</div><div class="missing">' + missingFn.join(", ") + '</div>';
+  if (missingObj.length) s3.innerHTML += '<div class="fail">Missing objects:</div><div class="missing">' + missingObj.join(", ") + '</div>';
+  if (ownerBad.length)   s3.innerHTML += '<div class="fail">Wrong owner (' + ownerBad.length + '):</div><ul style="margin-left:18px">' +
+    ownerBad.map(function(b){ return "<li>" + b + "</li>"; }).join("") + '</ul>';
+}
+
+/* ── 4. Content registries (all con- files) ───────────────────── */
+var s4 = sec("4. Content registries");
+try {
+  var cfg = window.Delve.CONFIG, d = window.Delve;
+  var needCfg = ["MONSTER_ROSTER","MONSTER_BANDS","BOSS_DEFS","elite","xpKill",
+                 "WARDS","BIOMES","TRAITS","PROGRESSION","loot","STATUS_EFFECTS",
+                 "statusChance","SLOTS","SLOT_ORDER","ATTRS","WEIGHT","WEAPON_SPEEDS"];
+  var needDelve = ["TIERS","SLOT_DEFS","itemDefs","potionDefs"];
+  var absentCfg = needCfg.filter(function(k){ return !cfg[k]; });
+  var absentDelve = needDelve.filter(function(k){ return !d[k]; });
+  var rosterCount = Object.keys(cfg.MONSTER_ROSTER || {}).length;
+  var itemCount = Object.keys(d.itemDefs || {}).length;
+  var trees = (cfg.PROGRESSION && cfg.PROGRESSION.TREES || []).length;
+  var nodeTrees = Object.keys((cfg.PROGRESSION && cfg.PROGRESSION.NODES) || {}).length;
+  var abilities = (cfg.TRAITS && cfg.TRAITS.abilities) || [];
+  var noData = abilities.filter(function(a){ return !a.data; }).map(function(a){ return a.id; });
+
+  var badWeights = [];
+  (cfg.MONSTER_BANDS || []).forEach(function(b, bi){
+    Object.keys(b.weights || {}).forEach(function(k){
+      if (!cfg.MONSTER_ROSTER[k]) badWeights.push("band " + bi + " → " + k);
+    });
+  });
+
+  // ── Shard-tree node integrity ──────────────────────────────────
+  // The check that would have caught the ~23 inert nodes. Every node's `type`
+  // must be one the engine actually consumes, and every node needs its identity
+  // fields. A bad type used to be ignored in silence: the card cost shards and
+  // changed nothing. Adding a NEW type means wiring the engine AND listing it
+  // here (same maintenance trade-off as EXPECT_OWNER in §3).
+  var NODE_TYPES = ["slotUnlock","inventory","ability","abilityRank","flatAtk","flatHp",
+    "flatRed","flatStat","flatDodge","startGold","startLevel","startItem","startConsumable",
+    "startKit","startEnergy","healPct","restPlus","dropPlus","goldPlus","discount",
+    "chestGuarantee","chestTierUp","killEnergy","energyCostPct","consumableHeal","cureHeal",
+    "bossDamage","statusUp","overkillPct","secondWindPct","secondWindTriggerPct","ironWill"];
+  var badNodes = [];
+  var nodeTotal = 0;
+  var nodeTreesCfg = (cfg.PROGRESSION && cfg.PROGRESSION.NODES) || {};
+  Object.keys(nodeTreesCfg).forEach(function(tree){
+    (nodeTreesCfg[tree] || []).forEach(function(nd){
+      nodeTotal++;
+      var where = tree + "/" + (nd && nd.id ? nd.id : "?");
+      if (!nd || !nd.id || !nd.name || !nd.desc || nd.cost === undefined || nd.tier === undefined){
+        badNodes.push(where + " — missing id/name/desc/cost/tier");
+      } else if (NODE_TYPES.indexOf(nd.type) < 0){
+        badNodes.push(where + " — type '" + nd.type + "' is not consumed by the engine");
+      }
+    });
+  });
+
+  // ── Biome identity ─────────────────────────────────────────────
+  // Every area must declare its decoration family and its drifting ambience.
+  // Without this a new ward silently renders with the ruins' weeds and no
+  // weather at all — the same class of silent gap the shard-tree check catches.
+  var CLUTTER_SETS = ["ruins", "blackvein", "frost"];
+  var AMBIENT_TYPES = ["dust", "ember", "snow"];
+  var badBiomes = [];
+  (cfg.BIOMES || []).forEach(function(bm, bi){
+    var nm = bm.name || ("biome " + bi);
+    if (CLUTTER_SETS.indexOf(bm.clutter) < 0)
+      badBiomes.push(nm + " — clutter '" + bm.clutter + "' (expected one of " + CLUTTER_SETS.join("/") + ")");
+    var am = bm.ambient;
+    if (!am){
+      badBiomes.push(nm + " — no ambient block (the area would have no weather)");
+    } else {
+      if (AMBIENT_TYPES.indexOf(am.type) < 0)
+        badBiomes.push(nm + " — ambient type '" + am.type + "' (expected one of " + AMBIENT_TYPES.join("/") + ")");
+      if (!(am.count > 0)) badBiomes.push(nm + " — ambient count must be greater than 0");
+      if (typeof am.vy !== "number" || am.vy === 0) badBiomes.push(nm + " — ambient vy must be a non-zero number");
+      if (typeof am.alpha !== "number" || am.alpha <= 0 || am.alpha > 1) badBiomes.push(nm + " — ambient alpha must be between 0 and 1");
+      if (!am.col || !am.col2) badBiomes.push(nm + " — ambient needs both colours");
+    }
+  });
+
+  // ── Arena dressing integrity ───────────────────────────────────
+  // Every ward should have a DRESSING entry, and every key it names must be real
+  // art. Without this, a new ward ships an empty arena, or one role silently
+  // draws nothing — the same silent-gap class as an unknown shard-tree node type.
+  (cfg.WARDS || []).forEach(function(wd){
+    if (!(cfg.DRESSING && cfg.DRESSING[wd.id]))
+      badBiomes.push("ward " + wd.id + " (" + (wd.name || "?") + ") has no DRESSING[wardId] entry — its arena would be bare");
+  });
+  Object.keys(cfg.DRESSING || {}).forEach(function(wid){
+    var rec = cfg.DRESSING[wid] || {};
+    Object.keys(rec).forEach(function(role){
+      if (!(d.SPR && d.SPR.world && d.SPR.world[rec[role]]))
+        badBiomes.push("DRESSING[" + wid + "]." + role + " names '" + rec[role] + "', which has no sprite in SPR.world");
+    });
+    // every role should be filled, or those props silently never appear
+    ["pillar","banner","wallBit","rubble","bone","cluster"].forEach(function(role){
+      if (!rec[role]) badBiomes.push("DRESSING[" + wid + "] has no '" + role + "' — those slots would be empty");
+    });
+  });
+
+  if (!absentCfg.length && !absentDelve.length && !noData.length && !badWeights.length && !badNodes.length && !badBiomes.length){
+    s4.innerHTML = '<div class="pass">✓ All registries loaded — monsters: ' + rosterCount +
+      ', items: ' + itemCount + ', trees: ' + trees + ', node trees: ' + nodeTrees +
+      ', nodes: ' + nodeTotal + ' (every type consumed)' +
+      ', areas: ' + (cfg.BIOMES || []).length + ' (each with its own decor + weather)' +
+      ', abilities with data: ' + abilities.length + '/' + abilities.length + '</div>';
+  } else {
+    extraFailures += absentCfg.length + absentDelve.length + noData.length + badWeights.length + badNodes.length + badBiomes.length;
+    s4.innerHTML = '<div class="fail">Content problems:</div>';
+    if (absentCfg.length)   s4.innerHTML += '<div class="missing">CONFIG missing: ' + absentCfg.join(", ") + '</div>';
+    if (absentDelve.length) s4.innerHTML += '<div class="missing">Delve missing: ' + absentDelve.join(", ") + '</div>';
+    if (noData.length)      s4.innerHTML += '<div class="missing">Abilities without data{}: ' + noData.join(", ") + '</div>';
+    if (badWeights.length)  s4.innerHTML += '<div class="missing">Band weights with no roster row: ' + badWeights.join(", ") + '</div>';
+    if (badNodes.length)    s4.innerHTML += '<div class="missing">Shard-tree nodes with a problem: ' + badNodes.join(", ") + '</div>';
+    if (badBiomes.length)   s4.innerHTML += '<div class="missing">Area identity with a problem: ' + badBiomes.join(", ") + '</div>';
+  }
+} catch (err){
+  extraFailures++;
+  s4.innerHTML = '<div class="fail">Content check aborted: ' + err.message + '</div>';
+}
+
+/* ── 5. Boss data + sprite registry ──────────────────────────── */
+var s5 = sec("5. Boss data &amp; sprite registry");
+try {
+  var registered = window.Delve._bossSpriteBuilders || {};
+  var bossDefs = (window.Delve.CONFIG && window.Delve.CONFIG.BOSS_DEFS) || {};
+  var problems = [], expectedKeys = [];
+  for (var bk in bossDefs){
+    var bd = bossDefs[bk];
+    if (bd.sprite) expectedKeys.push(bd.sprite);
+    else problems.push((bd.name || ("BOSS_DEFS[" + bk + "]")) + " — missing .sprite");
+    if (!bd.accent) problems.push((bd.name || ("BOSS_DEFS[" + bk + "]")) + " — missing .accent");
+  }
+  var missingBuilders = expectedKeys.filter(function(k){ return typeof registered[k] !== "function"; });
+  var missingSprites = expectedKeys.filter(function(k){ return !(window.Delve.SPR && window.Delve.SPR[k] && window.Delve.SPR[k].idle); });
+
+  // Bosses need an attack frame too (the telegraph swaps it in), and their canvas
+  // must match the tile footprint declared in BOSS_DEFS — 24px per tile, so a
+  // 2x2 boss has to be 48x48. A mismatch means stretched or half-empty art.
+  var missingAtk = expectedKeys.filter(function(k){ return !(window.Delve.SPR && window.Delve.SPR[k] && window.Delve.SPR[k].attack); });
+  var sizeMismatch = [];
+  for (var bsk in bossDefs){
+    var bsd = bossDefs[bsk];
+    if (!bsd.sprite) continue;
+    var sz = bsd.size || { w:1, h:1 };
+    var bimg = window.Delve.SPR && window.Delve.SPR[bsd.sprite] && window.Delve.SPR[bsd.sprite].idle;
+    if (!bimg) continue;
+    if (bimg.width !== 24 * sz.w || bimg.height !== 24 * sz.h)
+      sizeMismatch.push(bsd.sprite + " is " + bimg.width + "x" + bimg.height + " but declares " + sz.w + "x" + sz.h + " tiles");
+  }
+
+  // Every roster row's `kind` must have a built sprite too — a missing one renders
+  // as the pink placeholder circle, the same silent-failure class as a dead node.
+  // It also needs an `attack` frame: that's what the attack telegraph swaps in.
+  var roster = (window.Delve.CONFIG && window.Delve.CONFIG.MONSTER_ROSTER) || {};
+  var rosterKinds = Object.keys(roster).map(function(k){ return roster[k].kind || k; });
+  var noMobSprite = rosterKinds.filter(function(k){ return !(window.Delve.SPR && window.Delve.SPR[k] && window.Delve.SPR[k].idle); });
+  var atkKinds = rosterKinds.concat(["soldier"]);
+  var noAtkFrame = atkKinds.filter(function(k){ return !(window.Delve.SPR && window.Delve.SPR[k] && window.Delve.SPR[k].attack); });
+
+  if (!problems.length && !missingBuilders.length && !missingSprites.length && !missingAtk.length && !sizeMismatch.length && !noMobSprite.length && !noAtkFrame.length){
+    s5.innerHTML = '<div class="pass">✓ Bosses: ' + expectedKeys.length + ' sprite(s) — registered, built, sized and with attack frames (' + expectedKeys.join(", ") +
+      '). Monsters: ' + rosterKinds.length + ' roster kind(s), every one has an idle and an attack frame.</div>';
+  } else {
+    bossSpriteFailures = problems.length + missingBuilders.length + missingSprites.length + missingAtk.length + sizeMismatch.length + noMobSprite.length + noAtkFrame.length;
+    s5.innerHTML = '<div class="fail">Sprite problems:</div><div class="missing">';
+    if (problems.length)        s5.innerHTML += problems.join("<br>") + "<br>";
+    if (missingBuilders.length) s5.innerHTML += "No builder registered: " + missingBuilders.join(", ") + "<br>";
+    if (missingSprites.length)  s5.innerHTML += "No sprite built: " + missingSprites.join(", ") + "<br>";
+    if (missingAtk.length)      s5.innerHTML += "Boss with no attack frame: " + missingAtk.join(", ") + "<br>";
+    if (sizeMismatch.length)    s5.innerHTML += "Boss canvas / size mismatch: " + sizeMismatch.join(", ") + "<br>";
+    if (noMobSprite.length)     s5.innerHTML += "Roster kinds with no sprite (drawn as a placeholder): " + noMobSprite.join(", ") + "<br>";
+    if (noAtkFrame.length)      s5.innerHTML += "No attack frame (attack telegraph would show the idle pose): " + noAtkFrame.join(", ");
+    s5.innerHTML += '</div>';
+  }
+} catch (err){
+  bossSpriteFailures = 1;
+  s5.innerHTML = '<div class="fail">Boss check aborted: ' + err.message + '</div>';
+}
+
+/* ── 6. Save schema + persistence round-trip ──────────────────── */
+var s6 = sec("6. Save schema &amp; persistence");
+try {
+  var s = window.Delve.save;
+  var need = ["version","shards","bestFloor","lvls","unlocks","nodes","inventoryCap",
+              "abilities","abilityRanks","runTraits","runTraitsSeen","seenTutorial"];
+  var absent = need.filter(function(k){ return !(k in s); });
+
+  // Locate the save key rather than assuming it, so a rename cannot produce a
+  // misleading failure here.
+  var saveKey = null;
+  for (var lk in localStorage){
+    if (/underward/i.test(lk) && /save/i.test(lk)){ saveKey = lk; break; }
+  }
+
+  s.nodes = s.nodes || {};
+  s.nodes.__probe = 1;
+  window.Delve.persist();
+  var reread = null;
+  if (saveKey){
+    try { reread = JSON.parse(localStorage.getItem(saveKey) || "null"); } catch(_e){ reread = null; }
+  }
+  var persisted = !!(reread && reread.nodes && reread.nodes.__probe);
+  delete s.nodes.__probe;
+  window.Delve.persist();
+
+  if (!absent.length && persisted){
+    s6.innerHTML = '<div class="pass">✓ Save schema complete; purchases survive persist() round-trip' +
+      (saveKey ? ' <span style="color:#9fb3c5">(key ' + saveKey + ')</span>' : '') + '.</div>';
+  } else {
+    extraFailures += absent.length + (persisted ? 0 : 1);
+    s6.innerHTML = '<div class="fail">Save problems:</div>';
+    if (absent.length)    s6.innerHTML += '<div class="missing">Missing fields: ' + absent.join(", ") + '</div>';
+    if (!persisted)       s6.innerHTML += '<div class="missing">Node purchases do NOT survive persist() — whitelist still dropping them' +
+      (saveKey ? '' : ', or no underward save key found in localStorage') + '.</div>';
+  }
+} catch (err){
+  extraFailures++;
+  s6.innerHTML = '<div class="fail">Save check aborted: ' + err.message + '</div>';
+}
+
+/* ── 7. Floor generation (50 trials, floors 1–20) ─────────────── */
+var s7 = sec("7. Floor generation (50 trials, floors 1-30)");
+try {
+  if (typeof window.Delve.newRun !== "function") throw new Error("newRun missing");
+  window.Delve.newRun();
+  var G = window.Delve.G;
+  if (!G) throw new Error("Delve.G still null after newRun");
+
+  var trials = 50, fails = [];
+  var litByFloor = {};   // floor → lit-tile count, proving arena lighting is deterministic
+  var decorSig = {};     // floor → prop layout, proving arena dressing is deterministic
+  for (var t = 0; t < trials; t++){
+    G.floor = (t % 30) + 1;
+    var ward = window.Delve.getWard(G.floor);
+    if (!ward){ fails.push("trial " + t + ": no ward for floor " + G.floor); continue; }
+    var biomeIdx = (ward.biome !== undefined) ? ward.biome : -1;
+    if (biomeIdx < 0 || !(window.Delve.CONFIG.BIOMES && window.Delve.CONFIG.BIOMES[biomeIdx]))
+      fails.push("trial " + t + ": biome " + biomeIdx + " missing for floor " + G.floor);
+    window.Delve.genFloor();
+    var w = G.grid[0].length, h = G.grid.length;
+    if (G.px < 0 || G.py < 0 || G.px >= w || G.py >= h) fails.push("trial " + t + ": player outside map");
+    else if (G.grid[G.py][G.px] !== window.Delve.T.FLOOR) fails.push("trial " + t + ": player not on floor tile");
+    if (G.floor % 10 !== 0 && !G.stairs) fails.push("trial " + t + ": no stairs on floor " + G.floor);
+    (G.monsters || []).forEach(function(m){
+      if (window.Delve.mdist(m.x, m.y, G.px, G.py) <= 1) fails.push("trial " + t + ": monster adjacent to spawn");
+    });
+    if (G.floor % 10 === 0){
+      if (!G.boss) fails.push("trial " + t + ": boss floor " + G.floor + " has no boss");
+      else {
+        if (G.boss.kind !== (window.Delve.CONFIG.BOSS_DEFS[Math.ceil(G.floor/10)] || {}).sprite)
+          fails.push("trial " + t + ": boss kind '" + G.boss.kind + "' ≠ BOSS_DEFS.sprite");
+        (G.monsters || []).forEach(function(m){
+          if (window.Delve.mdist(m.x, m.y, G.boss.x, G.boss.y) <= 1)
+            fails.push("trial " + t + ": guard inside boss arena");
+        });
+        // boss floors must contain nothing but the arena
+        if ((G.monsters || []).length) fails.push("trial " + t + ": boss floor has " + G.monsters.length + " monster(s)");
+        if ((G.barrels || []).length)  fails.push("trial " + t + ": boss floor has barrels");
+        if (G.stairs)                  fails.push("trial " + t + ": boss floor has stairs");
+        // A boss arena must come out LIT. Braziers are derived from the arena's
+        // geometry (render.js arenaTorches), so this fails if that rule breaks
+        // and the chamber you fight the new 2x2 bosses in goes dark.
+        var lit = 0;
+        if (typeof window.Delve.isTorchTile !== "function"){
+          fails.push("trial " + t + ": Delve.isTorchTile missing, cannot verify arena lighting");
+        } else {
+          for (var ly = 0; ly < h; ly++) for (var lx = 0; lx < w; lx++){
+            if (window.Delve.isTorchTile(lx, ly)) lit++;
+          }
+          if (lit < 6) fails.push("trial " + t + ": boss arena " + G.floor + " has only " + lit + " lit tile(s)");
+          if (litByFloor[G.floor] === undefined) litByFloor[G.floor] = lit;
+          else if (litByFloor[G.floor] !== lit)
+            fails.push("trial " + t + ": floor " + G.floor + " lights " + lit + " tiles but lit " + litByFloor[G.floor] + " earlier — arena lighting must be identical every time");
+        }
+        // Arena props (G.decor). Decoration only, so they must never sit on a tile
+        // that matters, never leave the grid, and never name art that doesn't exist.
+        var decor = G.decor || [];
+        var worldSpr = window.Delve.SPR && window.Delve.SPR.world;
+        var decorBad = 0;
+        for (var di = 0; di < decor.length; di++){
+          var dec = decor[di];
+          var why = "";
+          if (!worldSpr || !worldSpr[dec.key]) why = "has no sprite named '" + dec.key + "'";
+          else if (dec.x < 0 || dec.y < 0 || dec.x >= w || dec.y >= h) why = "is outside the grid";
+          else if (dec.layer === "wall"
+                     ? G.grid[dec.y][dec.x] !== window.Delve.T.WALL
+                     : G.grid[dec.y][dec.x] !== window.Delve.T.FLOOR) why = "is on the wrong tile type";
+          else if (dec.x === G.px && dec.y === G.py) why = "is on the tile the player arrives on";
+          else if (G.boss){
+            var bsz = G.boss.size || { w:1, h:1 };
+            if (dec.x >= G.boss.x && dec.x < G.boss.x + bsz.w && dec.y <= G.boss.y && dec.y > G.boss.y - bsz.h) why = "is under the boss";
+          }
+          if (why){
+            decorBad++;
+            if (decorBad <= 3) fails.push("trial " + t + ": decor '" + dec.key + "' " + why);
+          }
+        }
+        if (decor.length < 6) fails.push("trial " + t + ": boss arena " + G.floor + " has only " + decor.length + " prop(s)");
+        var dsig = decor.map(function(dd){ return dd.x + "," + dd.y + "," + dd.key; }).join("|");
+        if (decorSig[G.floor] === undefined) decorSig[G.floor] = dsig;
+        else if (decorSig[G.floor] !== dsig)
+          fails.push("trial " + t + ": floor " + G.floor + " was dressed differently on a second generation");
+      }
+    }
+    if (fails.length > 25) break;
+  }
+  floorFailures = fails.length;
+  if (!fails.length) s7.innerHTML = '<div class="pass">✓ ' + trials + ' floors generated cleanly across all wards (incl. boss arena exclusion, empty boss floors, and every boss arena reliably lit the same way).</div>';
+  else {
+    s7.innerHTML = '<div class="fail">' + fails.length + ' problem(s):</div><ul style="margin-left:18px">';
+    fails.slice(0, 25).forEach(function(f){ s7.innerHTML += "<li>" + f + "</li>"; });
+    s7.innerHTML += "</ul>";
+  }
+} catch (err){
+  floorFailures = 1;
+  s7.innerHTML = '<div class="fail">Floor checks aborted: ' + err.message + '</div>';
+}
+
+/* ── 8. Movement, rest, pathfinding &amp; null-G safety ───────── */
+var s8 = sec("8. Movement, rest, pathfinding &amp; null-G safety");
+try {
+  var G8 = window.Delve.G;
+  if (!G8) throw new Error("no run — section 7 did not produce G");
+
+  // Neutralise anything an earlier section left on screen. Section 7 generates
+  // floors 10 and 20, which call showBossIntro() and leave the overlay up for
+  // 3s — that would make uiBlocked() correctly report true later on.
+  clearTimeout(window.Delve._bossIntroT);
+  clearTimeout(window.Delve._floorCardT);
+  ALL_OVERLAYS.forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = "none";
+  });
+
+  var notes = [];
+  var mfails = [];
+
+  G8.floor = 1;
+  window.Delve.genFloor();
+
+  G8.monsters.forEach(function(m){
+    if (G8.grid[m.y] && G8.grid[m.y][m.x] === window.Delve.T.MONSTER) G8.grid[m.y][m.x] = window.Delve.T.FLOOR;
+  });
+  G8.monsters = [];
+  G8.boss = null;
+  G8.hp = window.Delve.maxHp();
+
+  // --- 8a: adjacent step via tryAct ---------------------------------
+  var dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+  var stepped = false, blockedAll = true;
+  for (var di = 0; di < dirs.length && !stepped; di++){
+    var nx = G8.px + dirs[di][0], ny = G8.py + dirs[di][1];
+    if (!G8.grid[ny] || G8.grid[ny][nx] === undefined) continue;
+    var cell = G8.grid[ny][nx];
+    if (cell !== window.Delve.T.FLOOR) continue;
+    blockedAll = false;
+    var ox = G8.px, oy = G8.py;
+    var beforeHp = G8.hp;
+    window.Delve.tryAct(nx, ny);
+    if (G8.px === nx && G8.py === ny){
+      stepped = true;
+    } else {
+      G8.px = ox; G8.py = oy; G8.hp = beforeHp;
+      mfails.push("tryAct refused an adjacent FLOOR tile at " + nx + "," + ny);
+    }
+  }
+  if (blockedAll) notes.push("no adjacent FLOOR tile to step onto (rare map) — step test skipped");
+  else if (stepped) notes.push("tryAct moved the player one tile");
+
+  // --- 8b: rest on own tile ----------------------------------------
+  G8.restCount = 0;
+  G8.hp = 1;
+  window.Delve.tryRest();
+  if (G8.restCount === 1 && G8.hp > 1) notes.push("tryRest healed and consumed a rest dot");
+  else mfails.push("tryRest did not rest (restCount=" + G8.restCount + ", hp=" + G8.hp + ")");
+
+  // --- 8c: pathfind to a distant tile ------------------------------
+  var target = null;
+  for (var py = 0; py < G8.grid.length && !target; py++){
+    for (var px = 0; px < G8.grid[0].length; px++){
+      if (G8.grid[py][px] !== window.Delve.T.FLOOR) continue;
+      if (window.Delve.mdist(px, py, G8.px, G8.py) >= 6){ target = { x:px, y:py }; break; }
+    }
+  }
+  if (!target){
+    notes.push("no distant FLOOR tile to path to — path test skipped");
+  } else {
+    var path = window.Delve.findPath(target.x, target.y);
+    if (!path || !path.length){
+      mfails.push("findPath returned no route to a reachable FLOOR tile at " + target.x + "," + target.y);
+    } else {
+      notes.push("findPath found a route of " + path.length + " step(s)");
+      G8._path = path;
+      var px0 = G8.px, py0 = G8.py;
+      window.Delve.stepPath();
+      if (G8.px !== px0 || G8.py !== py0) notes.push("stepPath advanced along the route");
+      else mfails.push("stepPath did not advance the player");
+    }
+  }
+
+  // --- 8d: uiBlocked toggling (all overlays now closed) ------------
+  var hub = document.getElementById("hubScreen");
+  hub.style.display = "flex";
+  var blockedWhenShown = window.Delve.uiBlocked();
+  hub.style.display = "none";
+  var blockedWhenHidden = window.Delve.uiBlocked();
+  if (blockedWhenShown && !blockedWhenHidden) notes.push("uiBlocked correctly gates on visible overlays");
+  else mfails.push("uiBlocked wrong (shown=" + blockedWhenShown + ", hidden=" + blockedWhenHidden +
+    " — blockers: " + ((window.Delve._lastBlockers || []).join("+") || "none") + ")");
+
+  // --- 8e: null-G safety (step 8 hygiene sweep) --------------------
+  // Every entry point that reads Delve.G must bail on a null G rather than
+  // dereference it. This is the regression test for the hygiene sweep.
+  var savedG = window.Delve.G;
+  var nullCases = [
+    ["tryAct",       function(){ window.Delve.tryAct(0,0); }],
+    ["tryActOnStep", function(){ window.Delve.tryActOnStep(0,0); }],
+    ["tryRest",      function(){ window.Delve.tryRest(); }],
+    ["collectGold",  function(){ window.Delve.collectGold(0,0); }],
+    ["descend",      function(){ window.Delve.descend(); }],
+    ["smashBarrel",  function(){ window.Delve.smashBarrel(0,0); }],
+    ["openChest",    function(){ window.Delve.openChest(0,0); }],
+    ["promptStairs", function(){ window.Delve.promptStairs(); }],
+    ["killMonster",  function(){ window.Delve.killMonster({ kind:"goblin", x:0, y:0 }); }]
+  ];
+  window.Delve.G = null;
+  var nullBad = [];
+  try {
+    nullCases.forEach(function(pair){
+      try { pair[1](); }
+      catch(e){ nullBad.push(pair[0] + " threw on null G: " + e.message); }
+    });
+  } finally {
+    window.Delve.G = savedG;
+  }
+  if (!nullBad.length){
+    notes.push("null-G safety: all " + nullCases.length + " entry points bail cleanly");
+  } else {
+    nullBad.forEach(function(b){ mfails.push(b); });
+  }
+  if (window.Delve.G !== savedG) mfails.push("Delve.G was not restored after the null-G test");
+
+  movementFailures = mfails.length;
+  if (!mfails.length){
+    s8.innerHTML = '<div class="pass">✓ Tap chain intact.</div><ul style="margin-left:18px">' +
+      notes.map(function(n){ return "<li>" + n + "</li>"; }).join("") + '</ul>';
+  } else {
+    s8.innerHTML = '<div class="fail">' + mfails.length + ' movement problem(s):</div><ul style="margin-left:18px">' +
+      mfails.map(function(f){ return "<li>" + f + "</li>"; }).join("") + '</ul>';
+    if (notes.length){
+      s8.innerHTML += '<div style="color:#9fb3c5;font-size:13px;margin-top:6px">Passed:</div><ul style="margin-left:18px;color:#9fb3c5">' +
+        notes.map(function(n){ return "<li>" + n + "</li>"; }).join("") + '</ul>';
+    }
+  }
+} catch (err){
+  movementFailures = 1;
+  s8.innerHTML = '<div class="fail">Movement test aborted: ' + err.message + '</div>';
+}
+
+/* ── 9. Missing DOM elements ──────────────────────────────────── */
+var s9 = sec("9. DOM integrity (missingEls)");
+try {
+  if (window.Delve.showHub) window.Delve.showHub();
+
+  var misses = (window.Delve.missingEls || []).slice();
+
+  // Read index.html's ids so each miss can be classified. The distinction matters:
+  //   · in index.html but not in this page's fixture → the TEST PAGE is behind the
+  //     game. The game is fine; add the element to the #fixtures block above.
+  //   · in neither → ui.js asks for an id that exists nowhere. A real dead reference.
+  // §1 already fetched index.html; reuse its text when it succeeded.
+  var idInGame = {};
+  var readGame = false;
+  try {
+    var text9 = (typeof idxText === "string" && idxText) ? idxText : null;
+    if (!text9){
+      var x9 = new XMLHttpRequest();
+      x9.open("GET", "index.html?v=" + Date.now(), false);
+      x9.send();
+      if (x9.status === 200 || x9.status === 0) text9 = x9.responseText;
+    }
+    if (text9){
+      readGame = true;
+      var idRe = /\bid\s*=\s*["']([^"']+)["']/gi, m9;
+      while ((m9 = idRe.exec(text9)) !== null) idInGame[m9[1]] = 1;
+    }
+  } catch(e9){ readGame = false; }
+
+  var realMissing = [], fixtureDrift = [];
+  misses.forEach(function(id){
+    if (readGame && idInGame[id]) fixtureDrift.push(id);
+    else realMissing.push(id);
+  });
+
+  domFailures = misses.length;
+
+  var html = "";
+  if (!misses.length){
+    html += '<div class="pass">✓ No missing elements — every id ui.js asks for exists (in index.html and in this page\'s fixture).</div>';
+  } else {
+    if (realMissing.length){
+      html += '<div class="fail">ui.js asks for ids that exist in no page — a real dead reference: ' +
+        realMissing.join(", ") + '</div>';
+    }
+    if (fixtureDrift.length){
+      html += '<div class="fail">Test fixture behind index.html: ' + fixtureDrift.join(", ") +
+        ' — the GAME is fine (these exist in index.html and are wired in ui.js); add them to the ' +
+        '#fixtures block above so this page mirrors the real one.</div>';
+    }
+    if (!readGame){
+      html += '<div class="warn">Could not read index.html, so these misses cannot be classified ' +
+        '(serve this page over http): ' + misses.join(", ") + '</div>';
+    }
+  }
+  s9.innerHTML = html;
+} catch (err){
+  domFailures = 1;
+  s9.innerHTML = '<div class="fail">DOM check aborted: ' + err.message + '</div>';
+}
+
+/* ── 10. Tier rolls ───────────────────────────────────────────── */
+var s10 = sec("10. Tier rolls");
+try {
+  var counts = {1:0, 2:0, 3:0, 4:0};
+  var bad = 0;
+  var N = 2000;
+  for (var i = 0; i < N; i++){
+    var tier = window.Delve.rollTier(15);
+    // counts[tier] is 0 initially, so `!counts[tier]` is ALWAYS true — must use
+    // an explicit membership test instead. (This check was wrong before.)
+    if (!(tier in counts)) { bad++; continue; }
+    counts[tier]++;
+  }
+  var sum = counts[1] + counts[2] + counts[3] + counts[4];
+
+  // Legendary is no longer gated behind a "ward 3" that doesn't exist. The rule
+  // is now: possible from floor 1, climbing with depth and with Luck. Those are
+  // deterministic checks on the weight curve, so unlike a sampled "T4 > 0" they
+  // cannot go flaky.
+  var LOOT = (window.Delve.CONFIG && window.Delve.CONFIG.loot) || {};
+  var W = LOOT.weights || {};
+  var legFloor1  = (W.legendary ? W.legendary(0, 1, 1)  : 0);
+  var legFloor40 = (W.legendary ? W.legendary(0, 4, 40) : 0);
+  var legLuckUp  = (W.legendary ? W.legendary(20, 4, 40) : 0);
+  var curveOk = legFloor1 > 0 && legFloor40 > legFloor1 && legLuckUp > legFloor40;
+
+  // Sanity ceiling: even on floor 15 a roll stays mostly common/uncommon.
+  var t4Cap = Math.ceil(N * 0.03);
+  var outcomesOk = (bad === 0 && sum === N && counts[1] > 0 && counts[2] > 0 &&
+                    counts[3] > 0 && counts[4] <= t4Cap && curveOk);
+  if (outcomesOk){
+    s10.innerHTML = '<div class="pass">✓ ' + N + ' tier rolls on floor 15 all returned 1-4: ' +
+      "T1:" + counts[1] + " T2:" + counts[2] + " T3:" + counts[3] + " T4:" + counts[4] +
+      ' <span style="color:#9fb3c5">(legendary possible from floor 1, rises with depth + Luck)</span></div>';
+  } else {
+    extraFailures++;
+    s10.innerHTML = '<div class="fail">Tier roll problems — out-of-range: ' + bad +
+      ', total counted: ' + sum + '/' + N + ', T4: ' + counts[4] + ' (cap ' + t4Cap + ')' +
+      ', curve: floor1=' + legFloor1 + ' floor40=' + legFloor40 + ' luckUp=' + legLuckUp + '</div>';
+  }
+} catch (err){
+  extraFailures++;
+  s10.innerHTML = '<div class="fail">Tier roll check aborted: ' + err.message + '</div>';
+}
+
+/* ── 11. Summary ──────────────────────────────────────────────── */
+var s11 = sec("11. Summary");
+var total = errors.length + missing.length + dupKeys.length + bossSpriteFailures +
+            floorFailures + extraFailures + parityFailures + movementFailures +
+            domFailures + ownershipFailures;
+if (!total){
+  s11.innerHTML = '<div class="pass">✓ ALL GREEN — load order matches index.html, no duplicates, ' +
+    'ownership correct, null-G safe, tap chain intact, save round-trips, floors generate, tier rolls healthy.</div>';
+} else {
+  s11.innerHTML = '';
+  if (errors.length)         s11.innerHTML += '<div class="fail">Script errors: ' + errors.length + '</div>';
+  if (parityFailures)        s11.innerHTML += '<div class="fail">index.html parity: FAILED</div>';
+  if (missing.length)        s11.innerHTML += '<div class="fail">Missing globals: ' + missing.length + '</div>';
+  if (ownershipFailures)     s11.innerHTML += '<div class="fail">Wrong-owner symbols: ' + ownershipFailures + '</div>';
+  if (dupKeys.length)        s11.innerHTML += '<div class="warn">Duplicates: ' + dupKeys.length + '</div>';
+  if (bossSpriteFailures)    s11.innerHTML += '<div class="fail">Boss sprite issues: ' + bossSpriteFailures + '</div>';
+  if (floorFailures)         s11.innerHTML += '<div class="fail">Floor generation issues: ' + floorFailures + '</div>';
+  if (movementFailures)      s11.innerHTML += '<div class="fail">Movement / null-G issues: ' + movementFailures + '</div>';
+  if (domFailures)           s11.innerHTML += '<div class="fail">Missing DOM elements: ' + domFailures + '</div>';
+  if (extraFailures)         s11.innerHTML += '<div class="fail">Other issues: ' + extraFailures + '</div>';
+}
+
+/* ── 12. Ownership registry ───────────────────────────────────── */
+var s12 = sec("12. Ownership registry");
+var keys = Object.keys(ownership).sort();
+var table = '<table><tr><th>Key</th><th>First defined by</th></tr>';
+keys.forEach(function(k){ table += '<tr><td><code>' + k + '</code></td><td>' + ownership[k] + '</td></tr>'; });
+table += '</table>';
+s12.innerHTML = table;
+</script>
+</body>
+</html>

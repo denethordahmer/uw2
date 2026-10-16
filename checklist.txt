@@ -1,0 +1,108 @@
+CHECKLIST — underward outstanding work
+
+META NOTE
+cp.txt is long enough that a fresh AI reading it in one go gets the
+middle silently cut out — the nine decisions, the audit and the plan are
+exactly what disappears. Consider splitting that file in two, or moving
+the nine decisions to the top.
+
+STILL TO COME (polish menu, not yet chosen)
+- Boss second phases at half health
+- Death animations + hit-stop + crit feedback
+- Resuming a run after the phone closes the tab
+- Per-ward arena shapes
+- UI clarity work: status icons, item comparison against what you wear,
+  a run summary
+
+TRAIT-POOL BATCH (deferred from the tidy-up pass)
+- Make the trait rarity labels actually weight the draw (they are
+  decorative today)
+- Fix the "offer a unique" block in traits.js — it writes a random slot
+  twice, and the first write is discarded
+
+NEXT STEP (updated 16 Oct, after the title screen was written)
+- Upload these files (Batches 10 and 11 together — js/ui.js, architecture.md
+  and cp.txt changed in both, so upload the newest version of each once):
+  js/combat.js, js/rewards.js, js/state.js, js/ui.js, index.html, js/input.js,
+  js/main.js, js/menu.js (NEW — must be CREATED on GitHub, not just edited),
+  test.html, architecture.md, cp.txt
+- Check the title screen: it appears when the game opens; CONTINUE reaches the
+  hub; SETTINGS changes the volume and the change survives a reload; and the
+  in-run pause menu's sound sliders (⚙) still work. That last one is the real
+  risk in the title-screen batch, and it is exactly why the title's settings
+  have names of their own
+- Bump the ?v= number
+- Play a short run and check four things:
+  - Shards count up in the HUD while playing
+  - Refreshing mid-run does NOT add them to the total after reload
+  - Dying and retreating DO add them
+  - A boss victory adds everything earned so far
+- Delete direct_write_test.txt by hand — still outstanding
+- One test.html pass at some point is a sensible safety net (sections 6
+  and 7 exercise the save and floor generation)
+
+TITLE-SCREEN BATCH — owner decisions
+- Title screen appears every time the game is opened
+- The button that returns to saved progress says CONTINUE
+- ONE save slot only for now — the owner explicitly declined multiple
+  save files for the moment. Several profiles would be its own batch if
+  wanted later
+- Work order: finish and test the current changes first, so the title
+  screen arrives as its own small batch
+- Title art direction, in the owner's own words: the game's name at the
+  top in large stylish letters — a bubble-letter look but jagged rather
+  than fully rounded; black letters with a moving, glowing acid-green
+  outline that slowly pulses. This is a temporary version the owner will
+  replace with their own visuals later, so it should be built to be
+  swapped out easily
+
+WHAT SHIPPED (Batch 11 — js/menu.js NEW, index.html, js/ui.js, js/input.js,
+js/main.js, test.html, architecture.md, cp.txt)
+- js/menu.js owns the front end; the game opens on the title screen every load
+- CONTINUE reads BEGIN on a completely fresh save, and leads to the hub today.
+  It already contains the hook that will let it resume a run later
+- SETTINGS drives the same four sound settings as the in-run pause menu,
+  through the same sound code, so there is still only one set of settings
+- The wordmark is styling only, with no canvas drawing: the map and all tap
+  maths are untouched, and swapping in your own visuals later means replacing
+  one style block and one markup block in index.html
+
+TO JUDGE FOR YOURSELF: genuinely jagged letterforms need a font file and this
+project ships none, so the "jagged rather than rounded" look is approximated
+with a heavy weight, tight letter spacing and a doubled outline. If the letters
+read as too smooth, that is the reason, and the cure is a font file.
+
+RESUME-AFTER-CLOSE — owner asked, not yet built
+The owner asked whether saving on floor 24 could return them to floor 24.
+Honest answer: not today. Every floor is generated with plain random
+numbers that leave no memory behind, so a finished floor cannot be
+rebuilt once it is gone. Two ways to build it, each a batch of its own:
+(a) store the finished map itself in the save, or (b) give the generator
+a "seed" — a starting number that makes the same floor come out again —
+which means threading that through every random call in floor generation.
+The owner likes the idea; it already sits on the STILL TO COME list.
+
+DECISION TAKEN 16 Oct: when it is built, resuming must recreate the IDENTICAL
+floor, never generate a fresh version of the same floor number — a fresh layout
+would hand back every chest, barrel and monster already cleared, which is an
+endless loot farm. The title screen's CONTINUE button already contains the hook
+this needs (it asks for Delve.hasSavedRun / Delve.resumeRun first), so building
+resume later lights CONTINUE up with no change to the title screen.
+
+UNRESOLVED NIT — needs one line of an owner decision, deliberately not touched
+The game's tap-blocking list and its "hide everything" list name the same
+screens, but the level-up screen is missing from the second one. (Its name was
+also mis-spelled in the test page's list; that typo is now fixed.) Adding it to
+the "hide everything" list would bring the lists back into agreement, but there
+is one edge case that cannot be checked without running the game: if a level-up
+is waiting and another screen opens, hiding the level-up could leave the player
+with no way to pick a trait until the next level-up. Left alone on purpose.
+Tidy it or leave it — either way it is a two-line change.
+
+FUTURE TASK — after the current batches
+A whole-project visual pass to remove the square/boxy look and make
+things rounded and smoother. The owner already has files another AI
+produced that make these changes, and will bring them into a folder
+(separate from underward) for review. The job then: compare those files
+against the real game and decide whether to adopt them wholesale or
+adapt them, before applying anything to the actual project.
