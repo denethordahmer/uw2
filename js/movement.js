@@ -209,6 +209,7 @@ window.Delve = window.Delve || {};
  if(Delve.sfxSetWard) Delve.sfxSetWard((Delve.getWard(G.floor)||{}).id || 1);
  if(G.floor > Delve.save.bestFloor){ Delve.save.bestFloor = G.floor; Delve.persist(); }
  G.secondWindUsed = false;
+ G.restCount = 0;   // rests are per FLOOR — the HUD dots and the "this floor" message already say so
  G.lastStandUsed = false;
  G.floorCleared = false;
  Delve.recordStat("floorsDescended", 1);
@@ -216,6 +217,7 @@ window.Delve = window.Delve || {};
  Delve.genFloor();
  Delve.updateHUD();
  if(Delve.showFloorCard) Delve.showFloorCard(G.floor);
+ Delve.setFloorCheckpoint();   // entering a floor is the checkpoint (§6.12)
  };
 
  // ── Stairs prompt ────────────────────────────────────────────

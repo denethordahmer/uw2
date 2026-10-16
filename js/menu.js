@@ -55,6 +55,18 @@ window.Delve = window.Delve || {};
   return true;
  }
 
+ // The main button's label: CONTINUE for anyone with progress, BEGIN for a save with
+ // nothing in it. Called by showTitle(), and again after a RESET.
+ function refreshTitleButton(){
+  // A run in progress outranks everything else: the button names the floor it will take
+  // the player back to, and continuePressed() below resumes it (§6.12).
+  if(Delve.hasSavedRun && Delve.hasSavedRun()){
+   $("titleContinueBtn").textContent = "FLOOR " + Delve.savedRunFloor();
+   return;
+  }
+  $("titleContinueBtn").textContent = isFreshSave() ? "BEGIN" : "CONTINUE";
+ }
+
  // ── Settings panel ───────────────────────────────────────────
  // The same four settings as the in-run pause menu, driven through the same
  // sfx.js functions. The ids are title*-prefixed ON PURPOSE: ui.js looks up
@@ -75,6 +87,30 @@ window.Delve = window.Delve || {};
  function closeSettings(){
   $("titleSettingsPane").classList.remove("open");
   $("titleButtons").style.display = "flex";
+  closeResetConfirm();
+  $("titleResetDone").textContent = "";
+ }
+
+ // ── RESET (wipe the save) ────────────────────────────────────
+ // Two taps on purpose: nothing is deleted until the second one. Sound settings live in
+ // sfx.js under their own storage key, so they survive a reset — losing your volume
+ // because you reset your game would be silly. See architecture.md §6.11.
+ function openResetConfirm(){
+  $("titleResetDone").textContent = "";
+  $("titleResetBtn").style.display = "none";
+  $("titleResetConfirm").classList.add("open");
+ }
+ function closeResetConfirm(){
+  $("titleResetConfirm").classList.remove("open");
+  $("titleResetBtn").style.display = "";
+ }
+ function doReset(){
+  if(Delve.resetSave) Delve.resetSave({ silent:true });
+  Delve.G = null;                       // no half-finished run left in memory
+  closeResetConfirm();
+  refreshTitleButton();                 // the main button becomes BEGIN
+  $("titleResetDone").textContent = "Progress erased. Everything is back to zero.";
+  if(Delve.sfx) Delve.sfx("deny");
  }
 
  // ── Screens ──────────────────────────────────────────────────
@@ -90,7 +126,7 @@ window.Delve = window.Delve || {};
   const vg = $("combatVignette"); if(vg) vg.classList.remove("active");
   if(Delve.sfxStopAmbience) Delve.sfxStopAmbience();
   closeSettings();
-  $("titleContinueBtn").textContent = isFreshSave() ? "BEGIN" : "CONTINUE";
+  refreshTitleButton();
   $("titleScreen").style.display = "flex";
  };
 
@@ -102,9 +138,13 @@ window.Delve = window.Delve || {};
  // Forward-compatible seam. Nothing saves an in-progress run yet, so today this
  // always falls through to the hub. When run-resume is built it will expose
  // Delve.hasSavedRun() / Delve.resumeRun(), and CONTINUE starts resuming with no
- // change to this file. (Resuming must restore the SAME floor, not regenerate a
- // fresh one — a fresh layout would hand back every chest the player already
- // opened, which is an infinite-loot farm. See cp.txt, "resuming a run".)
+ // change to this file.
+ //
+ // Owner's decision, 16 Oct: when resume is built, the FLOOR IS REBUILT FRESH and the run
+ // REWINDS to how it was when the player entered that floor — gold, items, XP, level,
+ // traits and health all as they were on entry. Rewinding is what stops a resumed floor
+ // being farmed for chests or monster kills, and rebuilding fresh means the game never has
+ // to store a map. See architecture.md §6.12 and cp.txt, "resuming a run".
  function continuePressed(){
   if(Delve.hasSavedRun && Delve.hasSavedRun() && Delve.resumeRun){
    Delve.resumeRun();
@@ -117,6 +157,9 @@ window.Delve = window.Delve || {};
  $("titleContinueBtn").addEventListener("click", continuePressed);
  $("titleSettingsBtn").addEventListener("click", openSettings);
  $("titleSettingsClose").addEventListener("click", closeSettings);
+ $("titleResetBtn").addEventListener("click", openResetConfirm);
+ $("titleResetYes").addEventListener("click", doReset);
+ $("titleResetNo").addEventListener("click", closeResetConfirm);
 
  $("titleMuteBtn").addEventListener("click", function(){
   const muted = Delve.sfxToggleMute ? Delve.sfxToggleMute() : false;

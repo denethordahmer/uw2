@@ -24,6 +24,7 @@ window.Delve = window.Delve || {};
       runTraits: [],
       runTraitsSeen: [],
       seenTutorial: false,
+      run: null,                 // in-progress run checkpoint (§6.12); null = nothing to resume
       lastUpdated: Date.now()
     };
   }
@@ -64,6 +65,24 @@ window.Delve = window.Delve || {};
     return out;
   }
 
+  // The in-progress-run checkpoint (§6.12). Deliberately permissive about its innards —
+  // the fields are the run object's own — but strict about the two things that matter:
+  // it must survive a JSON round-trip, and it must name a real floor. Anything else
+  // returns null, which the game reads as "no run to resume".
+  function sanitizeRun(raw){
+    if(!raw || typeof raw !== "object") return null;
+    const floor = sanitizeNumber(raw.floor, 0);
+    if(floor < 1) return null;
+    let json;
+    try { json = JSON.stringify(raw); } catch(_err){ return null; }
+    if(!json || json.length > 40000) return null;   // refuse anything absurd
+    try {
+      const copy = JSON.parse(json);
+      copy.floor = Math.round(floor);
+      return copy;
+    } catch(_err){ return null; }
+  }
+
   function migrateSave(raw){
     const base = makeDefaultSave();
     const src = raw && typeof raw === "object" ? raw : {};
@@ -73,6 +92,7 @@ window.Delve = window.Delve || {};
     base.bestFloor = sanitizeNumber(src.bestFloor, 1);
     base.lastUpdated = sanitizeNumber(src.lastUpdated, Date.now());
     base.seenTutorial = !!src.seenTutorial;
+    base.run = sanitizeRun(src.run);
 
     if(src.lvls && typeof src.lvls === "object"){
       base.lvls = sanitizeLevels(src.lvls);
@@ -125,6 +145,7 @@ window.Delve = window.Delve || {};
         runTraits: sanitizeStringArray(saveData.runTraits),
         runTraitsSeen: sanitizeStringArray(saveData.runTraitsSeen),
         seenTutorial: !!saveData.seenTutorial,
+        run: sanitizeRun(saveData.run),
         lastUpdated: Date.now()
       };
       localStorage.setItem(storageKey, JSON.stringify(safeSave));

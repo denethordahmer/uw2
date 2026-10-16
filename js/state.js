@@ -74,4 +74,84 @@ Delve.newRun = function(){
 
  Delve.genFloor();
  Delve.updateHUD();
+ Delve.setFloorCheckpoint();   // floor 1 is a checkpoint too (§6.12)
+};
+
+// ── In-progress run checkpoint (§6.12) ──────────────────────
+// Entering a floor records a snapshot of the run as it stands at that moment. If the tab
+// is killed before the run ends, that snapshot is what the player comes back to: the SAME
+// floor, rebuilt fresh, with gold, items, XP, level, traits and health rewound to how they
+// were when they walked in. Anything earned on the abandoned attempt is forfeited — that is
+// what stops a resumed floor being farmed for chests and kills, and it is why no map ever
+// has to be stored.
+// The cost, accepted by the owner on 16 Oct: quitting before the killing blow escapes
+// death, paid for with that floor's loot and XP.
+//
+// The snapshot is the ONE piece of run state that lives in the save file. Shards still only
+// reach save.shards at a commit point (§6.10), so this does not reopen that hole.
+
+const CHECKPOINT_FIELDS = [
+ "floor","hp","gold","level","xp","energy","restCount",
+ "traits","abilities","takenUniques","inventory","equip",
+ "atkBuff","speedBuff","redBuff","luckBuff","stoneSkin","floorHealLeft","effects",
+ "secondWindUsed","unbrokenUsed","lastStandUsed","victoryDone",
+ "runStats","runShards","shardsBanked",
+ "_victoriesProcessed","_bonusesApplied"
+];
+
+// Deep-copied through JSON on the way out: the run keeps mutating its nested items and
+// arrays, so an aliased snapshot would drift along with the live run instead of freezing.
+Delve.captureRunSnapshot = function(){
+ const G = Delve.G;
+ if(!G || G.dead || G.runEnded) return null;
+ const snap = {};
+ CHECKPOINT_FIELDS.forEach(function(k){ if(G[k] !== undefined) snap[k] = G[k]; });
+ try { return JSON.parse(JSON.stringify(snap)); } catch(_err){ return null; }
+};
+
+Delve.setFloorCheckpoint = function(){
+ if(Delve._suppressCheckpoint) return;   // test.html sets this — see its header comment
+ if(!Delve.save) return;
+ const snap = Delve.captureRunSnapshot();
+ if(!snap) return;
+ Delve.save.run = snap;
+ Delve.persist();
+};
+
+Delve.clearRunCheckpoint = function(){
+ if(!Delve.save || !Delve.save.run) return;
+ Delve.save.run = null;
+ Delve.persist();
+};
+
+Delve.hasSavedRun = function(){
+ return !!(Delve.save && Delve.save.run && Delve.save.run.floor >= 1);
+};
+
+Delve.savedRunFloor = function(){
+ return Delve.hasSavedRun() ? Math.round(Delve.save.run.floor) : 0;
+};
+
+// Rebuild G from the checkpoint. The caller (ui.js resumeRun) handles the screen.
+// newRun() is used deliberately: it builds a correct, fully-formed run object and fires the
+// runStart hooks, after which the snapshot overwrites the parts that matter. It is slightly
+// wasteful — floor 1 gets generated and thrown away — and worth it, rather than keeping a
+// second copy of the run shape in this file for the two to drift apart.
+Delve.restoreRunFromCheckpoint = function(){
+ if(!Delve.hasSavedRun()) return false;
+ const snap = Delve.save.run;       // read before newRun() replaces save.run
+ Delve.newRun();
+ const G = Delve.G;
+ CHECKPOINT_FIELDS.forEach(function(k){ if(snap[k] !== undefined) G[k] = snap[k]; });
+ G.floor = Math.max(1, Math.round(snap.floor));
+ G.dead = false; G.runEnded = false; G.inCombat = false;
+ G.combatTarget = null; G.targetingAbility = null;
+ G.pendingLevelUps = 0; G.levelUpOpen = false;
+ Delve.genFloor();                  // the same floor, rebuilt fresh — never the same map
+ Delve.updateHUD();
+ // Re-take the checkpoint for the restored floor. newRun() stamped a floor-1 snapshot on
+ // the way through, and if the player quit again before descending that is what they would
+ // be sent back to — a rewind all the way to floor 1.
+ Delve.setFloorCheckpoint();
+ return true;
 };

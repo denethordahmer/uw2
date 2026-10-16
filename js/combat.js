@@ -12,6 +12,17 @@ window.Delve = window.Delve || {};
  // Chance for an enemy with an on-hit status to actually apply it.
  const ON_HIT_STATUS_CHANCE = 0.15;
 
+ // Hit-stop (§Batch 15): freeze the swing loop for a few frames so an impact reads. Kept on
+ // G rather than in a timer because the combat loop is the only thing that reads it — and
+ // that loop deliberately does not advance its swing timers while frozen, so the pause is
+ // real rather than a skipped swing.
+ function hitStop(ms){
+  const G = Delve.G;
+  if(!G) return;
+  const until = Date.now() + ms;
+  if(!G.hitStopUntil || until > G.hitStopUntil) G.hitStopUntil = until;
+ }
+
  // ── Shared monster-data lookups ──────────────────────────────
  function rowFor(kind){
  const cfg = Delve.CONFIG;
@@ -77,7 +88,10 @@ window.Delve = window.Delve || {};
  if(!G.combatTarget || G.dead || G.runEnded){ Delve.endCombat(false); return; }
  const m = G.combatTarget;
 
- playerTimer -= TICK;
+ // Hit-stop (§Batch 15): the swing timers do not advance either, so the pause is a real
+  // freeze rather than a skipped swing.
+  if(G.hitStopUntil && Date.now() < G.hitStopUntil){ Delve.draw(); return; }
+  playerTimer -= TICK;
  monsterTimer -= TICK;
 
  if(playerTimer <= 0){
@@ -146,6 +160,7 @@ window.Delve = window.Delve || {};
  if(Math.random() < Delve.crit()){
  dmg = Math.round(dmg * sec.critMult);
  isCrit = true;
+ hitStop(90);                                     // a crit gets a beat of impact (§Batch 15)
  if(Delve.sfx) Delve.sfx("crit", { weapon: weaponStyle });
  }
 
@@ -156,7 +171,8 @@ window.Delve = window.Delve || {};
  dmg = Math.max(1, Math.round(dmg * (1 - wpct)));
  }
 
- Delve.addFloater(isCrit ? ("CRIT " + dmg) : ("-" + dmg), m.x, m.y, isCrit ? "#ff9d3d" : "#ffd75e");
+ Delve.addFloater(isCrit ? ("CRIT " + dmg) : ("-" + dmg), m.x, m.y, isCrit ? "#ff9d3d" : "#ffd75e", isCrit ? 1.5 : 1);
+ if(isCrit) Delve.addShake(2);   // a crit should be felt, not just read (§Batch 15)
  if(!isCrit && Delve.sfx) Delve.sfx("hit", { weapon: weaponStyle });
  if(Delve.logPlayerAtk) Delve.logPlayerAtk(m.name || m.kind || "enemy", dmg, isCrit);
  Delve.recordStat("damageDealt", dmg);
@@ -334,6 +350,10 @@ window.Delve = window.Delve || {};
  Delve.killMonster = function(m){
  const G = Delve.G;
  if(!G || !m) return;
+ // Every death leaves a corpse fade and a beat of hit-stop (§Batch 15). A boss gets a
+ // longer freeze — it should land like the end of something.
+ hitStop(m.isBoss ? 170 : 70);
+ if(Delve.addDeath) Delve.addDeath(m);
  const g = G.grid;
  const buffs = Delve.itemBuffs();
  const rewards = Delve.killRewards(m); // js/rewards.js
@@ -448,7 +468,6 @@ window.Delve = window.Delve || {};
  if(G.combatTimer){ clearInterval(G.combatTimer); G.combatTimer = null; }
 
  Delve.convertGold(); // js/rewards.js — gold → run shards only
- Delve._applyBossBonus(idx); // js/rewards.js
  const totalBanked = Delve.bankRunShards(); // commit point
 
  Delve.recordStat("victories", 1);

@@ -48,24 +48,9 @@ window.Delve = window.Delve || {};
  return pending;
  };
 
- // ── Boss shard bonus ─────────────────────────────────────────
- // Applied once per boss, at the moment of the victory screen.
- // Bonus is bossDef.shardBonusPct × current runShards.
- Delve.applyBossBonus = Delve._applyBossBonus = function(wardIdx){
- const G = Delve.G;
- if(!G._bonusesApplied) G._bonusesApplied = [];
- if(G._bonusesApplied.indexOf(wardIdx) >= 0) return 0;
- G._bonusesApplied.push(wardIdx);
- const def = C().BOSS_DEFS[wardIdx];
- if(!def || !def.shardBonusPct) return 0;
- const bonus = Math.round((G.runShards || 0) * def.shardBonusPct);
- if(bonus > 0){
- G.runShards += bonus;
- Delve.recordStat("shardsEarned", bonus);
- if(Delve.logSystem) Delve.logSystem(def.name + " bonus: +" + bonus + " shards");
- }
- return bonus;
- };
+ // The old percentage boss bonus (bossDef.shardBonusPct × run shards) was REMOVED on 16 Oct
+ // by the owner's call. Bosses now pay a flat, depth-scaled amount awarded as part of the
+ // boss kill itself — see the boss branch of killRewards and CONFIG.economy.bossShardsPerWard.
 
  // ── Monster roster / rewards ────────────────────────────────
  Delve.monsterStats = function(type, floor){
@@ -91,7 +76,12 @@ window.Delve = window.Delve || {};
 
  if(m.isBoss){
  gold = cfg.goldBossBase || 80;
- shards = eco.bossShards || 40;
+ // Flat, depth-scaled payout: 30 for boss 1, then +30 per boss (30, 60, 90 … 300 at
+ // floor 100). Not a percentage — the old shardBonusPct system was removed on 16 Oct
+ // so the reward is one readable number needing no re-tuning per ward.
+ const ward = Math.max(1, Math.ceil(floor / 10));
+ const bossDef = cfg.BOSS_DEFS[ward];
+ shards = (bossDef && bossDef.shardReward) || (eco.bossShardsPerWard || 30) * ward;
  xp = (cfg.xpKill && cfg.xpKill.boss) || 30;
  } else {
  const row = Delve.rowFor(m.kind); // exported by js/combat.js

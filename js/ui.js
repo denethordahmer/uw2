@@ -392,6 +392,20 @@ window.Delve = window.Delve || {};
   Delve.showFloorCard(Delve.G.floor);
  };
 
+  // Carrying on from the title screen's FLOOR n button (§6.12). The checkpoint is restored,
+ // the floor is rebuilt fresh, and the run screen is shown exactly as startRun() shows it.
+ Delve.resumeRun = function(){
+  if(!Delve.restoreRunFromCheckpoint) return false;
+  if(!Delve.restoreRunFromCheckpoint()) return false;
+  hideAll();
+  $("hud").style.display = "flex";
+  if(Delve.sfxStartAmbience) Delve.sfxStartAmbience();
+  if(Delve.resize) Delve.resize();
+  Delve.draw();
+  Delve.showFloorCard(Delve.G.floor);
+  return true;
+ };
+
  // ── ABILITY BAR ──────────────────────────────────────────────
  Delve.renderAbilityBar = function(){
   const bar = $("abilityBar"); if(!bar) return;
@@ -548,6 +562,8 @@ window.Delve = window.Delve || {};
  };
 
  Delve.showEndScreen = function(kind, extra){
+ // death or retreat: the run is over, so there is nothing left to resume (§6.12)
+ Delve.clearRunCheckpoint();
   hideAll();
   $("levelupScreen").style.display = "none";
   const title = $("deathScreen").querySelector("h1");
@@ -607,6 +623,7 @@ window.Delve = window.Delve || {};
   $("dbgGo").addEventListener("click", function(){
    if(!need()) return;
    Delve.G.floor = parseInt($("dbgFloor").value,10);
+   Delve.setFloorCheckpoint();   // a debug jump is a floor entry too (§6.12)
    Delve.genFloor(); Delve.updateHUD(); Delve.draw();
    Delve.showFloorCard(Delve.G.floor);
   });
@@ -707,6 +724,7 @@ window.Delve = window.Delve || {};
  });
  $("victoryHub").addEventListener("click", function(){
   if(Delve.G) Delve.G.runEnded = true;
+  Delve.clearRunCheckpoint();   // the run is abandoned from here, not paused (§6.12)
   Delve.showHub();
  });
 

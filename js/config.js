@@ -41,7 +41,13 @@ Delve.CONFIG = {
   tierPrices: [12, 35, 90, 240],
   consumablePrices: { 1:10, 2:20, 3:40 },
   luckDiscountPerPoint: 0.02, maxLuckDiscount: 0.20, goldToShardRate: 10,
-  floorClearBonus: 2, floorClearBonusPerFloor: 1, bossShards: 40
+  floorClearBonus: 2, floorClearBonusPerFloor: 1,
+  // BOSS REWARD — flat and depth-scaled, deliberately NOT a percentage. Boss n sits
+  // on floor 10n and pays bossShardsPerWard × n, so it scales the same way the rest
+  // of the economy does (floor-clear bonus is 2 + floor; gold is 2 + 0.5 × floor —
+  // both linear in depth). 30 × n gives 30 at floor 10 rising to 300 at floor 100,
+  // the planned ten wards. A single boss can override it with shardReward in BOSS_DEFS.
+  bossShardsPerWard: 30
  },
 
  // ---------- GOLD ----------

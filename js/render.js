@@ -16,6 +16,13 @@ window.Delve = window.Delve || {};
  const FLOAT_LIFE = 1200;
  const floaterDepth = new Map();
 
+// Corpse fades (§Batch 15). A monster that dies leaves a record here for a moment so the
+// renderer can shrink and fade it away instead of blinking it out of existence. Owned by
+// render.js rather than by G: it is pure presentation, so it stays out of the run state, out
+// of the checkpoint snapshot (§6.12) and out of the test page's floor checks.
+let deaths = [];
+const DEATH_LIFE = 460;
+
  const recoils = new Map();
  function dirAway(fx, fy, tx, ty){
   let dx = fx - tx, dy = fy - ty;
@@ -819,6 +826,7 @@ window.Delve = window.Delve || {};
   }
 
   // monsters
+  drawDeaths(ctx,camX,camY,ts,vw,vh);
   G.monsters.forEach(m=>{
    if(m.x<camX||m.y<camY||m.x>=camX+vw||m.y>=camY+vh) return;
    drawMob(ctx,m,(m.x-camX)*ts+ts/2,(m.y-camY)*ts+ts/2,ts);
@@ -909,13 +917,36 @@ window.Delve = window.Delve || {};
   ctx.restore();
  }
 
+ // Short corpse fade: shrink a little, sink a little, fade out. A death belonging to a
+// different floor is skipped outright, so a corpse from the previous floor can never ghost
+// onto a new one — cheaper and safer than clearing the list on every descend.
+ function drawDeaths(ctx, camX, camY, ts, vw, vh){
+  if(!deaths.length) return;
+  const now=Date.now(), alive=[];
+  const gf = (Delve.G && Delve.G.floor) || 1;
+  deaths.forEach(function(d){
+   const age=now-d.born; if(age>=DEATH_LIFE) return;
+   if(d.floor!==gf) return;
+   if(d.x<camX||d.y<camY||d.x>=camX+vw||d.y>=camY+vh) return;
+   const t=age/DEATH_LIFE, s=1-0.35*t, slump=ts*0.22*t;
+   const cx=(d.x-camX)*ts+ts*0.5, cy=(d.y-camY)*ts+ts*0.5;
+   ctx.save();
+   ctx.globalAlpha=1-t;
+   ctx.translate(cx,cy); ctx.scale(s,s); ctx.translate(-cx,-cy);
+   drawSprite(ctx, d.kind, cx, cy+slump, ts, false, d.elite, false, d.size);
+   ctx.restore();
+   alive.push(d);
+  });
+  deaths = alive;
+ }
+
  function drawFloaters(ctx, camX, camY, ts){
   const now=Date.now(), alive=[];
   floaters.forEach(f=>{
    const age=now-f.born; if(age>=FLOAT_LIFE) return;
    const t=age/FLOAT_LIFE; const alpha=t<0.15?t/0.15:1-((t-0.15)/0.85); const rise=t*ts*2.2;
    const sx=(f.x-camX)*ts+ts*0.5, sy=(f.y-camY)*ts-rise;
-   ctx.save(); ctx.globalAlpha=alpha; ctx.font="700 "+Math.max(11,ts*0.32)+"px system-ui, sans-serif"; ctx.textAlign="center";
+   ctx.save(); ctx.globalAlpha=alpha; ctx.font="700 "+Math.round(Math.max(11,ts*0.32*(f.sc||1)))+"px system-ui, sans-serif"; ctx.textAlign="center";
    ctx.fillStyle="rgba(0,0,0,0.7)"; ctx.fillText(f.txt,sx+1,sy+1); ctx.fillStyle=f.col; ctx.fillText(f.txt,sx,sy); ctx.restore();
    alive.push(f);
   });
@@ -932,14 +963,24 @@ window.Delve = window.Delve || {};
   return "#"+r+g+b;
  }
 
- Delve.addFloater = function(txt,x,y,col){
+ // `sc` is an optional size multiplier — crits pass one so a crit reads as a bigger event.
+ Delve.addFloater = function(txt,x,y,col,sc){
   while(floaters.length>=60) floaters.shift();
   const key=Math.round(x)+","+Math.round(y);
   const depth=floaterDepth.get(key)||0;
   const jx=(Math.random()-0.5)*0.45;
-  floaters.push({txt, x:x+jx, y:y-depth*0.6, col, born:Date.now()});
+  floaters.push({txt, x:x+jx, y:y-depth*0.6, col, sc:sc||1, born:Date.now()});
   floaterDepth.set(key,depth+1);
   setTimeout(function(){ const d=floaterDepth.get(key)||0; if(d>1) floaterDepth.set(key,d-1); else floaterDepth.delete(key); },520);
+ };
+ // Called from killMonster for every monster and boss that dies (§Batch 15).
+ Delve.addDeath = function(m){
+  if(!m) return;
+  while(deaths.length>=14) deaths.shift();
+  deaths.push({
+   kind:m.kind||"goblin", x:m.x, y:m.y, elite:!!m.elite, size:m.size||null,
+   floor:(Delve.G && Delve.G.floor) || 1, born:Date.now()
+  });
  };
  Delve.addShake = function(mag){ shakeMag=Math.max(shakeMag,mag); shakeT=6; };
  // Introspection hook for test.html: is this wall tile lit? (see arenaTorches)
@@ -958,6 +999,8 @@ window.Delve = window.Delve || {};
   const B = biome();
   if(B.ambient && B.ambient.count) return true;          // drifting weather
   if(floaters.length || shakeT > 0) return true;
+  if(deaths.length) return true;                                  // corpse fades (§Batch 15)
+  if(G.hitStopUntil && Date.now() < G.hitStopUntil) return true;  // a frozen impact frame
   if(lunges.size || recoils.size) return true;
   if(G.swing && Date.now()-G.swing < ATTACK_MS) return true;
   if(G.playerHit && Date.now()-G.playerHit < ATTACK_MS*2) return true;
