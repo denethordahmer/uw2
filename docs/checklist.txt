@@ -1,0 +1,43 @@
+CHECKLIST — underward to-do
+
+SMALL
+- Trait rarity labels currently decorative — make them weight the draw.
+- traits.js "offer a unique" block writes the same slot twice.
+
+MENU (deferred, not started)
+- Boss second phases at half health.
+- Per-ward arena shapes.
+- In-game fonts. The title screen has custom fonts; the game itself
+  still uses the phone's default. Extending them to hub, HUD, item
+  cards and menus is its own job, judged on screen.
+- Title screen emptiness. Still mostly plain black. Fill with something
+  more than a flat background. Much later.
+- UI clarity: status icons, item comparison, run summary.
+- Whole-project visual pass — rounding and smoothing. Files already
+  exist from another AI; compare vs real game, decide wholesale vs
+  adapt before applying.
+
+NEW CONTENT
+- Ward 4: Bone Ossuary, floors 31-40. Boss: The Bonefather.
+  Designed but not built. Includes: palette, eight monsters with new
+  sprites, boss sprite and intro, its own special-floor behaviour, and
+  the boss card.
+- Wards 5 through 10: unbuilt. Each is 10 floors with its own boss.
+  Plan is roughly 100 floors total.
+- Per-ward content so far has followed the same recipe: new palette,
+  new monster roster, new boss with its own sprite and intro, its own
+  special floors. Ward 4 is the next one to build.
+
+TUNING AND POLISH (worth considering)
+- Legendary drop rate and overall loot pacing. The current curve is
+  new and untested against long play sessions.
+- Shard economy over long horizons. Boss reward is now flat × ward.
+  Worth checking whether the ramp still feels right at ward 6 and
+  beyond — the whole progression curve depends on it.
+- Difficulty curve beyond ward 3. Enemy per-floor scaling has been
+  hand-tuned so far. It may want formalising rather than guessing each
+  biome.
+- Trait pool size. Sixteen passives is thin — most appear in every run.
+  Adding more would give builds room to differ.
+- Ability count and usefulness. Some abilities are clearly better than
+  others. Worth reviewing which ones get picked.
