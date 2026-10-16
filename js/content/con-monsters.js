@@ -63,7 +63,7 @@ window.Delve = window.Delve || {};
    title:"Guardian of the Undercroft",
    flavour:"He has watched these stones since before your grandfather was born.\nHe will not step aside.",
    hp:100, atk:9, speed:0.65, chainHitEvery:3,
-   shardBonusPct:0.10,
+   // (no shardBonusPct — bosses pay a flat, depth-scaled amount; CONFIG.economy.bossShardsPerWard)
    sprite:"boss_warden",   // key registered in content/bosssprites.js
    accent:"#7ee0ff",       // boss intro tint — matches his pale-blue eyes
    size:{ w:2, h:2 }       // tiles his art covers (tile is the bottom-left of it)
@@ -73,7 +73,7 @@ window.Delve = window.Delve || {};
    title:"Heart of the Blackvein",
    flavour:"It was ancient before the corruption found it.\nNow it walks, and it has been waiting.",
    hp:160, atk:14, speed:0.70, chainHitEvery:2,
-   shardBonusPct:0.15,
+   // (no shardBonusPct — bosses pay a flat, depth-scaled amount; CONFIG.economy.bossShardsPerWard)
    sprite:"boss_thorn",    // FIX #27: previously fell back to boss_warden
    accent:"#a8e84a",
    size:{ w:2, h:2 }
@@ -83,7 +83,7 @@ window.Delve = window.Delve || {};
    title:"Heart of the Blizzard",
    flavour:"The storm did not arrive. It woke.",
    hp:220, atk:18, speed:0.72, chainHitEvery:2,
-   shardBonusPct:0.20,
+   // (no shardBonusPct — bosses pay a flat, depth-scaled amount; CONFIG.economy.bossShardsPerWard)
    sprite:"boss_tempest",  // registered in content/bosssprites.js
    accent:"#a8e8ff",       // the blizzard's own light
    size:{ w:2, h:2 }
