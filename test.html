@@ -122,6 +122,12 @@ for (var c = 0; c < canvases.length; c++) canvases[c].getContext = function(){ r
 window.requestAnimationFrame = function(){};
 window.cancelAnimationFrame = function(){};
 
+/* The engine records an in-progress-run checkpoint on each floor entry (§6.12). This page
+   generates 50 floors, so suppression stops it stamping over the real save's run slot — and
+   stops it leaving a bogus run behind for the game to offer as "FLOOR 1". */
+window.Delve = window.Delve || {};
+window.Delve._suppressCheckpoint = true;
+
 /* ── output helpers ───────────────────────────────────────────── */
 var outBox = document.getElementById("console");
 function out(html){ outBox.insertAdjacentHTML("beforeend", html); }
@@ -185,7 +191,7 @@ var EXPECT_OWNER = {
   "Delve.rewards.floorClearBonus":["floorClearBonus", "js/rewards.js"],
   "Delve.rewards.makeElite":      ["makeElite", "js/rewards.js"],
   "Delve.rewards.monsterStats":   ["monsterStats", "js/rewards.js"],
-  "Delve.rewards.applyBossBonus": ["applyBossBonus", "js/rewards.js"],
+  // "Delve.rewards.applyBossBonus" removed 16 Oct — boss rewards are flat, no percentage.
   "Delve.combat.rowFor":          ["rowFor", "js/combat.js"],
   "Delve.combat.onHitEffectFor":  ["onHitEffectFor", "js/combat.js"],
   "Delve.combat.startCombat":     ["startCombat", "js/combat.js"],
@@ -356,13 +362,15 @@ var REQUIRED_FN = [
   "killRewards","floorClearBonus","makeElite","startCombat","endCombat",
   "tryAct","tryActOnStep","smashBarrel","collectGold",
   "triggerVictory","tryRest","descend","promptStairs","die","retreat","convertGold",
-  "applyBossBonus","recordStat","addFloater","updateHUD","renderMinimap","drawPaperDoll",
+  "recordStat","addFloater","updateHUD","renderMinimap","drawPaperDoll",
   "refreshHub","openInventory","openShop","buildShop","makeShopStock","shopHealCost",
   "applyEffect","applyPlayerEffect","tickPlayerEffects","statusColor",
   "registerBossSprite","rebuildSprites","castAbility","addXP","addAbility",
   "logXP","logKill","logSystem","logFloor","hasProgression","markRunTrait",
   "injectHubAbilities","persist","isShopFloor","healCost","getWard","getMonsterBand",
-  "findPath","stepPath","uiBlocked","rowFor","onHitEffectFor","markVisited","isTorchTile"
+  "findPath","stepPath","uiBlocked","rowFor","onHitEffectFor","markVisited","isTorchTile",
+  "hasSavedRun","savedRunFloor","resumeRun","restoreRunFromCheckpoint",
+  "setFloorCheckpoint","clearRunCheckpoint","captureRunSnapshot","addDeath"
 ];
 // Non-function globals. `save` lives here, NOT in REQUIRED_FN — Delve.save is
 // the DATA object, so a typeof==="function" check could never pass.
@@ -574,7 +582,7 @@ var s6 = sec("6. Save schema &amp; persistence");
 try {
   var s = window.Delve.save;
   var need = ["version","shards","bestFloor","lvls","unlocks","nodes","inventoryCap",
-              "abilities","abilityRanks","runTraits","runTraitsSeen","seenTutorial"];
+              "abilities","abilityRanks","runTraits","runTraitsSeen","seenTutorial","run"];
   var absent = need.filter(function(k){ return !(k in s); });
 
   // Locate the save key rather than assuming it, so a rename cannot produce a

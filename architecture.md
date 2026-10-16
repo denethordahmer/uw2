@@ -33,9 +33,10 @@ No build step, no dependencies, no bundler, no framework. Plain `<script>` tags 
 one global namespace (`Delve`).
 
 ### Core loop
-1. **Title screen → Hub** — the front door is the title screen (§6.11): `CONTINUE` leads
-   to the hub, `SETTINGS` opens the sound panel. The hub is where you spend shards on
-   permanent attribute levels and a shard-tree of nodes.
+1. **Title screen → Hub** — the front door is the title screen (§6.11). Its main button reads
+   `CONTINUE`, `BEGIN` on an empty save, or **`FLOOR n` when a run is in progress** (§6.12).
+   `SETTINGS` opens the sound panel. `CONTINUE` leads to the hub, which is where you spend
+   shards on permanent attribute levels and a shard-tree of nodes.
 2. **START RUN** — new run, floor 1, procedurally generated, one ward (10-floor band)
    at a time.
 3. **Movement** — tap an adjacent tile to step; tap your own tile to rest; tap a
@@ -197,7 +198,9 @@ every `BOSS_DEFS.sprite` is registered and built.
 
 **`js/state.js`**
 `Delve.T` (tile enum), `Delve.G` (run state), `rng`, `rngF`, `clamp`, `flash`, `mdist`,
-`getWard`, `getMonsterBand`, `pickWeighted`, `recordStat`, `newRun`.
+`getWard`, `getMonsterBand`, `pickWeighted`, `recordStat`, `newRun`, and the run-checkpoint set
+(§6.12): `captureRunSnapshot`, `setFloorCheckpoint`, `clearRunCheckpoint`, `hasSavedRun`,
+`savedRunFloor`, `restoreRunFromCheckpoint`.
 Notes: tile enum + RNG + math utils + ward/band lookup + run construction.
 ⚠️ **GOTCHA:** `Delve.T` is a **plain object**, but many files alias it as a
 **function** (`const T = () => Delve.T`). Both styles exist and are not
@@ -241,8 +244,8 @@ top of both `tryAct` and `tryActOnStep`. Every entry point guards `Delve.G` befo
 Never owns the combat loop or the economy. `test.html` §8 is the direct guard on this file.
 
 **`js/rewards.js`**
-`convertGold`, `bankRunShards`, `pendingRunShards`, `applyBossBonus` / `_applyBossBonus`,
-`monsterStats`, `killRewards`, `floorClearBonus`, `makeElite`.
+`convertGold`, `bankRunShards`, `pendingRunShards`, `monsterStats`, `killRewards`,
+`floorClearBonus`, `makeElite`.
 **Shard rule:** run earnings live in `G.runShards` and are never in the save while the run
 is in progress; only `bankRunShards()` writes them into the save (§6.10).
 Consumes `Delve.rowFor` from `combat.js` at call time. `monsterStats` has no internal
@@ -266,7 +269,7 @@ slider) — keep in sync if you change it.
 Two destinations: a rolling strip (`#combatLog`) and a modal (`#logWindowContent`).
 
 **`js/render.js`**
-`Delve.draw`, `addFloater`, `addShake`, `isTorchTile`, tile/floor/wall/torch/stairs
+`Delve.draw`, `addFloater`, `addShake`, `addDeath`, `isTorchTile`, tile/floor/wall/torch/stairs
 drawing, sprite drawing (idle / hurt / elite / **attack** frames, plus the hurt-recoil
 and the attack-lunge offsets), the offscreen tile cache, the per-biome decoration
 families and the drifting ambience layer, `Delve.drawPaperDoll`, `Delve.markVisited`,
@@ -689,9 +692,17 @@ repeat while `pendingLevelUps > 0`.
   is safe. Victory banks, the run continues deeper, later earnings accrue from zero, and a
   later death banks only the remainder. `Delve.pendingRunShards()` reports what is unbanked.
 - `die()` → `endRun("death")` → banks → `showEndScreen` → `#deathScreen`.
-- Boss dies → boss branch of `killMonster` → guaranteed boss drop →
-  `triggerVictory(wardIdx)` → `convertGold()` (gold→shards at 10:1) → `_applyBossBonus`
-  (boss `shardBonusPct` of run shards) → `bankRunShards()` → `showVictory`.
+- Boss dies → boss branch of `killMonster` → guaranteed boss drop (**flat, depth-scaled
+  boss shards** — see the next bullet) → `triggerVictory(wardIdx)` → `convertGold()`
+  (gold→shards at 10:1) → `bankRunShards()` → `showVictory`.
+- **Boss reward (Batch 13):** a boss pays a flat `CONFIG.economy.bossShardsPerWard × ward` —
+  30 for boss 1, +30 per boss, so 300 by floor 100 (the planned ten wards). The old system
+  was a constant 40 **plus** a percentage of run shards (`BOSS_DEFS[n].shardBonusPct`), which
+  meant boss 3 paid the same flat 40 as boss 1; the percentage was removed by the owner's
+  call on 16 Oct. A single boss can still override the formula with `shardReward` in
+  `BOSS_DEFS`. Linear in ward **on purpose**: the floor-clear bonus (`2 + floor`) and gold
+  (`2 + 0.5 × floor`) are both linear in depth, so a boss stays "slightly better than an
+  ordinary floor" at every depth instead of being re-tuned each time a ward is added.
 - Victory screen offers **Descend deeper** (ward 1 only) or **Return to Hub**.
 - `retreat()` → gold converts, banks, counts as a success.
 - During a run the HUD's 💎 shows `save.shards + pendingRunShards()` — banked plus what this
@@ -755,9 +766,10 @@ lists, and nothing new that can leak taps.
 New ids (present in both `index.html` and `test.html`'s `#fixtures`): `titleResetBtn`,
 `titleResetConfirm`, `titleResetNote`, `titleResetYes`, `titleResetNo`, `titleResetDone`.
 
-### 6.12 Resume after the app closes (design agreed, NOT built)
+### 6.12 Resume after the app closes (BUILT — Batch 14)
 The owner's decision, 16 Oct. This **supersedes** the "recreate the identical floor" idea
-sketched earlier.
+sketched earlier. The design bullets below are the agreed behaviour; the implementation notes
+are at the end.
 - **Entering a floor sets the run's checkpoint.** Resuming rewinds gold, items, XP, level,
   traits **and health** to how they were when that floor was entered — **full health on entry**,
   deliberately, so someone who quit at 3 HP isn't made to re-clear the floor while nearly dead.
@@ -769,10 +781,62 @@ sketched earlier.
 - Retreating still ends the run properly, so the button returns to CONTINUE.
 - **Accepted cost:** quitting before the killing blow is an escape from death. The price is that
   floor's loot and XP, which are discarded.
-- Storage needed: the floor number plus the entry-time snapshot — *not* the map. It still needs
-  the save rules: the new field in all three places in `save.js`, a version bump, and `test.html`
-  §6. The hook already exists (`menu.js`'s `continuePressed()` asks for `Delve.hasSavedRun()` /
-  `Delve.resumeRun()` and falls through to the hub when they're absent).
+**Implementation (Batch 14).**
+- `save.js` carries the snapshot in a new field, `save.run` — `null` when there is no run. Added
+  in all three required places (`makeDefaultSave`, `migrateSave`, the write-out whitelist), and
+  validated by `sanitizeRun()`: it must survive a JSON round-trip and name a floor ≥ 1, or it is
+  dropped as "nothing to resume".
+- `state.js` owns the checkpoint set. `captureRunSnapshot` copies a fixed list (the const
+  `CHECKPOINT_FIELDS`) **deep-copied through JSON**, so it freezes rather than aliasing the live
+  run's nested items and arrays.
+- **Written** at the end of `newRun()` (floor 1), at the end of `descend()` (`movement.js`), on a
+  debug floor-jump, and again at the end of `restoreRunFromCheckpoint`. That last one is not
+  optional: `newRun()` stamps a floor-1 snapshot on the way through, so without re-taking it,
+  quitting straight after a resume would send the player back to floor 1.
+- **Cleared** in `showEndScreen` (death and retreat both route through it) and in the
+  `victoryHub` handler. **Deliberately NOT in `showHub`** — `ui.js` calls `showHub()` at load,
+  before `main.js` shows the title, so clearing there would destroy the saved run on every page
+  load. That was the trap most likely to have shipped.
+- `restoreRunFromCheckpoint` calls `newRun()` and then overwrites the snapshot's fields. That
+  reuses the one definition of the run's shape and fires the `runStart` hooks (hub abilities
+  included, which is idempotent), at the cost of generating floor 1 and discarding it — cheaper
+  than a second copy of the run shape that could drift.
+- `ui.js`'s `resumeRun()` mirrors `startRun()` for the screen. `menu.js`'s `refreshTitleButton()`
+  reads `FLOOR n`, and `continuePressed()` calls `Delve.resumeRun()` — the name the title screen
+  was already looking for.
+- **Shards are unaffected.** The snapshot records `runShards`/`shardsBanked` so a resumed run
+  still banks its pre-floor earnings at a commit point (§6.10), but nothing here ever writes
+  `save.shards`.
+- **Two accepted consequences:** (a) quitting before the killing blow escapes death, paid for with
+  that floor's loot and XP; (b) re-fighting the boss of the floor you resume on pays its flat
+  reward again, because the floor genuinely is fresh — bounded by having to win the fight from the
+  floor-entry loadout each time.
+- **Test-page note:** `test.html` sets `Delve._suppressCheckpoint = true`, because it generates 50
+  floors and would otherwise stamp over the live save's run slot. Worth knowing: `test.html`
+  already writes to the real save, so running it can clobber a run in progress.
+- **The hub is deliberately unreachable while a run is in progress** (owner's decision, 16 Oct):
+  spending shards is a between-runs activity, so `FLOOR n` replacing `CONTINUE` is correct
+  behaviour rather than a missing button. A player who wants to upgrade retreats first — which
+  ends the run and banks it. Do not add a "go to hub" escape from an active run.
+
+### 6.13 Impact feedback (Batch 15)
+Three additions, all presentational — none touch the grid, pathfinding, the combat maths or the
+save.
+- **Corpse fades.** `killMonster` calls `Delve.addDeath(m)`; render.js keeps up to 14 records for
+  `DEATH_LIFE` (460ms) and draws each as the ordinary sprite shrinking to ~65% while sinking
+  ~0.22 tiles and fading out. The animation clock runs at 150ms, so that is roughly **three
+  frames** — if it reads as steppy rather than smooth, the knob is `DEATH_LIFE` or `ANIM_MS`,
+  not the drawing code. The records are **render.js's own state, deliberately not on `G`** —
+  so they stay out of the run state, out of the checkpoint snapshot (§6.12), and out of the floor
+  checks in `test.html` §7. Each carries its floor number and is skipped when the floor no longer
+  matches, which is why nothing has to clear the list on descend.
+- **Hit-stop.** `hitStop(ms)` in `combat.js` sets `G.hitStopUntil`, and the swing loop returns early
+  while it holds — **without advancing `playerTimer`/`monsterTimer`**, so the pause is a real freeze
+  rather than a skipped swing. 90ms on a crit, 70ms on an ordinary kill, 170ms on a boss.
+  `animating()` reports true during a stop so the frozen frame is actually drawn.
+- **Crit feedback.** `addFloater` gained an optional 5th argument (a size multiplier); crits use 1.5×,
+  a crit now shakes the screen by 2, and the crit sound (`sounds.crit`, already wired) still plays.
+  A crit should be felt, not only read.
 
 ---
 
@@ -913,10 +977,19 @@ try/catch.
 - `tryAct`/`tryActOnStep` dereferenced `G` before null-checking it.
 - `uiBlocked` threw `blocking is not defined` (see §8).
 - **Shards were banked mid-run** (found 16 Oct, played by the owner): `killMonster`, the
-  floor-clear bonus, `convertGold` and `_applyBossBonus` each wrote `Delve.save.shards`
+  floor-clear bonus, `convertGold` and the boss bonus (then `_applyBossBonus`, removed in
+  Batch 13) each wrote `Delve.save.shards`
   directly and persisted immediately, so refreshing (or the phone killing the tab) mid-run
   kept every shard earned without finishing the run — and dying cost the player nothing.
   All four now add to `G.runShards` only; `bankRunShards()` commits at a commit point (§6.10).
+- **Rests never refilled** (found 16 Oct while building the run checkpoint): `G.restCount` was
+  set to 0 on `newRun` and **never reset again** — `descend()` and `genFloor()` both left it alone
+  — so `tryRest` refused every rest after the first `restPerFloor` of a *run*, while the HUD dots
+  and the "No more rest available this floor" message both promised per-floor. `descend()` now
+  resets it alongside `secondWindUsed` / `lastStandUsed` / `floorCleared`. **This is also a
+  difficulty change** — 3 rests per floor instead of 3 per run — which is what the UI already
+  claimed. If per-run rests were the real intent for balance, the honest alternative is to rename
+  `restPerFloor` and change both messages, rather than leave the interface lying.
 - The boss intro swallowed input for 3 seconds.
 - A secret room could leave a phantom false-wall pulse on the next floor — `genFloor`
   now resets `G.floorData`.

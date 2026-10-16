@@ -91,8 +91,10 @@ Batch 4 - later, separate: the "rounded / less square" visual pass (see below).
 
 Not in these batches (content for another day, unless the owner pulls one forward): guarding for a future third area. Two things that were on this list are now done instead: dressing the boss floors (batch 8) and the "descend deeper" limitation (fixed when it became data-driven in batch 5).
 
-STATUS RIGHT NOW
-Nine batches are WRITTEN TO DISK; nothing has been uploaded or play-tested yet.
+STATUS RIGHT NOW (as of 16 Oct, latest session)
+Batches 1-9: written, uploaded and played. Batches 10, 11, 12 and 12b were then written, uploaded and looked at — the owner has reviewed the title screen and approved it for now (two layout faults were found and fixed in 12b). Batches 13, 14 and 15 are WRITTEN TO DISK AND NOT YET UPLOADED, and none of the three has been played: an economy change (boss rewards), the project's first save-format change (resuming a run), and the impact-feedback pass. Those are described further down this file, and checklist.txt carries the single upload list and the checks to run.
+
+The batch-by-batch notes below are the history of the FIRST session, when nothing had been uploaded yet — read them as a record of what was built then, not as the current upload state.
 Batch 1 (the shard tree): all 23 inert nodes now really work, Energy is a real purchasable attribute, the two duplicate names were replaced (Iron Will node -> "Last Stand", Warden's Oath node -> "Oathbound"), and chaining now needs one node per tier instead of two.
 Batch 2 (odds and ends): the Log button is reachable, the app-icon lines are in index.html, legendary gear is no longer impossible (it scales with depth + Luck, with chests/elites/bosses better), the token-upload tool was stripped out of icons/icon-maker.html, and test.html section 10 was rewritten for the new loot rule.
 Batch 3 (tidy-ups + docs): dead code removed (legacy decor loop, inert boss bands, a dead Lunge calculation, the stale introOverlay reference), stale comments corrected, architecture.md brought back in line. Section 4 now FAILS if a shard-tree node uses a type the engine doesn't consume, so nodes cannot silently die again.
@@ -167,5 +169,57 @@ The owner looked at the title screen. The title font itself was judged good. Two
 - The buttons were not low enough - they sat tucked under the tagline even with a 7vh gap. The inner block now grows to fill the screen and the buttons are anchored to the bottom of it, so their position no longer depends on a guessed gap.
 
 No other files changed. js/menu.js and index.html remain the only code files in this work.
+
+BATCH 13 - BOSS SHARD REWARDS (an economy change) - WRITTEN TO DISK, NOT YET UPLOADED
+
+Why: the owner killed a boss and banked 80 shards, and that felt like a lot. Investigating showed the payout was two things stacked - a FLAT 40 (economy.bossShards) PLUS a percentage of the run's shards (BOSS_DEFS[n].shardBonusPct, 10% / 15% / 20%). The flat 40 was about half of what he saw, and it was the same 40 for every boss: boss 3 paid no more than boss 1 despite far higher stats. Only the percentage ramped.
+
+The owner's decisions: keep a flat reward, increase it by 30 per boss, and remove the percentage system entirely.
+
+What changed:
+- CONFIG.economy.bossShards (40) became CONFIG.economy.bossShardsPerWard (30).
+- A boss now pays bossShardsPerWard x its ward number: 30 at floor 10, 60 at floor 20, 90 at floor 30, rising to 300 at floor 100.
+- That ramp was chosen against the END of the plan (ten wards, 100 floors) rather than the three wards that exist, because everything else that scales with depth here is linear in floor (floor-clear bonus is 2+floor; gold is 2+0.5xfloor). A linear boss ramp therefore needs no re-tuning when ward 4 is built. The owner's first idea (+5 per boss) would have ended at 75 shards for the floor-100 boss - less than an ordinary floor is worth by then.
+- Delve.applyBossBonus / _applyBossBonus are GONE, and the call was removed from triggerVictory. shardBonusPct is gone from all three BOSS_DEFS entries.
+- A single boss can still override the formula with shardReward in BOSS_DEFS, so one ward can be hand-tuned without disturbing the others.
+- test.html needed two edits or it would have failed loudly: applyBossBonus was in its required-function list and in its ownership map.
+
+Caveat worth keeping: the economy block in config.js labels itself "sim-locked shard pacing", meaning the old numbers were modelled against a simulation. This change rests on the owner's feel judgement plus the depth-scaling argument above, not on that model. If pacing now feels off, the floor-clear bonus (2 + floor) is the larger dial, since it compounds on every floor cleared.
+
+FILES TOUCHED (Batch 13): js/config.js, js/rewards.js, js/combat.js, js/content/con-monsters.js, test.html, architecture.md, cp.txt, checklist.txt.
+
+BATCH 14 - RESUMING A RUN AFTER THE TAB DIES (§6.12) - WRITTEN TO DISK, NOT YET UPLOADED
+
+What it does: quitting mid-run no longer throws the run away. Entering a floor records a checkpoint - the run as it stood at that moment - and the title screen's main button then reads FLOOR n instead of CONTINUE. Tapping it puts the player back at the START of that floor, rebuilt fresh, with gold, items, XP, level, traits and health rewound to how they were when they entered it.
+
+Why the rewind: it is what stops the exploit. If the floor came back as the player left it, or if they kept what they had picked up on it, then quitting and reopening would be an unlimited chest-and-kill farm. Rewinding also means no map ever has to be stored - just a floor number and a snapshot - which is what makes this affordable at all.
+
+Two consequences the owner accepted knowingly:
+- Quitting before the killing blow escapes death. The price is that floor's loot and XP, which are discarded.
+- Re-fighting the boss of the floor being resumed pays its flat reward again, because the floor really is fresh. Bounded by having to win the fight from the floor-entry loadout every time.
+- The hub stays deliberately unreachable during an active run (owner's decision, same day): upgrading is a between-runs activity, so FLOOR n replacing CONTINUE is intended, not a missing button.
+
+Storage: a new field, save.run, added in all three places in save.js as the project's rule requires (default builder, migration, write-out whitelist), plus a sanitiser that drops anything that will not survive a JSON round-trip or that names no floor. Shards are untouched: the snapshot carries runShards/shardsBanked so a resumed run still banks its pre-floor earnings at a commit point, but save.shards is never written by any of this.
+
+Traps found and handled while building it (worth remembering):
+- Clearing the checkpoint in showHub would have destroyed every saved run on every page load, because ui.js calls showHub() at load, before main.js shows the title. Clearing lives in showEndScreen (death and retreat both route through it) and the victoryHub handler instead.
+- newRun() is used to rebuild the run object, which stamps a floor-1 checkpoint on its way through. restoreRunFromCheckpoint re-takes the checkpoint afterwards, or quitting straight after a resume would rewind the player to floor 1.
+- The debug floor jump sets the checkpoint too, so the feature can be tested without playing ten floors.
+- test.html sets Delve._suppressCheckpoint = true, since it generates 50 floors and would otherwise stamp over the live save's run slot.
+
+FILES TOUCHED (Batch 14): js/save.js, js/state.js, js/movement.js, js/ui.js, js/menu.js, test.html, architecture.md, cp.txt, checklist.txt.
+
+BATCH 15 - IMPACT FEEDBACK (death fades, hit-stop, crits) - WRITTEN TO DISK, NOT YET UPLOADED
+
+What the owner asked for: death animations, hit-stop and crit feedback - the "juice" pass from the polish menu.
+
+What was added:
+- Monsters and bosses now fade out instead of vanishing: the sprite shrinks to about two thirds, sinks slightly and fades over roughly half a second. The records live in render.js, NOT in the run state, so they cannot leak into the checkpoint snapshot or into the test page's floor checks. Each record carries its floor number, so a corpse can never appear on a floor it does not belong to - which is why nothing has to clear the list when the player descends.
+- Hit-stop: a brief freeze on impact - 90ms on a crit, 70ms on an ordinary kill, 170ms on a boss. The swing timers deliberately do NOT advance during it, so it is a real pause rather than a skipped swing.
+- Crits now read as events: the damage floater is drawn at 1.5x size, the screen takes a small shake, and the crit sound (which already existed and was already wired) plays.
+
+Nothing here touches the combat maths, movement, the grid or the save. The animation clock had to be told about both new things, or a corpse would freeze mid-fall: it only redraws while something is genuinely animating.
+
+FILES TOUCHED (Batch 15): js/render.js, js/combat.js, test.html, architecture.md, cp.txt, checklist.txt.
 
 That's everything we've covered. If you paste this into a new chat, the fresh AI should know the roles, the location, the constraints, the nine decisions, the audit findings, the plan, and exactly where we paused.
