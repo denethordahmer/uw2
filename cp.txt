@@ -160,4 +160,12 @@ Owner feedback after first looking at the title screen, and what was done about 
 
 FILES TOUCHED (Batch 12): index.html, js/menu.js, test.html, architecture.md, cp.txt, checklist.txt. The three font files are new and were uploaded by the owner: fonts/title.ttf, fonts/sub.ttf, fonts/buttons.ttf.
 
+BATCH 12b - FIRST LOOK FEEDBACK (rides in the same upload as Batch 12)
+
+The owner looked at the title screen. The title font itself was judged good. Two layout faults, both fixed in index.html only:
+- The wordmark was too wide and ran off the left and right edges on the narrow phone. 16vw is too much for nine letters; it is now 13vw with an 80px cap, which fits with room to spare.
+- The buttons were not low enough - they sat tucked under the tagline even with a 7vh gap. The inner block now grows to fill the screen and the buttons are anchored to the bottom of it, so their position no longer depends on a guessed gap.
+
+No other files changed. js/menu.js and index.html remain the only code files in this work.
+
 That's everything we've covered. If you paste this into a new chat, the fresh AI should know the roles, the location, the constraints, the nine decisions, the audit findings, the plan, and exactly where we paused.

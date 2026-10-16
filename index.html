@@ -596,7 +596,7 @@ body{
     radial-gradient(100% 55% at 50% 100%, rgba(18,26,34,.95), rgba(0,0,0,0) 72%),
     #070b0e;
 }
-#titleInner{ display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:520px; }
+#titleInner{ display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:520px;flex:1;padding-bottom:5vh; }
 
 /* The wordmark. Black letters, thick acid-green outline, a fast, strong pulsing glow, and
    a second stroke that drifts a hair off-centre for the "moving outline". The
@@ -606,7 +606,7 @@ body{
 #titleWord{
   position:relative;margin:0;
   font-family:"UwTitle", system-ui, sans-serif;
-  font-size:clamp(44px,16vw,96px);font-weight:400;line-height:1;letter-spacing:0;
+  font-size:clamp(36px,13vw,80px);font-weight:400;line-height:1;letter-spacing:0;
   color:#04080a;
   -webkit-text-stroke:2px #8dff2a;
   text-shadow:0 0 9px rgba(141,255,42,.70), 0 0 22px rgba(141,255,42,.40), 0 0 44px rgba(141,255,42,.20);
@@ -635,7 +635,7 @@ body{
   #titleWord, #titleWord::after{ animation:none; }
 }
 #titleTagline{ margin:10px 0 0;font-family:"UwSub", system-ui, sans-serif;font-size:14px;color:#7f94a8;text-align:center;letter-spacing:.02em; }
-#titleButtons{ display:flex;flex-direction:column;gap:14px;width:100%;margin-top:7vh; }
+#titleButtons{ display:flex;flex-direction:column;gap:14px;width:100%;margin-top:auto; }
 /* letter-spacing is deliberately 0 here: buttons.ttf is Jacquard 12, a pixel-grid font, and
    tracking knocks it off the grid, which makes it render soft. For the same reason it looks
    crispest at a size that is a multiple of its 12px design grid (12px or 24px). */

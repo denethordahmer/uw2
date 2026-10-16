@@ -735,11 +735,13 @@ cached as hard as anything else on a phone.
   has that setting off, which is why the pulse is visible at all — the original "no pulse" was
   this guard doing its job, not a bug.
 - Layout: `#titleScreen` no longer vertically centres (`justify-content:flex-start` plus
-  `padding-top:13vh`), so the wordmark sits in the **upper half**; the tagline follows it;
-  `#titleButtons` is pushed down with `margin-top:7vh` and 14px gaps. Still centred side-to-side.
-- The wordmark is **one line** at `clamp(44px,16vw,96px)`. Nine letters on a narrow phone is
-  what caps the size — pushing it much larger needs two lines (`under` / `ward`), which the
-  owner declined for now.
+  `padding-top:13vh`), so the wordmark sits in the **upper half**; the tagline follows it.
+  `#titleInner` grows to fill the screen (`flex:1`) and `#titleButtons` is anchored to the
+  bottom of it with `margin-top:auto` above a 5vh bottom pad — so the buttons sit **low**,
+  rather than tucked under the tagline on a guessed gap. Still centred side-to-side.
+- The wordmark is **one line**, sized `clamp(36px,13vw,80px)`. It started at 16vw, which ran off
+  the left and right edges of a narrow phone — nine letters is a lot of width — so 13vw it is.
+  Pushing it much larger needs two lines (`under` / `ward`), which the owner declined for now.
 
 #### 6.11.3 RESET — wiping the save (Batch 12)
 In the settings panel: **RESET** → an inline `ARE YOU SURE?` block (`#titleResetConfirm`) that
