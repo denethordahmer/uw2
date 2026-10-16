@@ -175,17 +175,47 @@ const DEATH_LIFE = 460;
  }
 
  // ── FLOOR ────────────────────────────────────────────────────
+ // Smooth, continuous tone field for the floor. Values are bilinearly smoothed
+ // from knots placed every FLOOR_TONE_K tiles, so neighbouring tiles always land
+ // on nearly the same shade: no hard checkerboard step, and the light/dark
+ // patches drift across several tiles at once. Deterministic — same coords, same
+ // tone, computed purely from the position hash; nothing changes per frame.
+ const FLOOR_TONE_K = 4;
+ function floorTone(gx, gy){
+  const px = (gx + 0.5) / FLOOR_TONE_K, py = (gy + 0.5) / FLOOR_TONE_K;
+  const xi = Math.floor(px), yi = Math.floor(py);
+  let fx = px - xi, fy = py - yi;
+  fx = fx * fx * (3 - 2 * fx);
+  fy = fy * fy * (3 - 2 * fy);
+  const a = hash3(xi, yi, 7703), b = hash3(xi + 1, yi, 7703);
+  const c = hash3(xi, yi + 1, 7703), d = hash3(xi + 1, yi + 1, 7703);
+  const top = a + (b - a) * fx, bot = c + (d - c) * fx;
+  return top + (bot - top) * fy;
+ }
  function drawFloorTile(ctx, sx, sy, ts, gx, gy, b){
   const n = hash2(gx,gy), n3 = hash3(gx,gy,31), n4 = hash3(gx,gy,53);
-  let slabCol = ((gx+gy)%2===0) ? b.floor : b.floor2;
+  // A) Continuous-tone shading — floorTone replaces the old (gx+gy)%2 two-tone
+  //    flip, so the floor has soft light/dark patches instead of square steps.
+  let slabCol = blendHex(b.floor, b.floor2, floorTone(gx, gy));
   if(n3 < 0.05) slabCol = blendHex(slabCol, "#0a0e12", 0.35);
-  // The slab fills its own tile edge to edge now. The 2px mortar gap that used
-  // to frame every tile, the light/dark bevel strips along its top-left and
-  // bottom-right, and the chipped-corner patch were what made the floor read as
-  // a grid of bordered squares. Owner's request, 16 Oct: remove the tile edge so
-  // the floor is one continuous surface. This removes ONLY the edge — cracks,
-  // puddles, rubble and weeds painted on the tiles are untouched.
-  ctx.fillStyle = slabCol; ctx.fillRect(sx, sy, ts, ts);
+  // B) Soft flagstone — a rounded-corner slab with a feathered edge sits over a
+  //    base only a little darker than itself (in the slab's own colour family,
+  //    not the old near-black grout). The joint is rounded and low-contrast, so
+  //    the floor reads as worn flags rather than a grid of squares.
+  const gap = Math.max(1, Math.round(ts * 0.035));
+  const r = ts * 0.20;
+  const grout = blendHex(slabCol, "#0a0e12", 0.16);
+  ctx.fillStyle = grout; ctx.fillRect(sx, sy, ts, ts);
+  const x = sx + gap, y = sy + gap, w = ts - gap * 2, h = ts - gap * 2;
+  const midX = x + w * 0.5, midY = y + h * 0.5;
+  const grad = ctx.createRadialGradient(midX, midY, h * 0.34, midX, midY, Math.max(w, h) * 0.72);
+  grad.addColorStop(0, slabCol);
+  grad.addColorStop(0.80, slabCol);
+  grad.addColorStop(1, grout);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+  ctx.fill();
   if(n > 0.82){
    const crackType = Math.floor(hash3(gx,gy,7)*10);
    ctx.save(); ctx.strokeStyle="rgba(0,0,0,0.32)"; ctx.lineWidth=Math.max(1,ts*0.03);
