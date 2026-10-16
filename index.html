@@ -570,6 +570,17 @@ body{
 .inv-section-label{ margin-top:8px; }
 </style>
 <style>
+/* ── Title-screen fonts — three files the owner uploaded into fonts/. They are registered
+   under neutral internal names (Uw*) so a font already installed on the phone can never
+   shadow them. font-weight is declared as a range so the browser uses the font's real
+   glyphs at any weight instead of synthesising a fake bold, which goes muddy behind a
+   text-stroke. font-display:swap shows the fallback immediately rather than invisible
+   text while a font loads. Swapping a font later means replacing the file and bumping
+   ?v= — these are cached as hard as anything else on a phone. */
+@font-face{ font-family:"UwTitle"; src:url("fonts/title.ttf") format("truetype"); font-weight:400 900; font-display:swap; }
+@font-face{ font-family:"UwSub";   src:url("fonts/sub.ttf") format("truetype"); font-weight:400 900; font-display:swap; }
+@font-face{ font-family:"UwBtn";   src:url("fonts/buttons.ttf") format("truetype"); font-weight:400 900; font-display:swap; }
+
 /* ── Title screen (owned by js/menu.js — see architecture.md §6.11) ────────
    Everything here is additive: it only names #titleScreen and its own
    children, so nothing already styled changes. Colours are the game's own
@@ -577,50 +588,55 @@ body{
    dungeon look like one game. */
 #titleScreen{
   position:absolute;inset:0;z-index:30;
-  display:none;flex-direction:column;align-items:center;justify-content:center;
-  gap:16px;overflow-y:auto;
-  padding:calc(28px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
+  display:none;flex-direction:column;align-items:center;justify-content:flex-start;
+  gap:0;overflow-y:auto;
+  padding:calc(13vh + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));
   background:
     radial-gradient(120% 70% at 50% 6%, rgba(141,255,42,.08), rgba(0,0,0,0) 62%),
     radial-gradient(100% 55% at 50% 100%, rgba(18,26,34,.95), rgba(0,0,0,0) 72%),
     #070b0e;
 }
-#titleInner{ display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:460px; }
+#titleInner{ display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:520px; }
 
-/* The wordmark. Black letters, thick acid-green outline, slow pulsing glow, and
+/* The wordmark. Black letters, thick acid-green outline, a fast, strong pulsing glow, and
    a second stroke that drifts a hair off-centre for the "moving outline". The
    jagged-instead-of-rounded feel is approximated with weight + tight tracking +
    that doubled stroke; genuinely jagged letterforms would need a font file, and
-   this project deliberately ships no font files. */
+   as of Batch 12 the real thing is here: fonts/title.ttf, applied to #titleWord. */
 #titleWord{
   position:relative;margin:0;
-  font-size:clamp(40px,15vw,88px);font-weight:900;line-height:1;letter-spacing:.01em;
+  font-family:"UwTitle", system-ui, sans-serif;
+  font-size:clamp(44px,16vw,96px);font-weight:400;line-height:1;letter-spacing:0;
   color:#04080a;
   -webkit-text-stroke:2px #8dff2a;
-  text-shadow:0 0 6px rgba(141,255,42,.50), 0 0 18px rgba(141,255,42,.26);
-  animation:titlePulse 3.6s ease-in-out infinite;
+  text-shadow:0 0 9px rgba(141,255,42,.70), 0 0 22px rgba(141,255,42,.40), 0 0 44px rgba(141,255,42,.20);
+  animation:titlePulse 2.2s ease-in-out infinite, titleBreathe 2.2s ease-in-out infinite;
 }
 #titleWord::after{
   content:attr(data-text);
   position:absolute;left:1px;top:1px;
   color:transparent;-webkit-text-stroke:2px #b8ff5c;
-  animation:titleDrift 6.5s ease-in-out infinite alternate;
+  animation:titleDrift 3.4s ease-in-out infinite alternate;
   pointer-events:none;
 }
 @keyframes titlePulse{
-  0%,100%{ text-shadow:0 0 5px rgba(141,255,42,.40), 0 0 14px rgba(141,255,42,.20); }
-  50%    { text-shadow:0 0 10px rgba(141,255,42,.95), 0 0 26px rgba(141,255,42,.55), 0 0 48px rgba(141,255,42,.30); }
+  0%,100%{ text-shadow:0 0 9px rgba(141,255,42,.65), 0 0 22px rgba(141,255,42,.35), 0 0 40px rgba(141,255,42,.18); }
+  50%    { text-shadow:0 0 18px rgba(190,255,90,1), 0 0 44px rgba(141,255,42,.85), 0 0 90px rgba(141,255,42,.50); }
+}
+@keyframes titleBreathe{
+  0%,100%{ transform:scale(1); }
+  50%    { transform:scale(1.035); }
 }
 @keyframes titleDrift{
-  0%  { transform:translate(-1.5px,-1px); opacity:.35; }
-  100%{ transform:translate(1.5px,1px);   opacity:.90; }
+  0%  { transform:translate(-2.5px,-1.5px); opacity:.30; }
+  100%{ transform:translate(2.5px,1.5px);   opacity:1; }
 }
 @media (prefers-reduced-motion: reduce){
   #titleWord, #titleWord::after{ animation:none; }
 }
-#titleTagline{ margin:0;font-size:13px;color:#6f8394;text-align:center; }
-#titleButtons{ display:flex;flex-direction:column;gap:10px;width:100%;margin-top:14px; }
-#titleButtons .btn{ width:100%;max-width:none;margin:0; }
+#titleTagline{ margin:10px 0 0;font-family:"UwSub", system-ui, sans-serif;font-size:14px;color:#7f94a8;text-align:center;letter-spacing:.02em; }
+#titleButtons{ display:flex;flex-direction:column;gap:14px;width:100%;margin-top:7vh; }
+#titleButtons .btn{ width:100%;max-width:none;margin:0;font-family:"UwBtn", system-ui, sans-serif;font-size:15px;letter-spacing:.06em;padding:14px 16px; }
 #titleSettingsPane{
   display:none;flex-direction:column;gap:12px;width:100%;max-width:360px;
   background:#0e141a;border:1px solid #24303c;border-radius:14px;padding:16px;
@@ -629,6 +645,11 @@ body{
 #titleSettingsPane.open{ display:flex; }
 #titleSettingsPane .pause-row{ width:100%; }
 #titleSettingsPane #titleVolumeSlider, #titleSettingsPane #titleMusicSlider{ flex:1; }
+#titleResetConfirm{ display:none;flex-direction:column;gap:10px; }
+#titleResetConfirm.open{ display:flex; }
+#titleResetNote{ margin:0;font-size:12px;line-height:1.5;color:#e8a0a0; }
+#titleResetYes{ border-color:#ff7a7a66;color:#ff9a9a; }
+#titleResetDone{ margin:0;font-size:12px;line-height:1.4;color:#7ee08a; }
 </style>
 </head>
 <body>
@@ -788,6 +809,15 @@ body{
         <span class="pause-slider-label">📳 Haptics</span>
         <button id="titleHapticsBtn" class="pause-toggle">ON</button>
       </div>
+      <hr class="pause-divider">
+      <button class="btn" id="titleResetBtn">RESET</button>
+      <div id="titleResetConfirm">
+        <div class="pause-label">ARE YOU SURE?</div>
+        <p id="titleResetNote">This deletes every shard, upgrade and unlock you have earned. It cannot be undone. Your sound settings are kept.</p>
+        <button class="btn" id="titleResetYes">YES, WIPE IT</button>
+        <button class="btn" id="titleResetNo">CANCEL</button>
+      </div>
+      <p id="titleResetDone"></p>
       <button class="btn" id="titleSettingsClose">↩ Back</button>
     </div>
   </div>

@@ -21,16 +21,21 @@ TRAIT-POOL BATCH (deferred from the tidy-up pass)
   twice, and the first write is discarded
 
 NEXT STEP (updated 16 Oct, after the title screen was written)
-- Upload these files (Batches 10 and 11 together — js/ui.js, architecture.md
-  and cp.txt changed in both, so upload the newest version of each once):
+- Upload these files (Batches 10, 11 and 12 together — js/ui.js, architecture.md
+  and cp.txt changed in more than one batch, so upload the newest version of each
+  once):
   js/combat.js, js/rewards.js, js/state.js, js/ui.js, index.html, js/input.js,
   js/main.js, js/menu.js (NEW — must be CREATED on GitHub, not just edited),
   test.html, architecture.md, cp.txt
-- Check the title screen: it appears when the game opens; CONTINUE reaches the
-  hub; SETTINGS changes the volume and the change survives a reload; and the
-  in-run pause menu's sound sliders (⚙) still work. That last one is the real
-  risk in the title-screen batch, and it is exactly why the title's settings
-  have names of their own
+The three fonts are already uploaded: fonts/title.ttf, fonts/sub.ttf,
+fonts/buttons.ttf.
+- Check the title screen: it opens with the name in the upper half in your own
+  font with a strong pulsing glow; the tagline and buttons use their two fonts;
+  CONTINUE reaches the hub; SETTINGS changes the volume and the change survives a
+  reload; RESET asks ARE YOU SURE? and, if you say yes, everything returns to zero
+  while your sound settings survive; and the in-run pause menu's sound sliders (⚙)
+  still work. That last one is the real risk in the title-screen work, and it is
+  exactly why the title's settings have names of their own
 - Bump the ?v= number
 - Play a short run and check four things:
   - Shards count up in the HUD while playing
@@ -82,14 +87,18 @@ a "seed" — a starting number that makes the same floor come out again —
 which means threading that through every random call in floor generation.
 The owner likes the idea; it already sits on the STILL TO COME list.
 
-DECISION TAKEN 16 Oct: when it is built, resuming must recreate the IDENTICAL
-floor, never generate a fresh version of the same floor number — a fresh layout
-would hand back every chest, barrel and monster already cleared, which is an
-endless loot farm. The title screen's CONTINUE button already contains the hook
-this needs (it asks for Delve.hasSavedRun / Delve.resumeRun first), so building
-resume later lights CONTINUE up with no change to the title screen.
+DECISION REVISED 16 Oct (replaces the identical-floor idea recorded earlier):
+when resume is built, the FLOOR IS REBUILT FRESH and the run REWINDS to how it
+was when the player entered that floor — gold, items, XP, level, traits and
+HEALTH, with full health on entry, so somebody who quit at 3 HP does not have to
+re-clear the floor while nearly dead. Rewinding is what stops a resumed floor
+being farmed for chests and kills; rebuilding fresh means the game never has to
+store a map, which makes this far cheaper to build than the earlier idea. The
+cost accepted: quitting before the killing blow is an escape from death, paid for
+with that floor's loot and XP. The title screen's CONTINUE button already holds
+the hook this needs, and it will read the floor number once the feature exists.
 
-UNRESOLVED NIT — needs one line of an owner decision, deliberately not touched
+NIT — DECIDED 16 Oct: leave it as-is. No action, no code touched.
 The game's tap-blocking list and its "hide everything" list name the same
 screens, but the level-up screen is missing from the second one. (Its name was
 also mis-spelled in the test page's list; that typo is now fixed.) Adding it to
@@ -97,7 +106,10 @@ the "hide everything" list would bring the lists back into agreement, but there
 is one edge case that cannot be checked without running the game: if a level-up
 is waiting and another screen opens, hiding the level-up could leave the player
 with no way to pick a trait until the next level-up. Left alone on purpose.
-Tidy it or leave it — either way it is a two-line change.
+Owner's decision (16 Oct): leave it. It cannot cause a bug — the popup blocks
+taps while it is open, so no other screen can be on screen at the same time — so
+the missing name is untidiness only. If those lists are ever touched for another
+reason, add it then.
 
 FUTURE TASK — after the current batches
 A whole-project visual pass to remove the square/boxy look and make

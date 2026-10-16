@@ -705,9 +705,7 @@ repeat while `pendingLevelUps > 0`.
 - **Forward-compatible seam.** `continuePressed()` first asks for `Delve.hasSavedRun()` /
   `Delve.resumeRun()` if those exist. Nothing saves an in-progress run yet, so today it always
   falls through to the hub. When run-resume is built, CONTINUE starts resuming with **no change
-  to `menu.js`**. Resume must restore the *same* floor and never regenerate a fresh one: a fresh
-  layout would hand back every chest, barrel and monster already cleared, which is an
-  infinite-loot farm (see cp.txt, "resuming a run").
+  to `menu.js`** — and the button will then read the floor number instead of CONTINUE (§6.12).
 - **SETTINGS** → the same four sound settings as the in-run pause menu, through the same
   `sfx.js` functions (`sfxSetVolume` / `musicSetVolume` / `sfxSetHaptics` / `sfxToggleMute`).
   Prefs live under `sfx.js`'s own key, so this panel is a *view* of them, never a second copy.
@@ -718,6 +716,62 @@ repeat while `pendingLevelUps > 0`.
   approximated with weight, tight tracking and the doubled stroke.
 - `titleScreen` is registered in **both** `ui.js`'s `hideAllScreens()` and `input.js`'s
   `uiBlocked()`. Miss either one and the screen either won't close or will leak taps to the map.
+
+#### 6.11.1 Fonts (Batch 12)
+Three files the owner uploaded into `fonts/`: `title.ttf` (the wordmark), `sub.ttf` (the
+tagline), `buttons.ttf` (the title's buttons). Each is registered with `@font-face` under a
+neutral internal name — `UwTitle` / `UwSub` / `UwBtn` — so a font already installed on the
+phone can never shadow it, and with `font-weight:400 900` declared so the browser uses the
+font's **real glyphs** at any weight instead of synthesising a fake bold, which goes muddy
+behind a text-stroke. `font-display:swap` shows the fallback immediately rather than invisible
+text while a font loads. Swapping a font later = replace the file and bump `?v=`; fonts are
+cached as hard as anything else on a phone.
+
+#### 6.11.2 The pulse and the layout (Batch 12)
+- The pulse runs at **2.2s** (was 3.6s), much stronger at its peak, with a **permanent** glow
+  underneath so the letters always look lit rather than only during the beat. `titleBreathe`
+  scales the whole word 1 → 1.035.
+- The `prefers-reduced-motion` guard is **kept**: with the phone's reduce-animations setting on,
+  both animations stop and the static `text-shadow` on `#titleWord` is what remains. The owner
+  has that setting off, which is why the pulse is visible at all — the original "no pulse" was
+  this guard doing its job, not a bug.
+- Layout: `#titleScreen` no longer vertically centres (`justify-content:flex-start` plus
+  `padding-top:13vh`), so the wordmark sits in the **upper half**; the tagline follows it;
+  `#titleButtons` is pushed down with `margin-top:7vh` and 14px gaps. Still centred side-to-side.
+- The wordmark is **one line** at `clamp(44px,16vw,96px)`. Nine letters on a narrow phone is
+  what caps the size — pushing it much larger needs two lines (`under` / `ward`), which the
+  owner declined for now.
+
+#### 6.11.3 RESET — wiping the save (Batch 12)
+In the settings panel: **RESET** → an inline `ARE YOU SURE?` block (`#titleResetConfirm`) that
+names what dies → **YES, WIPE IT** / **CANCEL**. Nothing is deleted until the second tap. It
+calls the existing `Delve.resetSave({silent:true})`, nulls `Delve.G` so no half-finished run
+lingers in memory, prints a confirmation, and re-labels the main button via
+`refreshTitleButton()` so it reads BEGIN. **Sound prefs survive** — they live under `sfx.js`'s
+own storage key, and losing your volume because you reset your game would be absurd. Built
+**inline rather than as a new overlay** on purpose: no new screen to register in the two id
+lists, and nothing new that can leak taps.
+New ids (present in both `index.html` and `test.html`'s `#fixtures`): `titleResetBtn`,
+`titleResetConfirm`, `titleResetNote`, `titleResetYes`, `titleResetNo`, `titleResetDone`.
+
+### 6.12 Resume after the app closes (design agreed, NOT built)
+The owner's decision, 16 Oct. This **supersedes** the "recreate the identical floor" idea
+sketched earlier.
+- **Entering a floor sets the run's checkpoint.** Resuming rewinds gold, items, XP, level,
+  traits **and health** to how they were when that floor was entered — **full health on entry**,
+  deliberately, so someone who quit at 3 HP isn't made to re-clear the floor while nearly dead.
+- **The floor is rebuilt fresh**, not reproduced. Rewinding is what stops a resumed floor being
+  farmed for chests and kills; rebuilding fresh is what means **no map ever has to be stored**,
+  which makes this far cheaper than the identical-floor version.
+- The title's main button then reads **"FLOOR 24"** instead of CONTINUE, and tapping it puts the
+  player at the start of that floor.
+- Retreating still ends the run properly, so the button returns to CONTINUE.
+- **Accepted cost:** quitting before the killing blow is an escape from death. The price is that
+  floor's loot and XP, which are discarded.
+- Storage needed: the floor number plus the entry-time snapshot — *not* the map. It still needs
+  the save rules: the new field in all three places in `save.js`, a version bump, and `test.html`
+  §6. The hook already exists (`menu.js`'s `continuePressed()` asks for `Delve.hasSavedRun()` /
+  `Delve.resumeRun()` and falls through to the hub when they're absent).
 
 ---
 
@@ -802,6 +856,11 @@ the write-to-storage whitelist.
 - **`addAbility` silently drops the oldest ability** past `levelMaxAbilities`. UI
   surfacing is deferred, not forgotten.
 - **`ui.js`'s guarded `$()`** returns an inert stub for missing ids on purpose.
+- **The level-up screen is absent from `hideAll()`'s sweep** (`ui.js`) but *is* in
+  `uiBlocked()` (`input.js`), and is hidden explicitly in `showHub`, `hideHub` and
+  `showEndScreen`. **Owner's decision, 16 Oct: leave it.** It cannot cause the
+  two-screens-at-once problem the sweep guards against, because the popup blocks taps for
+  as long as it is open. Untidiness, not a defect — do not "fix" it without being asked.
 - **The title screen's settings ids are `title*`-prefixed** (`titleMuteBtn`, `titleVolumeSlider`,
   `titleMusicSlider`, `titleHapticsBtn`) rather than reusing the pause menu's. `ui.js` looks those
   ids up **by name at load**, so a duplicate id in the title markup would silently bind `ui.js` to
