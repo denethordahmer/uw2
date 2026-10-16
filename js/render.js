@@ -176,31 +176,21 @@ const DEATH_LIFE = 460;
 
  // ── FLOOR ────────────────────────────────────────────────────
  function drawFloorTile(ctx, sx, sy, ts, gx, gy, b){
-  const n = hash2(gx,gy), n2 = hash3(gx,gy,17), n3 = hash3(gx,gy,31), n4 = hash3(gx,gy,53);
+  const n = hash2(gx,gy), n3 = hash3(gx,gy,31), n4 = hash3(gx,gy,53);
   let slabCol = ((gx+gy)%2===0) ? b.floor : b.floor2;
   if(n3 < 0.05) slabCol = blendHex(slabCol, "#0a0e12", 0.35);
-  const mortar = 2;
-  ctx.fillStyle = b.mortar; ctx.fillRect(sx, sy, ts, ts);
-  ctx.fillStyle = slabCol; ctx.fillRect(sx+mortar, sy+mortar, ts-mortar*2, ts-mortar*2);
-  ctx.fillStyle = "rgba(255,255,255,0.04)";
-  ctx.fillRect(sx+mortar, sy+mortar, ts-mortar*2, 2);
-  ctx.fillRect(sx+mortar, sy+mortar, 2, ts-mortar*2);
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.fillRect(sx+ts-mortar-2, sy+mortar, 2, ts-mortar*2);
-  ctx.fillRect(sx+mortar, sy+ts-mortar-2, ts-mortar*2, 2);
-  if(n2 < 0.08){
-   const corner = Math.floor(n2/0.02)%4, cs = Math.max(3, Math.floor(ts*0.18));
-   ctx.fillStyle = b.mortar;
-   if(corner===0) ctx.fillRect(sx+mortar, sy+mortar, cs, cs);
-   if(corner===1) ctx.fillRect(sx+ts-mortar-cs, sy+mortar, cs, cs);
-   if(corner===2) ctx.fillRect(sx+mortar, sy+ts-mortar-cs, cs, cs);
-   if(corner===3) ctx.fillRect(sx+ts-mortar-cs, sy+ts-mortar-cs, cs, cs);
-  }
+  // The slab fills its own tile edge to edge now. The 2px mortar gap that used
+  // to frame every tile, the light/dark bevel strips along its top-left and
+  // bottom-right, and the chipped-corner patch were what made the floor read as
+  // a grid of bordered squares. Owner's request, 16 Oct: remove the tile edge so
+  // the floor is one continuous surface. This removes ONLY the edge — cracks,
+  // puddles, rubble and weeds painted on the tiles are untouched.
+  ctx.fillStyle = slabCol; ctx.fillRect(sx, sy, ts, ts);
   if(n > 0.82){
    const crackType = Math.floor(hash3(gx,gy,7)*10);
    ctx.save(); ctx.strokeStyle="rgba(0,0,0,0.32)"; ctx.lineWidth=Math.max(1,ts*0.03);
    ctx.globalAlpha=0.6; ctx.lineCap="round";
-   const m=mortar+2, x0=sx+m, y0=sy+m, tw=ts-m*2;
+   const m=Math.max(3, ts*0.09), x0=sx+m, y0=sy+m, tw=ts-m*2;
    ctx.beginPath();
    switch(crackType){
     case 0: ctx.moveTo(x0,y0); ctx.lineTo(x0+tw*0.5,y0+tw*0.5); break;
@@ -784,17 +774,11 @@ const DEATH_LIFE = 460;
    }
   }
 
-  // adjacency highlights
-  [[0,1],[0,-1],[1,0],[-1,0]].forEach(d=>{
-   const gx=G.px+d[0], gy=G.py+d[1];
-   if(gx<camX||gx>=camX+vw||gy<camY||gy>=camY+vh) return;
-   const t=tileAt(gx,gy);
-   if(t===null||t===T.WALL) return;
-   const sx=(gx-camX)*ts, sy=(gy-camY)*ts;
-   if(t===T.MONSTER||t===T.BOSS){ ctx.fillStyle="rgba(255,140,90,0.30)"; ctx.strokeStyle="rgba(255,170,120,0.9)"; }
-   else { ctx.fillStyle="rgba(110,200,255,0.20)"; ctx.strokeStyle="rgba(140,220,255,0.80)"; }
-   ctx.fillRect(sx,sy,ts,ts); ctx.lineWidth=2; ctx.strokeRect(sx+1,sy+1,ts-2,ts-2);
-  });
+  // The four adjacency highlights that used to ring the player here — a blue
+  // square on each walkable neighbour, orange on a monster — were removed by
+  // owner request, 16 Oct. Nothing replaces them: the floor is meant to read as
+  // one continuous surface. The path-destination square above is the only
+  // movement aid that stays.
 
   // chests
   (G.chests||[]).forEach(ch=>{
