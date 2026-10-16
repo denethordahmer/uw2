@@ -36,7 +36,8 @@ one global namespace (`Delve`).
 1. **Title screen → Hub** — the front door is the title screen (§6.11). Its main button reads
    `CONTINUE`, `BEGIN` on an empty save, or **`FLOOR n` when a run is in progress** (§6.12).
    `SETTINGS` opens the sound panel. `CONTINUE` leads to the hub, which is where you spend
-   shards on permanent attribute levels and a shard-tree of nodes.
+   shards on permanent attribute levels and a shard-tree of nodes — **but only between runs**
+   (§6.12.2: with a run parked, the hub is reachable and nothing in it can be bought).
 2. **START RUN** — new run, floor 1, procedurally generated, one ward (10-floor band)
    at a time.
 3. **Movement** — tap an adjacent tile to step; tap your own tile to rest; tap a
@@ -200,7 +201,7 @@ every `BOSS_DEFS.sprite` is registered and built.
 `Delve.T` (tile enum), `Delve.G` (run state), `rng`, `rngF`, `clamp`, `flash`, `mdist`,
 `getWard`, `getMonsterBand`, `pickWeighted`, `recordStat`, `newRun`, and the run-checkpoint set
 (§6.12): `captureRunSnapshot`, `setFloorCheckpoint`, `clearRunCheckpoint`, `hasSavedRun`,
-`savedRunFloor`, `restoreRunFromCheckpoint`.
+`savedRunFloor`, `runInProgress`, `restoreRunFromCheckpoint`.
 Notes: tile enum + RNG + math utils + ward/band lookup + run construction.
 ⚠️ **GOTCHA:** `Delve.T` is a **plain object**, but many files alias it as a
 **function** (`const T = () => Delve.T`). Both styles exist and are not
@@ -230,7 +231,7 @@ intentional, UI surfacing deferred. **A new ability id needs a new `case` in
 - Combat loop: `startCombat`, `endCombat`, internal `playerSwing`, `monsterSwing`
 - Ambient attacks: `enemiesTurn`, internal `ambientMob`
 - Kill resolution: `killMonster`
-- Run lifecycle: `endRun`, `retreat`, `die`, `triggerVictory`
+- Run lifecycle: `endRun`, `retreat`, `saveAndExit`, `die`, `triggerVictory`
 - Exported for other files: `Delve.rowFor`, `Delve.onHitEffectFor`
 Notes: `enemiesTurn`/`ambientMob` stay here deliberately — they share
 `ON_HIT_STATUS_CHANCE` and `onHitEffectFor` with `monsterSwing`. Boss-kill branch
@@ -275,9 +276,15 @@ and the attack-lunge offsets), the offscreen tile cache, the per-biome decoratio
 families and the drifting ambience layer, `Delve.drawPaperDoll`, `Delve.markVisited`,
 `Delve.renderMinimap`.
 Draw order is: floored tiles (+ their biome clutter) → **floor props** → walls (+ torches
-and the secret-wall shimmer) → **hanging props** → path/adjacency highlights →
+and the secret-wall shimmer) → **hanging props** → path highlight →
 chests/items/gold/barrels/shop → monsters and boss (a boss gets a pool of torchlight
 underneath it) → player → ambience → floaters → per-biome colour wash → vignette.
+**A floor tile has no edge.** The slab fills its tile corner to corner — no mortar gap, no
+bevel strips, no chipped corner — so neighbours meet flush and the floor reads as one
+continuous surface. Cracks, puddles, rubble and weeds still break it up. Walls keep their own
+edges and shadows. The **four adjacency highlights** that used to ring the player (blue for a
+walkable neighbour, orange for a monster) were removed by owner request, 16 Oct — nothing
+replaces them. The only movement aid left is the single **path-destination square**.
 `drawDecor(layer)` paints `G.decor`: floor props sit centred on their tile; wall props
 hang from the top of theirs, and because their art is 1.5 tiles tall they spill into the
 tile below — which is what makes them read as hanging.
@@ -814,10 +821,68 @@ are at the end.
 - **Test-page note:** `test.html` sets `Delve._suppressCheckpoint = true`, because it generates 50
   floors and would otherwise stamp over the live save's run slot. Worth knowing: `test.html`
   already writes to the real save, so running it can clobber a run in progress.
-- **The hub is deliberately unreachable while a run is in progress** (owner's decision, 16 Oct):
-  spending shards is a between-runs activity, so `FLOOR n` replacing `CONTINUE` is correct
-  behaviour rather than a missing button. A player who wants to upgrade retreats first — which
-  ends the run and banks it. Do not add a "go to hub" escape from an active run.
+- **The hub is reachable, but its wallet is shut while a run is unfinished** (owner's rule,
+  16 Oct — this **replaces** the earlier "hub is unreachable during a run" decision, which left a
+  player with a parked run and no way to reach the hub at all). See §6.12.2.
+
+#### 6.12.1 Save floor & exit — leaving a run ALIVE (BUILT — Batch 16)
+The in-run pause menu used to offer only *Flee to surface*, which ends the run. It now also
+offers **Save floor n & exit**, because a player who simply wanted to stop playing had no way
+to leave a run alive except killing the tab — the mechanism existed (Batch 14) but had no button.
+- It sets `G.runEnded` — which the tick loop, movement, XP gain, the gear button and the debug
+  panel all already guard on — then lands on the title screen, whose main button reads `FLOOR n`.
+  **Nothing is banked and nothing is cleared:** this is leaving the game, not ending the run.
+- **It deliberately does NOT re-take the checkpoint**, and that is the whole trick. Re-taking it
+  at save time would snapshot the player's current gold, XP, items and health — everything this
+  floor has already paid out — while a resume rebuilds the floor fresh, chests and monsters
+  included. Half-clearing a floor and saving would then be repeatable for profit. The checkpoint
+  therefore stays at **floor entry**, where a resumed floor is worth exactly what it was worth the
+  first time. A checkpoint is created here only when none exists at all, which cannot be farmed
+  because there is nothing to reset.
+- **It does NOT bank shards** (§6.10). Leaving the game is not a commit point, and banking here
+  would double-count: the resumed run restores the same pending amount, so the later death or
+  retreat would bank it a second time.
+- **Allowed mid-fight, unlike Flee.** Flee is blocked mid-fight because it both banks and ends the
+  run, which would make fleeing a losing fight profitable. Save & exit does neither, so it is the
+  same escape a killed tab already gives, at the same accepted price.
+- Lives in `combat.js` as `Delve.saveAndExit()`, a run-lifecycle sibling of `retreat`/`die`, wired
+  from `ui.js`. The button names its floor (`💾 Save floor 12 & exit`) and the label is refreshed
+  every time the menu opens, so it can never name the wrong floor.
+- **Open question, deliberately left open:** with a run parked on the title screen the hub is still
+  unreachable — the main button resumes and nothing else leads there, so reaching the hub means
+  resuming and retreating, or RESET, which erases everything. That is the same rule as "no hub
+  during an active run", but a *saved* run is a new shade of it. **Answered by the owner on
+  16 Oct — see §6.12.2**, which opens the hub and shuts its wallet. Do not re-litigate it.
+
+**Touched by this batch:** `js/combat.js` (the function), `js/ui.js` (the pause-menu wiring),
+`index.html` (the button, its styles and its note). Note for anyone reading the pause card: the
+save button's label is rewritten on every open, so the string in `index.html` is a fallback.
+
+#### 6.12.2 The hub is open, the wallet is shut (BUILT — Batch 17)
+The owner's rule, 16 Oct: **shards are spendable only once the run they were earned in has
+ended** — dying, retreating or winning the ward. So the hub became reachable with a run parked,
+and rather than hiding it, everything in it is **visible and unbuyable**.
+- The title screen grows a **HUB** button, shown **only when a run is parked**. With no run saved
+  the main button already leads to the hub, so a second door would be clutter.
+- In the hub with a run parked: a banner reads *"Your run is still going — floor n. Upgrades
+  unlock when it ends."*, the attribute buttons are disabled, and shard-tree cards render locked
+  **with no click handler attached at all**.
+- **Both purchase points re-ask at click time** via `Delve.runInProgress()` (`state.js`) rather
+  than trusting what was true when the screen was drawn — the hub can sit open for minutes and the
+  gate has to hold regardless. `runInProgress()` is true for a parked run *or* a live unfinished
+  one, so the two states cannot drift apart.
+- The hub's footer button becomes **`RESUME FLOOR n`** rather than `START RUN`, because starting a
+  fresh run from there would overwrite the parked checkpoint without a word. A **TITLE SCREEN**
+  button appears beside it, since the hub otherwise has no way back out.
+- Only two places in the game spend shards — `ui.js`'s attribute rows and `progression.js`'s tree
+  nodes. **If a third is ever added it must call `runInProgress()` too**, or this rule leaks.
+- **Why this is safe rather than an exploit:** a run's earnings live in `G.runShards` and do not
+  reach `save.shards` until a commit point (§6.10), so a mid-run player has nothing extra to spend
+  even though the door is now open. That is precisely what makes opening it affordable.
+
+**Touched by this batch:** `js/state.js` (the predicate), `js/ui.js` (the hub banner, the locked
+attribute buttons, the two footer buttons), `js/progression.js` (the locked tree), `js/menu.js`
+(the title's HUB button), `index.html` (both buttons and the banner style).
 
 ### 6.13 Impact feedback (Batch 15)
 Three additions, all presentational — none touch the grid, pathfinding, the combat maths or the
@@ -938,6 +1003,12 @@ the write-to-storage whitelist.
 - **The `T` / `T()` duality.** `Delve.T` is a plain object; some files alias it as a
   function. Both styles are in use and are correct in their own files. Don't normalise
   without checking every call site in that file.
+- **The floor has no tile edges, and the four adjacency highlights are gone.**
+  Owner's request, 16 Oct. `drawFloorTile` no longer paints the mortar gap around a slab,
+  its bevel strips or its chipped corner, and `draw()` no longer rings the player's four
+  neighbours with a highlight square — nothing replaces them. A floor is meant to read as one
+  continuous surface. Re-adding either is a change of look to ask about, not a bug fix. The
+  single path-destination square is the one movement aid that deliberately stays.
 
 ### Real risks, ranked
 - **MEDIUM — flat namespace, ~180 `Delve.*` symbols.** A one-line math helper sits at
