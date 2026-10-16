@@ -1,0 +1,100 @@
+window.Delve = window.Delve || {};
+(function(){
+ const C = Delve.CONFIG;
+
+ // ── content/con-biomes.js : biome visuals + ward (floor-band) rules ──
+
+ C.WARDS = [
+  { id:1, name:"Upper Ruins", floors:[1,10], biome:0,
+    roomMin:6, roomMax:9,
+    roomWMin:4, roomWMax:9, roomHMin:4, roomHMax:9,
+    roomMaxDuplicateSize:2, roomSplitArea:80, dungeonSize:26,
+    treasureChanceBase:0.14, treasureChanceLuck:0.018, treasureChanceCap:0.45,
+    secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
+    // Per-biome nudge to the rare + legendary weights (1 = neutral).
+    lootRarityMult:1 },
+
+  { id:2, name:"The Blackvein", floors:[11,20], biome:1,
+    roomMin:6, roomMax:10,
+    roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
+    roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
+    treasureChanceBase:0.10, treasureChanceLuck:0.018, treasureChanceCap:0.35,
+    secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
+    // Per-biome nudge to the rare + legendary weights (1 = neutral).
+    lootRarityMult:1,
+    special:{
+      // Ward-relative floor offsets (1 = the ward's first floor) and what happens
+      // there: 2-3 clustered-loot floors, plus a 25%-per-remaining-floor chance
+      // of a swarm chamber. Numbers here preserve Blackvein's original behaviour.
+      floors:[1,9],          // floors 11-19
+      clustered:[2,3],
+      swarmChance:0.25,
+      swarmKind:"spore_swarm",
+      swarmMin:18, swarmMax:26
+    } },
+
+  { id:3, name:"The Frosted Vault", floors:[21,30], biome:2,
+    roomMin:6, roomMax:10,
+    roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
+    roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
+    treasureChanceBase:0.10, treasureChanceLuck:0.018, treasureChanceCap:0.35,
+    secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
+    // Per-biome nudge to the rare + legendary weights (1 = neutral).
+    lootRarityMult:1,
+    special:{
+      floors:[2,8],          // ward-relative: floors 22-29
+      clustered:[2,3],       // 2-3 clustered-loot floors per run
+      swarmChance:0.25,      // "Frozen Cache" swarms
+      swarmKind:"icebound_swarm",
+      swarmMin:18, swarmMax:26
+    } }
+ ];
+
+ // ── Arena dressing (Batch 8) ───────────────────────────────────
+ // Which props dress each ward's boss arena, by role. The ENGINE owns *where*:
+ // levels.js dressBossArena derives every position from G.bossArena. A ward only
+ // chooses *what* art fills each role, so a new ward needs no new placement code.
+ // Every key must exist in Delve.SPR.world (sprites.js, "ARENA PROPS"). Keys are
+ // per-boss: each ward's six pieces are bespoke art in that boss's colours, so the
+ // three arenas don't share a silhouette. Leave a role out and those slots are skipped.
+ //   pillar  — big vertical prop, the chamber's four inner corners
+ //   banner  — cloth hanging on the chamber's back wall
+ //   wallBit — chain / root / icicle hanging on the side and corridor walls
+ //   rubble  — stone debris strewn along the chamber walls
+ //   bone    — remains, mixed in with the rubble
+ //   cluster — a floor feature either side of the way in
+ C.DRESSING = {
+  1: { pillar:"prop_pillarWarden", banner:"prop_bannerWarden", wallBit:"prop_chainWarden", rubble:"prop_rubbleWarden", bone:"prop_bonesWarden", cluster:"prop_statueWarden" },
+  2: { pillar:"prop_pillarThorn",  banner:"prop_bannerThorn",  wallBit:"prop_rootThorn",   rubble:"prop_rubbleThorn",  bone:"prop_huskThorn",    cluster:"prop_clusterThorn"  },
+  3: { pillar:"prop_pillarFrost",  banner:"prop_bannerFrost",  wallBit:"prop_icicleFrost", rubble:"prop_rubbleFrost",  bone:"prop_bonesFrost",   cluster:"prop_clusterFrost"  }
+ };
+
+ C.BIOMES = [
+  { name:"Upper Ruins",
+    wall:"#64707c", wallEdge:"#8d99a6", wallBrick:"#3a4248", mortar:"#0b0f14",
+    floor:"#2e3842", floor2:"#283039", moss:"#3f6d55",
+    water:"#1e3a4a", torch:"#ffb347", light:"rgba(70,140,255,0.06)",
+    // Decoration family for floor tiles (render.js drawClutter/drawWeed):
+    // "ruins" | "blackvein" | "frost". A ward must name one, or its floors
+    // would fall back to the ruins look.
+    clutter:"ruins",
+    // Drifting ambience (render.js drawAmbience). vy is tiles per second —
+    // negative rises, positive falls. drift is the sideways sway in tiles.
+    // type picks the particle look: "dust" | "ember" | "snow".
+    ambient:{ type:"dust", count:14, col:"#c9c2b0", col2:"#8d99a6", size:0.055, vy:-0.04, drift:0.06, alpha:0.34 } },
+  { name:"The Blackvein",
+    wall:"#2a3524", wallEdge:"#4d5c3e", wallBrick:"#141c10", mortar:"#080c06",
+    floor:"#2c3524", floor2:"#242c1e", moss:"#7a9a3a",
+    water:"#3a2048", torch:"#c8d84a", light:"rgba(120,180,60,0.06)",
+    clutter:"blackvein",
+    // Embers drift upward out of the seam, with spore flecks among them.
+    ambient:{ type:"ember", count:16, col:"#c8d84a", col2:"#ff9a3a", size:0.05, vy:-0.17, drift:0.10, alpha:0.5 } },
+  { name:"The Frosted Vault",
+    wall:"#3a4a5e", wallEdge:"#7a9ac0", wallBrick:"#1a2436", mortar:"#0a1018",
+    floor:"#2a3644", floor2:"#232e3c", moss:"#7ec8e0",
+    water:"#1a3a5e", torch:"#a8e8ff", light:"rgba(180,220,255,0.07)",
+    clutter:"frost",
+    // Fine snow falls through the vault and slants sideways as it drops.
+    ambient:{ type:"snow", count:22, col:"#eaffff", col2:"#a8e8ff", size:0.05, vy:0.22, drift:0.13, alpha:0.5 } }
+ ];
+})();
