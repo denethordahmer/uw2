@@ -279,12 +279,16 @@ Draw order is: floored tiles (+ their biome clutter) → **floor props** → wal
 and the secret-wall shimmer) → **hanging props** → path highlight →
 chests/items/gold/barrels/shop → monsters and boss (a boss gets a pool of torchlight
 underneath it) → player → ambience → floaters → per-biome colour wash → vignette.
-**A floor tile has no edge.** The slab fills its tile corner to corner — no mortar gap, no
-bevel strips, no chipped corner — so neighbours meet flush and the floor reads as one
-continuous surface. Cracks, puddles, rubble and weeds still break it up. Walls keep their own
-edges and shadows. The **four adjacency highlights** that used to ring the player (blue for a
-walkable neighbour, orange for a monster) were removed by owner request, 16 Oct — nothing
-replaces them. The only movement aid left is the single **path-destination square**.
+**The floor is one continuous surface.** Each tile is drawn as a rounded-corner, feathered
+slab whose base colour comes from a smooth value-noise field (`floorTone`, knots every 4
+tiles) instead of a two-tone `(gx+gy)%2` flip — so shade drifts gently across several tiles
+and never steps at a square's edge. The faint joint left between slabs is rounded and only a
+little darker than the slab itself (never the old near-black grout), so the floor reads as
+worn flags rather than a grid. Cracks, puddles, rubble and weeds still break it up. Walls
+keep their own edges and shadows. The **four adjacency highlights** that used to ring the
+player (blue for a walkable neighbour, orange for a monster) were removed by owner request,
+16 Oct — nothing replaces them. The only movement aid left is the single
+**path-destination square**.
 `drawDecor(layer)` paints `G.decor`: floor props sit centred on their tile; wall props
 hang from the top of theirs, and because their art is 1.5 tiles tall they spill into the
 tile below — which is what makes them read as hanging.
@@ -1003,12 +1007,14 @@ the write-to-storage whitelist.
 - **The `T` / `T()` duality.** `Delve.T` is a plain object; some files alias it as a
   function. Both styles are in use and are correct in their own files. Don't normalise
   without checking every call site in that file.
-- **The floor has no tile edges, and the four adjacency highlights are gone.**
-  Owner's request, 16 Oct. `drawFloorTile` no longer paints the mortar gap around a slab,
-  its bevel strips or its chipped corner, and `draw()` no longer rings the player's four
-  neighbours with a highlight square — nothing replaces them. A floor is meant to read as one
-  continuous surface. Re-adding either is a change of look to ask about, not a bug fix. The
-  single path-destination square is the one movement aid that deliberately stays.
+- **The floor has no hard tile edges, and the four adjacency highlights are gone.**
+  Owner's request, 16 Oct. Floor shade comes from `floorTone` (a smooth, deterministic
+  value-noise field) rather than a two-colour checkerboard, and each slab is rounded with a
+  feathered edge over a low-contrast base — deliberately a worn-flagstone look, not the old
+  near-black mortar lines. `draw()` no longer rings the player's four neighbours with a
+  highlight square — nothing replaces them. Re-adding hard tile outlines or the highlight
+  squares is a change of look to ask about, not a bug fix. The single path-destination square
+  is the one movement aid that deliberately stays.
 
 ### Real risks, ranked
 - **MEDIUM — flat namespace, ~180 `Delve.*` symbols.** A one-line math helper sits at
