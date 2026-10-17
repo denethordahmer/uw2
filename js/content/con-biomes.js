@@ -78,6 +78,8 @@ window.Delve = window.Delve || {};
     // "ruins" | "blackvein" | "frost". A ward must name one, or its floors
     // would fall back to the ruins look.
     clutter:"ruins",
+    // Ground-cover sprite (js/ground.js): mushrooms in the ruins.
+    groundCover:"ground_mushroom",
     // Drifting ambience (render.js drawAmbience). vy is tiles per second —
     // negative rises, positive falls. drift is the sideways sway in tiles.
     // type picks the particle look: "dust" | "ember" | "snow".
@@ -87,6 +89,8 @@ window.Delve = window.Delve || {};
     floor:"#2c3524", floor2:"#242c1e", moss:"#7a9a3a",
     water:"#3a2048", torch:"#c8d84a", light:"rgba(120,180,60,0.06)",
     clutter:"blackvein",
+    // Ground-cover sprite (js/ground.js): blood moss creeping over the floor.
+    groundCover:"ground_moss",
     // Embers drift upward out of the seam, with spore flecks among them.
     ambient:{ type:"ember", count:16, col:"#c8d84a", col2:"#ff9a3a", size:0.05, vy:-0.17, drift:0.10, alpha:0.5 } },
   { name:"The Frosted Vault",
@@ -94,6 +98,8 @@ window.Delve = window.Delve || {};
     floor:"#2a3644", floor2:"#232e3c", moss:"#7ec8e0",
     water:"#1a3a5e", torch:"#a8e8ff", light:"rgba(180,220,255,0.07)",
     clutter:"frost",
+    // Ground-cover sprite (js/ground.js): frozen puddles in the vault.
+    groundCover:"ground_ice",
     // Fine snow falls through the vault and slants sideways as it drops.
     ambient:{ type:"snow", count:22, col:"#eaffff", col2:"#a8e8ff", size:0.05, vy:0.22, drift:0.13, alpha:0.5 } }
  ];
