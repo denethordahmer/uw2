@@ -151,6 +151,7 @@ var FILES = [
   "js/items.js",
   "js/sprites.js",
   "js/content/con-bosssprites.js",
+  "js/content/con-worldart.js",
   "js/state.js",
   "js/levels.js",
   "js/ground.js",
@@ -373,7 +374,7 @@ var REQUIRED_FN = [
   "findPath","stepPath","uiBlocked","rowFor","onHitEffectFor","markVisited","isTorchTile",
   "hasSavedRun","savedRunFloor","resumeRun","restoreRunFromCheckpoint",
   "setFloorCheckpoint","clearRunCheckpoint","captureRunSnapshot","addDeath","saveAndExit",
-  "placeGroundCover","drawGroundCover"
+  "placeGroundCover","drawGroundCover","registerWorldSprite","registerClutter"
 ];
 // Non-function globals. `save` lives here, NOT in REQUIRED_FN — Delve.save is
 // the DATA object, so a typeof==="function" check could never pass.
