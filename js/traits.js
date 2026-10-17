@@ -241,9 +241,15 @@ window.Delve = window.Delve || {};
  }
  function hurt(m, dmg, col){
  const G = Delve.G;
- m.hp -= dmg;
+ // Boss shield (the Bonefather's ribs): abilities are absorbed the same way
+ // weapon hits are. absorbBossShield floats/logs the absorbed part itself.
+ let dealt = dmg;
+ if(m.isBoss && Delve.absorbBossShield) dealt = Delve.absorbBossShield(m, dmg);
+ if(dealt > 0){
+ m.hp -= dealt;
  m.hitFlash = Date.now();
- Delve.addFloater("-" + dmg, m.x, m.y, col || "#ffd75e");
+ Delve.addFloater("-" + dealt, m.x, m.y, col || "#ffd75e");
+ }
  if(m.hp <= 0){
  const wasTarget = (G.combatTarget === m);
  Delve.killMonster(m);

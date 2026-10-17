@@ -22,6 +22,18 @@ window.Delve = window.Delve || {};
   Delve._worldSpriteBuilders[key] = builderFn;
  };
 
+ // ── Monster-sprite registry ──
+ // Satellite content files call Delve.registerMonsterSprite(kind, idleBuilder,
+ // atkRects). buildAll() consumes this registry after the hand-built roster
+ // (an explicit entry in the literal always wins) and automatically gives every
+ // registered monster its hurt / elite / attack variants — the same set the
+ // hand-built rows get, so render.js needs no special case. See
+ // con-monstersprites.js.
+ Delve._monsterSpriteBuilders = Delve._monsterSpriteBuilders || {};
+ Delve.registerMonsterSprite = function(kind, idleBuilder, atkRects){
+  Delve._monsterSpriteBuilders[kind] = { idleBuilder: idleBuilder, atkRects: atkRects || [] };
+ };
+
  // ── Clutter-family registry ──
  // Per-biome floor art (clutter + growth painters) is registered content too:
  // Delve.registerClutter(familyName, { clutter(ctx,sx,sy,ts,roll),
@@ -427,6 +439,16 @@ window.Delve = window.Delve || {};
     shopkeeper: merchant
    }
   };
+
+  // Registered monster sprites (con-monstersprites.js): idle + hurt + elite +
+  // attack, built the same way the hand-built rows above are.
+  for(const key in Delve._monsterSpriteBuilders){
+   if(Delve.SPR[key]) continue;   // an explicit entry always wins
+   const rec = Delve._monsterSpriteBuilders[key];
+   const idle = rec.idleBuilder();
+   const entry = { idle: idle, hurt: tint(idle,"#ff5c5c"), elite: tint(idle,"#ffd75e"), attack: atkFrom(idle, rec.atkRects) };
+   Delve.SPR[key] = entry;
+  }
 
   // Registered world art (con-worldart.js): arena props + biome ground cover.
   // Runs after the literal above; an explicit entry always wins over a

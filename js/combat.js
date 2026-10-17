@@ -208,12 +208,18 @@ window.Delve = window.Delve || {};
  dmg = Math.max(1, Math.round(dmg * (1 - wpct)));
  }
 
- Delve.addFloater(isCrit ? ("CRIT " + dmg) : ("-" + dmg), m.x, m.y, isCrit ? "#ff9d3d" : "#ffd75e", isCrit ? 1.5 : 1);
+ // Boss shield (the Bonefather's ribs): damage eats the shield first; only the
+ // remainder reaches HP. absorbBossShield floats/logs the absorbed part itself.
+ const dealt = (m.isBoss && Delve.absorbBossShield) ? Delve.absorbBossShield(m, dmg) : dmg;
+
+ if(dealt > 0){
+ Delve.addFloater(isCrit ? ("CRIT " + dealt) : ("-" + dealt), m.x, m.y, isCrit ? "#ff9d3d" : "#ffd75e", isCrit ? 1.5 : 1);
  if(isCrit) Delve.addShake(2);   // a crit should be felt, not just read (§Batch 15)
  if(!isCrit && Delve.sfx) Delve.sfx("hit", { weapon: weaponStyle });
- if(Delve.logPlayerAtk) Delve.logPlayerAtk(m.name || m.kind || "enemy", dmg, isCrit);
- Delve.recordStat("damageDealt", dmg);
- m.hp -= dmg;
+ if(Delve.logPlayerAtk) Delve.logPlayerAtk(m.name || m.kind || "enemy", dealt, isCrit);
+ Delve.recordStat("damageDealt", dealt);
+ m.hp -= dealt;
+ }
 
  // Weapon on-hit status (poison/bleed/burn from item)
  const equip = G.equip || {};
@@ -246,6 +252,31 @@ window.Delve = window.Delve || {};
  Delve.endCombat(false);
  }
  }
+
+ // Boss shield (Batch 18 — the Bonefather's ribcage, generic for future bosses).
+ // A boss with shieldHp > 0 soaks damage into the shield first; only the
+ // remainder reaches HP. The ribs do not regrow: once the shield breaks it
+ // stays broken (m.shieldBroken), which render.js uses to swap the art to the
+ // boss's exposed form. Returns the damage that actually reached HP.
+ Delve.absorbBossShield = function(m, dmg){
+  if(!m || !m.isBoss || !(m.shieldHp > 0)) return dmg;
+  const absorbed = Math.min(m.shieldHp, dmg);
+  m.shieldHp -= absorbed;
+  Delve.addFloater("ribs -" + absorbed, m.x, m.y, "#e8dcc0");
+  if(Delve.logPlayerAtk) Delve.logPlayerAtk((m.name || "boss") + " (ribs)", absorbed, false);
+  if(m.shieldHp <= 0){
+   m.shieldHp = 0;
+   if(!m.shieldBroken){
+    m.shieldBroken = true;   // Act 2 begins — and stays begun
+    Delve.flash("THE RIBS SHATTER!");
+    Delve.addFloater("THE HEART IS EXPOSED", m.x, m.y - 0.8, "#ff9d3d", 1.3);
+    Delve.addShake(5);
+    if(Delve.sfx) Delve.sfx("crit", { weapon: "bone" });
+    if(Delve.logSystem) Delve.logSystem("The ribcage breaks — the black heart is exposed!");
+   }
+  }
+  return dmg - absorbed;
+ };
 
  // helper for trait buffs inside combat tick
  const tb = () => Delve.traitBuffs ? Delve.traitBuffs() : {};
@@ -387,6 +418,22 @@ window.Delve = window.Delve || {};
  Delve.killMonster = function(m){
  const G = Delve.G;
  if(!G || !m) return;
+ // The Reassembled (Bone Ossuary): on its first death it reassembles at half
+ // HP and keeps fighting — no rewards, no corpse, no floor-clear until the
+ // second death actually lands. The gimmick fires from any kill path
+ // (weapon, ability, DOT) because they all route through here.
+ if(!m.isBoss && m.reassembleOnce && !m.reassembled){
+  m.reassembled = true;
+  m.hp = Math.max(1, Math.ceil(m.maxHp * 0.5));
+  if(G.grid[m.y] && G.grid[m.y][m.x] !== undefined) G.grid[m.y][m.x] = T().MONSTER;
+  Delve.flash("IT REASSEMBLES!");
+  Delve.addShake(3);
+  if(Delve.sfx) Delve.sfx("elite_kill", { monster: m.kind });
+  Delve.addFloater("reassembled", m.x, m.y - 0.6, "#e8dcc0", 1.2);
+  if(Delve.logSystem) Delve.logSystem(m.name + " drags itself back together.");
+  if(Delve.updateHUD) Delve.updateHUD();
+  return;
+ }
  // Every death leaves a corpse fade and a beat of hit-stop (§Batch 15). A boss gets a
  // longer freeze — it should land like the end of something.
  hitStop(m.isBoss ? 170 : 70);

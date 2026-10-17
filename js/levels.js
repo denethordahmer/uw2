@@ -40,7 +40,7 @@ window.Delve = window.Delve || {};
   G._wardPlans = G._wardPlans || {};
   const key = ward.id || 1;
   if(G._wardPlans[key]) return G._wardPlans[key];
-  const plan = { clustered: [], swarm: [] };
+  const plan = { clustered: [], swarm: [], sarcophagus: [] };
   const s = ward.special;
   if(s && s.floors){
    const pool = [];
@@ -53,6 +53,7 @@ window.Delve = window.Delve || {};
    }
    for(let i=0; i<pool.length; i++){
     if(Math.random() < (s.swarmChance || 0)) plan.swarm.push(pool[i]);
+    if(Math.random() < (s.sarcophagusChance || 0)) plan.sarcophagus.push(pool[i]);
    }
   }
   G._wardPlans[key] = plan;
@@ -151,6 +152,31 @@ window.Delve = window.Delve || {};
 
   G.floorType = "clustered";
   if(Delve.logSystem) Delve.logSystem("A knot of vines guards a sealed chest.");
+ }
+
+ // Sarcophagus Hall (Bone Ossuary): 6-10 sealed stone tombs scattered across
+ // the floor. Opening one is the player's choice; contents differ — loot, a
+ // monster bursting out, or dust. Tombs ride the CHEST tile so taps reach
+ // openChest, flagged sarcophagus:true.
+ function applySarcophagusFloor(G, rooms, special){
+  const usable = specialRooms(G, rooms);
+  if(!usable.length) return;
+  const count = Delve.rng((special && special.sarcMin) || 6, (special && special.sarcMax) || 10);
+  let placed = 0, attempts = 120;
+  while(placed < count && attempts-- > 0){
+   const room = usable[Delve.rng(0, usable.length - 1)];
+   const x = room.x + Delve.rng(0, room.w - 1);
+   const y = room.y + Delve.rng(0, room.h - 1);
+   if(!G.grid[y] || G.grid[y][x] !== T().FLOOR) continue;
+   if(x === G.px && y === G.py) continue;
+   if(G.stairs && x === G.stairs.x && y === G.stairs.y) continue;
+   if(G.shop && G.shop.x === x && G.shop.y === y) continue;
+   G.grid[y][x] = T().CHEST;
+   G.chests.push({ x:x, y:y, open:false, sarcophagus:true });
+   placed++;
+  }
+  G.floorType = "sarcophagus";
+  if(Delve.logSystem) Delve.logSystem("Sealed tombs crowd the hall. Some are not empty.");
  }
 
  // ── Boss floor: bespoke arena layout ─────────────────────────
@@ -302,6 +328,10 @@ window.Delve = window.Delve || {};
    atk:bossDef.atk || cfg.bossAtkBase,
    speed:bossDef.speed || cfg.bossSpeed,
    chainHitEvery:bossDef.chainHitEvery || 3, chainHitCount:0,
+   // Boss shield (Batch 18): the Bonefather's ribcage soaks damage first and
+   // never regrows. spriteOpen is the Act-2 form render.js swaps to.
+   shieldHp:bossDef.shieldHp || 0, shieldBroken:false,
+   spriteOpen:bossDef.spriteOpen || null,
    size:bossDef.size || { w:1, h:1 },   // tiles its art covers (own tile = bottom-left)
    effects:[], elite:false, hasActed:false
   };
@@ -483,6 +513,8 @@ window.Delve = window.Delve || {};
     applySwarmFloor(G, rooms, ward.special);
    } else if(plan.clustered.indexOf(G.floor) >= 0){
     applyClusteredLootFloor(G, rooms);
+   } else if(plan.sarcophagus.indexOf(G.floor) >= 0){
+    applySarcophagusFloor(G, rooms, ward.special);
    }
   }
 
@@ -556,6 +588,53 @@ window.Delve = window.Delve || {};
   if(!G) return;
   const chest = G.chests.find(function(c){ return c.x===x && c.y===y; });
   if(!chest || chest.open) return;
+
+  // ── Sarcophagus (Bone Ossuary): shift the lid and see what stirs ──
+  if(chest.sarcophagus){
+   chest.open = true;
+   G.grid[y][x] = T().FLOOR;
+   if(Delve.sfx) Delve.sfx("chest");
+   const roll = Math.random();
+   const source = { kind:"sarcophagus" };
+   if(roll < 0.30){          // an item sleeps with the dead
+    let tier = Delve.rollTier(G.floor, (Delve.CONFIG.loot.sourceRarityMult || {}).chest || 1);
+    if(Delve.hasProgression && Delve.hasProgression("lucky_find")) tier = Math.min(4, tier+1);
+    const it = Delve.makeItem(tier);
+    it.x = x; it.y = y;
+    Delve.stampProvenance(it, source);
+    G.items.push(it);
+    if(Delve.logSystem) Delve.logSystem("The lid shifts — grave goods, still wrapped.");
+   } else if(roll < 0.55){   // gold left for the afterlife
+    const mult = Delve.goldMult ? Delve.goldMult() : 1;
+    const gold = Math.round((15 + Math.floor(Math.random()*10) + G.floor*2) * mult);
+    G.gold += gold;
+    Delve.recordStat("goldEarned", gold);
+    Delve.addFloater("+" + gold + "g", x, y, "#ffd75e");
+    if(Delve.logSystem) Delve.logSystem("The tomb held its gold. Now it doesn't.");
+   } else if(roll < 0.75){   // something bursts out
+    const band = Delve.getMonsterBand(G.floor);
+    const kind = Delve.pickWeighted(band.weights);
+    G.monsters = G.monsters.filter(function(m){ return !(m.x === x && m.y === y); });
+    const m = kind ? spawnMonsterKind(G, x, y, kind) : null;
+    if(m){
+     if(Delve.sfx) Delve.sfx("hit", { monster: m.kind });
+     Delve.addShake(3);
+     Delve.flash(m.name.toUpperCase() + " BURSTS OUT!");
+     if(Delve.logSystem) Delve.logSystem(m.name + " bursts from the tomb!");
+    } else {
+     if(Delve.logSystem) Delve.logSystem("The lid shifts. Dust. Nothing more.");
+    }
+   } else if(roll < 0.90){   // a potion, preserved
+    Delve.dropPotion(x, y, 2, source);
+    if(Delve.logSystem) Delve.logSystem("A sealed potion, kept for a journey the dead never took.");
+   } else {                  // already empty
+    if(Delve.logSystem) Delve.logSystem("The lid shifts. Dust. Nothing more.");
+   }
+   Delve.updateHUD();
+   Delve.draw();
+   return;
+  }
+
   chest.open = true;
   G.grid[y][x] = T().FLOOR;
   if(Delve.sfx) Delve.sfx("chest");

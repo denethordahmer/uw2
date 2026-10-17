@@ -512,7 +512,12 @@ const DEATH_LIFE = 460;
    rx = ro.x + lo.x; ry = ro.y + lo.y;
   } else recoils.delete(m);
 
-  drawSprite(ctx, m.kind||"goblin", ax+rx, cy+ry, ts, hurt, m.elite, atk, size);
+  drawSprite(
+   ctx,
+   // Act-2 form: a boss whose rib-shield broke swaps to its exposed sprite,
+   // permanently (§6.16). Every other mob draws its own kind as before.
+   (m.isBoss && m.shieldBroken && m.spriteOpen && Delve.SPR[m.spriteOpen]) ? m.spriteOpen : (m.kind||"goblin"),
+   ax+rx, cy+ry, ts, hurt, m.elite, atk, size);
 
   if(m.elite){ ctx.save(); ctx.strokeStyle=Delve.CONFIG.elite.glow||"#ffd75e"; ctx.lineWidth=1.5; ctx.globalAlpha=0.7; ctx.beginPath(); ctx.arc(ax+rx, cy+ry-ts*0.1, ts*0.42*bw, 0, Math.PI*2); ctx.stroke(); ctx.restore(); }
   if(m.effects && m.effects.length){
@@ -540,6 +545,8 @@ const DEATH_LIFE = 460;
 
  function drawChest(ctx, chest, cx, cy, ts){
   drawShadow(ctx, cx, cy, ts*0.5);
+  // Sarcophagus tombs (Bone Ossuary) draw their own sealed/open art.
+  if(chest.sarcophagus){ drawWorldSprite(ctx, chest.open ? "tombOpen" : "tombSealed", cx, cy, ts); return; }
   drawWorldSprite(ctx, chest.open ? "chestOpen" : "chestClosed", cx, cy, ts);
  }
 
