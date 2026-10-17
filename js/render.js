@@ -77,12 +77,11 @@ const DEATH_LIFE = 460;
   return best;
  }
 
- function hash2(x, y){
-  let n = x*374761393 + y*668265263;
-  n = (n ^ (n>>13)) * 1274126177;
-  return ((n ^ (n>>16)) >>> 0) / 4294967295;
- }
- function hash3(x, y, salt){ return hash2(x*2053+salt, y*3571+salt*7); }
+ // Deterministic hashes now live in state.js (Delve.hash2 / Delve.hash3) so
+ // content files can use them too. These aliases keep every call site in this
+ // file unchanged.
+ function hash2(x, y){ return Delve.hash2(x, y); }
+ function hash3(x, y, salt){ return Delve.hash3(x, y, salt); }
 
  function biome(){
   const G = Delve.G;
@@ -253,9 +252,11 @@ const DEATH_LIFE = 460;
 
  function drawWeed(ctx, sx, sy, ts, gx, gy, b, type){
   // Growth follows the biome too: frost ferns and ice crystals in the vault,
-  // thorn tendrils and spore stalks in the blackvein, meadow weeds in the ruins.
-  if(b.clutter === "frost") return drawFrostGrowth(ctx, sx, sy, ts, gx, gy, b, type);
-  if(b.clutter === "blackvein") return drawThornGrowth(ctx, sx, sy, ts, gx, gy, b, type);
+  // thorn tendrils and spore stalks in the blackvein, meadow weeds in the
+  // ruins. Non-ruins families are registered content (con-worldart.js); the
+  // ruins' meadow weeds below stay inline as the fallback family.
+  const fam = Delve._clutterFamilies && Delve._clutterFamilies[b.clutter];
+  if(fam && fam.weed) return fam.weed(ctx, sx, sy, ts, gx, gy, b, type);
   ctx.save(); ctx.globalAlpha=0.72;
   const cx=sx+ts*(0.3+hash3(gx,gy,61)*0.4), cy=sy+ts*(0.35+hash3(gx,gy,67)*0.4), sc=ts/40;
   switch(type){
@@ -274,8 +275,10 @@ const DEATH_LIFE = 460;
  function drawClutter(ctx, sx, sy, ts, gx, gy, b){
   const roll = hash3(gx, gy, 71);
   if(roll < 0.03){
-   if(b.clutter === "frost"){ drawFrostClutter(ctx, sx, sy, ts, roll); return; }
-   if(b.clutter === "blackvein"){ drawThornClutter(ctx, sx, sy, ts, roll); return; }
+   // Non-ruins families are registered content (con-worldart.js). The ruins
+   // pebbles/bones below stay inline as the fallback family.
+   const fam = Delve._clutterFamilies && Delve._clutterFamilies[b.clutter];
+   if(fam && fam.clutter){ fam.clutter(ctx, sx, sy, ts, roll); return; }
    ctx.save(); ctx.globalAlpha=0.5;
    if(roll < 0.01){
     ctx.fillStyle="#c9c2b0";
@@ -291,119 +294,11 @@ const DEATH_LIFE = 460;
  }
 
  // ── BIOME DECORATION FAMILIES ────────────────────────────────
- // Two per non-ruins biome: floor clutter (bones/pebbles in the ruins) and
- // growth (weeds in the ruins). Colours are the biome's own, so a future area
- // reusing a family only needs its palette to fit.
- function drawFrostClutter(ctx, sx, sy, ts, roll){
-  ctx.save(); ctx.globalAlpha=0.55;
-  if(roll < 0.012){
-   // ice shards pushing through the slab
-   ctx.fillStyle="#7ec8e0";
-   [[0.40,0.62,1.0],[0.55,0.64,0.72],[0.30,0.63,0.55]].forEach(function(s){
-    const bx=sx+ts*s[0], by=sy+ts*s[1], hh=ts*0.17*s[2];
-    ctx.beginPath(); ctx.moveTo(bx,by-hh); ctx.lineTo(bx-ts*0.05*s[2],by); ctx.lineTo(bx+ts*0.05*s[2],by); ctx.closePath(); ctx.fill();
-   });
-  } else if(roll < 0.02){
-   // a drift of snow
-   ctx.fillStyle="#dff0ff";
-   ctx.beginPath(); ctx.ellipse(sx+ts*0.50,sy+ts*0.60,ts*0.26,ts*0.09,0,0,Math.PI*2); ctx.fill();
-   ctx.globalAlpha=0.35; ctx.fillStyle="#ffffff";
-   ctx.beginPath(); ctx.ellipse(sx+ts*0.46,sy+ts*0.57,ts*0.15,ts*0.05,0,0,Math.PI*2); ctx.fill();
-  } else {
-   // frozen puddle: dark water under a skin of ice
-   ctx.globalAlpha=0.45; ctx.fillStyle="#1a3a5e";
-   ctx.beginPath(); ctx.ellipse(sx+ts*0.50,sy+ts*0.58,ts*0.19,ts*0.10,0,0,Math.PI*2); ctx.fill();
-   ctx.globalAlpha=0.5; ctx.strokeStyle="#cfeeff"; ctx.lineWidth=Math.max(1,ts*0.02);
-   ctx.beginPath(); ctx.moveTo(sx+ts*0.37,sy+ts*0.56); ctx.lineTo(sx+ts*0.61,sy+ts*0.62); ctx.stroke();
-  }
-  ctx.restore();
- }
-
- function drawThornClutter(ctx, sx, sy, ts, roll){
-  ctx.save(); ctx.globalAlpha=0.62;
-  if(roll < 0.012){
-   // a thorn breaking the surface
-   ctx.fillStyle="#4a3a1e";
-   ctx.beginPath(); ctx.moveTo(sx+ts*0.50,sy+ts*0.44); ctx.lineTo(sx+ts*0.42,sy+ts*0.66); ctx.lineTo(sx+ts*0.58,sy+ts*0.66); ctx.closePath(); ctx.fill();
-   ctx.fillStyle="#c8d84a";
-   ctx.beginPath(); ctx.arc(sx+ts*0.50,sy+ts*0.47,ts*0.04,0,Math.PI*2); ctx.fill();
-  } else if(roll < 0.02){
-   // a spore pod, pulsing faintly
-   ctx.fillStyle="#3d5a22";
-   ctx.beginPath(); ctx.ellipse(sx+ts*0.50,sy+ts*0.58,ts*0.09,ts*0.12,0,0,Math.PI*2); ctx.fill();
-   ctx.globalAlpha=0.4; ctx.fillStyle="#7a9a3a";
-   ctx.beginPath(); ctx.arc(sx+ts*0.50,sy+ts*0.56,ts*0.12,0,Math.PI*2); ctx.fill();
-  } else {
-   // a patch of glowing seam-moss
-   ctx.globalAlpha=0.35; ctx.fillStyle="#7a9a3a";
-   ctx.beginPath(); ctx.ellipse(sx+ts*0.50,sy+ts*0.58,ts*0.16,ts*0.07,0,0,Math.PI*2); ctx.fill();
-  }
-  ctx.restore();
- }
-
- function drawFrostGrowth(ctx, sx, sy, ts, gx, gy, b, type){
-  ctx.save(); ctx.globalAlpha=0.75;
-  const cx=sx+ts*(0.3+hash3(gx,gy,61)*0.4), cy=sy+ts*(0.4+hash3(gx,gy,67)*0.4), sc=ts/40;
-  switch(type % 3){
-   case 0:   // frost fern
-    ctx.strokeStyle="#7ec8e0"; ctx.lineWidth=Math.max(1,sc*1.1); ctx.lineCap="round";
-    ctx.beginPath();
-    for(let i=-1;i<=1;i++){
-     ctx.moveTo(cx,cy+sc*5);
-     ctx.quadraticCurveTo(cx+i*sc*4, cy+sc*1, cx+i*sc*8, cy-sc*6);
-    }
-    ctx.stroke(); break;
-   case 1:   // cluster of ice crystals
-    ctx.fillStyle="#7ec8e0";
-    [[-3.2,3,5.0],[0,3,8.0],[3.2,3,5.5]].forEach(function(s){
-     const bx=cx+s[0]*sc, by=cy+sc*2;
-     ctx.beginPath(); ctx.moveTo(bx,by-s[2]*sc); ctx.lineTo(bx-sc*1.5,by); ctx.lineTo(bx+sc*1.5,by); ctx.closePath(); ctx.fill();
-    });
-    ctx.globalAlpha=0.45; ctx.fillStyle="#eaffff";
-    ctx.beginPath(); ctx.arc(cx,cy+sc*1,sc*2,0,Math.PI*2); ctx.fill();
-    break;
-   default:  // blades of grass, frozen stiff
-    ctx.strokeStyle="#a8e8ff"; ctx.lineWidth=Math.max(1,sc*0.9); ctx.lineCap="round";
-    ctx.beginPath();
-    ctx.moveTo(cx-sc*4,cy+sc*5); ctx.lineTo(cx-sc*2,cy-sc*4);
-    ctx.moveTo(cx,cy+sc*5); ctx.lineTo(cx+sc*1,cy-sc*6);
-    ctx.moveTo(cx+sc*4,cy+sc*5); ctx.lineTo(cx+sc*6,cy-sc*3);
-    ctx.stroke();
-    ctx.globalAlpha=0.5; ctx.fillStyle="#eaffff";
-    ctx.beginPath(); ctx.arc(cx+sc*1,cy-sc*6,sc*1.2,0,Math.PI*2); ctx.fill();
-    break;
-  }
-  ctx.restore();
- }
-
- function drawThornGrowth(ctx, sx, sy, ts, gx, gy, b, type){
-  ctx.save(); ctx.globalAlpha=0.8;
-  const cx=sx+ts*(0.3+hash3(gx,gy,61)*0.4), cy=sy+ts*(0.4+hash3(gx,gy,67)*0.4), sc=ts/40;
-  switch(type % 3){
-   case 0:   // thorn tendril
-    ctx.strokeStyle="#4a3a1e"; ctx.lineWidth=Math.max(1,sc*1.3); ctx.lineCap="round";
-    ctx.beginPath(); ctx.moveTo(cx,cy+sc*6); ctx.quadraticCurveTo(cx-sc*6,cy+sc*2,cx-sc*2,cy-sc*6); ctx.stroke();
-    ctx.strokeStyle="#c8d84a"; ctx.lineWidth=Math.max(1,sc*0.9);
-    ctx.beginPath(); ctx.moveTo(cx-sc*3,cy+sc*1); ctx.lineTo(cx-sc*5,cy-sc*2);
-    ctx.moveTo(cx-sc*2,cy-sc*2); ctx.lineTo(cx-sc*1,cy-sc*5); ctx.stroke();
-    break;
-   case 1:   // spore stalk with a glowing head
-    ctx.strokeStyle="#6a7a2e"; ctx.lineWidth=Math.max(1,sc*1.1); ctx.lineCap="round";
-    ctx.beginPath(); ctx.moveTo(cx,cy+sc*6); ctx.lineTo(cx+sc,cy-sc*3); ctx.stroke();
-    ctx.globalAlpha=0.45; ctx.fillStyle="#7a9a3a";
-    ctx.beginPath(); ctx.arc(cx+sc,cy-sc*4,sc*2.6,0,Math.PI*2); ctx.fill();
-    ctx.globalAlpha=0.9; ctx.fillStyle="#eaffa8";
-    ctx.beginPath(); ctx.arc(cx+sc,cy-sc*4,sc*1.1,0,Math.PI*2); ctx.fill();
-    break;
-   default:  // curled vine running across the slab
-    ctx.strokeStyle="#3d5a22"; ctx.lineWidth=Math.max(1,sc*1.1); ctx.lineCap="round";
-    ctx.beginPath(); ctx.moveTo(sx+ts*0.08,cy+sc*3); ctx.bezierCurveTo(cx-sc*5,cy-sc*4,cx+sc*5,cy+sc*5,cx+sc*9,cy-sc*2); ctx.stroke();
-    ctx.globalAlpha=0.35; ctx.fillStyle="#7a9a3a";
-    ctx.beginPath(); ctx.ellipse(cx+sc*2,cy-sc*3,sc*3,sc*1.4,-0.5,0,Math.PI*2); ctx.fill();
-    break;
-  }
-  ctx.restore();
- }
+ // The per-biome clutter/growth painters (frost, blackvein) moved to
+ // content/con-worldart.js (16 Oct) — registered via Delve.registerClutter and
+ // consumed by drawClutter/drawWeed above. The ruins family stays inline here
+ // as the fallback. A new biome registers its family there, so this file stops
+ // growing with every ward.
 
  // ── WALL ─────────────────────────────────────────────────────
  // Batch 17 — textured stone + depth. Each tile is its own shade of the biome's

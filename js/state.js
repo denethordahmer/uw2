@@ -12,6 +12,16 @@ Delve.flash = function(t){
 
 Delve.mdist = function(x1,y1,x2,y2){ return Math.abs(x1-x2)+Math.abs(y1-y2); };
 
+// Deterministic position hashes (moved here from render.js, 16 Oct). Pure math
+// utilities like mdist/rng — and content files (con-worldart.js clutter
+// families) need them too, so they live on the namespace.
+Delve.hash2 = function(x, y){
+ let n = x*374761393 + y*668265263;
+ n = (n ^ (n>>13)) * 1274126177;
+ return ((n ^ (n>>16)) >>> 0) / 4294967295;
+};
+Delve.hash3 = function(x, y, salt){ return Delve.hash2(x*2053+salt, y*3571+salt*7); };
+
 Delve.getWard = function(floor){
  const wards = Delve.CONFIG.WARDS || [];
  for(const w of wards){
