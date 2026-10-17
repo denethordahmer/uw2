@@ -285,7 +285,8 @@ and the attack-lunge offsets), the offscreen tile cache, the per-biome decoratio
 families, the drifting ambience layer and the biome ground-cover layer,
 `Delve.drawPaperDoll`, `Delve.markVisited`,
 `Delve.renderMinimap`.
-Draw order is: floored tiles (+ their biome clutter) → **biome ground cover** → **floor props** → walls (+ torches
+Draw order is: floored tiles (+ their biome clutter) → **biome ground cover** → **floor props** →
+**wall drop shadows** → walls (+ torches and the secret-wall shimmer)
 and the secret-wall shimmer) → **hanging props** → path highlight →
 chests/items/gold/barrels/shop → monsters and boss (a boss gets a pool of torchlight
 underneath it) → player → ambience → floaters → per-biome colour wash → vignette.
@@ -294,8 +295,8 @@ slab whose base colour comes from a smooth value-noise field (`floorTone`, knots
 tiles) instead of a two-tone `(gx+gy)%2` flip — so shade drifts gently across several tiles
 and never steps at a square's edge. The faint joint left between slabs is rounded and only a
 little darker than the slab itself (never the old near-black grout), so the floor reads as
-worn flags rather than a grid. Cracks, puddles, rubble and weeds still break it up. Walls
-keep their own edges and shadows. The **four adjacency highlights** that used to ring the
+worn flags rather than a grid. Cracks, puddles, rubble and weeds still break it up. Walls are
+textured stone (§6.15). The **four adjacency highlights** that used to ring the
 player (blue for a walkable neighbour, orange for a monster) were removed by owner request,
 16 Oct — nothing replaces them. The only movement aid left is the single
 **path-destination square**.
@@ -935,6 +936,22 @@ stay out of the run snapshot.
   floor props; each occupied tile draws its own little sprite (with a per-tile mirror to
   break up repetition). Art is `SPR.world["ground_*"]`, named per biome by
   `BIOMES[n].groundCover`; a biome without one simply has no cover.
+
+### 6.15 Wall look — textured stone + drop shadows (Batch 17)
+Owner's choice from a four-option menu (soft top-down light, rounded caps, textured stone,
+drop shadows — stone + shadows taken, 16 Oct). All of it lives in `render.js`:
+- **`drawWallTile`** — each tile is its own shade of the biome's stone (`blendHex` against
+  near-black by a hash, a few tiles lighter), a soft top-down light gradient, the
+  `wallEdge`/`wallBrick` colours kept but feathered and low-contrast so joints texture rather
+  than grid, the biome's `moss` colour creeping over the top edge (moss / lichen / frost,
+  ~45% of tiles, plus the occasional drip), chips and dents, a warm `torch`-tinted sheen on
+  or beside a brazier tile, and a feathered top highlight / bottom contact shade.
+- **`drawWallShadows`** — a pass after the floor props and before the walls: every wall
+  throws a soft gradient shadow onto the floor below it and to its right. Direction is fixed
+  everywhere, so the whole dungeon reads as lit the same way. Shadows land on whatever is
+  there (ground cover and props included), which is the point.
+  Still deterministic per tile and still cached per floor — no per-frame cost beyond the
+  shadow pass itself.
 
 ---
 
