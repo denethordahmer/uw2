@@ -24,7 +24,21 @@ window.Delve = window.Delve || {};
   shatterling:    { name:"Shatterling",         hp:28, hpPerFloor:3.2, atk:6, atkPerFloor:0.70, xp:7, gold:7, shards:3, kind:"shatterling",     speed:1.25, deathBurst:6 },
   glacial_stalker:{ name:"Glacial Stalker",     hp:24, hpPerFloor:3.0, atk:6, atkPerFloor:0.75, xp:7, gold:7, shards:3, kind:"glacial_stalker", speed:1.30, onHitEffect:"bleed" },
   rimecaster:     { name:"Rimecaster",          hp:30, hpPerFloor:3.6, atk:7, atkPerFloor:0.80, xp:8, gold:8, shards:3, kind:"rimecaster",      speed:1.10, onHitEffect:"chill" },
-  frostbound:     { name:"Frostbound Sentinel", hp:42, hpPerFloor:4.5, atk:9, atkPerFloor:0.95, xp:9, gold:9, shards:4, kind:"frostbound",      speed:0.75, onHitEffect:"chill" }
+  frostbound:     { name:"Frostbound Sentinel", hp:42, hpPerFloor:4.5, atk:9, atkPerFloor:0.95, xp:9, gold:9, shards:4, kind:"frostbound",      speed:0.75, onHitEffect:"chill" },
+
+  // ── The Bone Ossuary (ward 4, floors 31-40) ────────────────────
+  // dried blood #7a2a24 as the bleed accent; Socket-numbers follow the ward doc.
+  bone_rat:        { name:"Bone Rat",        hp:12, hpPerFloor:1.8, atk:3,  atkPerFloor:0.50, xp:4, gold:4, shards:2, kind:"bone_rat",        speed:1.40 },
+  grave_skitter:   { name:"Grave Skitter",   hp:14, hpPerFloor:2.0, atk:4,  atkPerFloor:0.55, xp:4, gold:4, shards:2, kind:"grave_skitter",   speed:1.40 },
+  marrow_hound:    { name:"Marrow Hound",    hp:24, hpPerFloor:3.0, atk:6,  atkPerFloor:0.75, xp:7, gold:7, shards:3, kind:"marrow_hound",    speed:1.30, onHitEffect:"bleed"  },
+  bonecaller:      { name:"Bonecaller",      hp:30, hpPerFloor:3.6, atk:7,  atkPerFloor:0.80, xp:8, gold:8, shards:3, kind:"bonecaller",      speed:1.10, onHitEffect:"weaken" },
+  ossuary_sentry:  { name:"Ossuary Sentry",  hp:36, hpPerFloor:4.0, atk:8,  atkPerFloor:0.85, xp:8, gold:8, shards:3, kind:"ossuary_sentry",  speed:0.90, onHitEffect:"weaken" },
+  ribcage_brute:   { name:"Ribcage Brute",   hp:46, hpPerFloor:4.8, atk:10, atkPerFloor:1.00, xp:9, gold:9, shards:4, kind:"ribcage_brute",   speed:0.70 },
+  skull_warden:    { name:"Skull Warden",    hp:40, hpPerFloor:4.4, atk:11, atkPerFloor:1.05, xp:9, gold:9, shards:4, kind:"skull_warden",    speed:0.80, onHitEffect:"bleed"  },
+  reassembled:     { name:"The Reassembled", hp:30, hpPerFloor:3.6, atk:8,  atkPerFloor:0.85, xp:9, gold:9, shards:4, kind:"reassembled",     speed:1.00,
+                    // The gimmick: on death it reassembles once at half HP.
+                    // Fight it twice; the base HP is deliberately low.
+                    reassembleOnce:true }
  };
 
  C.MONSTER_BANDS = [
@@ -40,11 +54,17 @@ window.Delve = window.Delve || {};
   { floors:[21,22], boss:false, countMin:12, countMax:15, weights:{ frostling:40, icebound_swarm:35, glacial_stalker:15, rimecaster:10 } },
   { floors:[23,25], boss:false, countMin:13, countMax:17, weights:{ frostling:20, icebound_swarm:20, glacial_stalker:20, rimecaster:20, shatterling:12, frostbound:8 } },
   { floors:[26,29], boss:false, countMin:14, countMax:18, weights:{ frostling:8, icebound_swarm:10, glacial_stalker:22, rimecaster:22, shatterling:18, frostbound:20 } },
+  // Floors 31-40 — The Bone Ossuary. Counts follow the ward-3 ramp. Floor 40
+  // has no band: it is a boss floor, and genBossFloor spawns nothing.
+  { floors:[31,32], boss:false, countMin:12, countMax:15, weights:{ bone_rat:40, grave_skitter:35, marrow_hound:15, bonecaller:10 } },
+  { floors:[33,35], boss:false, countMin:13, countMax:17, weights:{ bone_rat:20, grave_skitter:20, marrow_hound:20, bonecaller:20, ossuary_sentry:12, ribcage_brute:8 } },
+  { floors:[36,39], boss:false, countMin:14, countMax:18, weights:{ bone_rat:8, grave_skitter:10, marrow_hound:22, bonecaller:22, ossuary_sentry:18, ribcage_brute:20, skull_warden:0, reassembled:0 } },
   // Overflow fallback band — used by getMonsterBand for any floor past the last
   // defined ward. Kept deliberately: future wards override it by defining their
   // own bands above this entry. (Boss floors need no band: genBossFloor spawns
-  // nothing.) Carries Frosted Vault weights, since that is the deepest content.
-  { floors:[31,999], boss:false, countMin:14, countMax:18, weights:{ frostling:8, icebound_swarm:10, glacial_stalker:22, rimecaster:22, shatterling:18, frostbound:20 } }
+  // nothing.) Carries Bone Ossuary weights, since that is now the deepest
+  // content.
+  { floors:[41,999], boss:false, countMin:14, countMax:18, weights:{ bone_rat:8, grave_skitter:10, marrow_hound:22, bonecaller:22, ossuary_sentry:18, ribcage_brute:20 } }
  ];
 
  C.spawnSafetyRadius = 4;
@@ -87,6 +107,18 @@ window.Delve = window.Delve || {};
    sprite:"boss_tempest",  // registered in content/bosssprites.js
    accent:"#a8e8ff",       // the blizzard's own light
    size:{ w:2, h:2 }
+  },
+  4: {
+   name:"The Bonefather",
+   title:"Lord of the Marrow",
+   flavour:"Every rib was once a promise.\nHe kept them all.",
+   hp:280, atk:22, speed:0.72, chainHitEvery:2,
+   // (no shardBonusPct — bosses pay a flat, depth-scaled amount; CONFIG.economy.bossShardsPerWard)
+   sprite:"boss_bonefather",            // Act 1: the ribs sealed
+   spriteOpen:"boss_bonefather_open",   // Act 2: ribs shattered, heart exposed
+   shieldHp:120,                        // the ribs soak ~120 damage, then break
+   accent:"#e8dcc0",                    // bleached bone
+   size:{ w:2, h:2 }
   }
  };
 
@@ -99,4 +131,7 @@ window.Delve = window.Delve || {};
  // Kill XP — single source of truth is the roster row's `xp`.
  // This table exists for legacy readers; kept in sync. Prefer MONSTER_ROSTER[k].xp.
  C.xpKill = { rat:1, slime:2, goblin:3, brute:5, wraith:6, barkling:4, spore_swarm:4, thornling:7, vine_stalker:8, dryad:8, treant:9, frostling:4, icebound_swarm:4, shatterling:7, glacial_stalker:7, rimecaster:8, frostbound:9, boss:30 };
+ C.xpKill.bone_rat = 4; C.xpKill.grave_skitter = 4; C.xpKill.marrow_hound = 7;
+ C.xpKill.bonecaller = 8; C.xpKill.ossuary_sentry = 8; C.xpKill.ribcage_brute = 9;
+ C.xpKill.skull_warden = 9; C.xpKill.reassembled = 9;
 })();

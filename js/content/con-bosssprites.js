@@ -156,6 +156,169 @@ window.Delve = window.Delve || {};
    [22,15,1,2,"#eaffff"],[27,15,1,2,"#eaffff"]]);
  });
 
+ // ═══ THE BONEFATHER — ward 4, The Bone Ossuary ═══
+ // A colossal walking ribcage: arms hang from the sides, ribs curve down
+ // around him like a cage, and inside — suspended in the dark — a heart of
+ // black bone. Act 1 art keeps the ribs sealed over the heart; Act 2
+ // (boss_bonefather_open) draws them shattered and splayed, the heart fully
+ // exposed. The shield mechanic in combat.js swaps between the two forms.
+ function buildBossBonefather(){
+  const c=mk(48,48),x=gx(c);
+  // feet: broad bone platforms
+  R(x,8,43,12,3,"#d8d0b8");R(x,28,43,12,3,"#d8d0b8");
+  R(x,8,43,12,1,"#f0e8d0");R(x,28,43,12,1,"#f0e8d0");
+  R(x,10,46,8,2,"#8a7658");R(x,30,46,8,2,"#8a7658");       // dust at the base
+  // leg bones: femur pairs rising to the pelvis
+  R(x,10,33,4,10,"#e8dcc0");R(x,34,33,4,10,"#e8dcc0");
+  R(x,11,33,1.4,10,"#f0e8d0");                              // shaft highlight
+  // pelvis: a wide vertebra bar
+  R(x,10,31,28,3,"#b8ac8c");
+  for(let i=0;i<7;i++) R(x,11+i*4,31.6,1.6,1.6,"#8a7658");  // vertebra nubs
+  // spine column up the middle
+  R(x,22,9,4,24,"#e8dcc0");
+  R(x,22,9,1.2,24,"#f0e8d0");
+  for(let i=0;i<8;i++) R(x,21,11+i*2.6,1.6,1.6,"#d8d0b8");  // spinous processes
+  // the dark interior between the ribs
+  x.globalAlpha=0.9; x.fillStyle="#1a140c";
+  x.beginPath(); x.ellipse(24,23,8,10,0,0,Math.PI*2); x.fill();
+  x.globalAlpha=1;
+  // the heart of black bone, suspended in the dark
+  x.globalAlpha=0.85; x.fillStyle="#0d0604";
+  x.beginPath(); x.ellipse(24,22,4.5,5.5,0,0,Math.PI*2); x.fill();
+  x.globalAlpha=1;
+  R(x,22,19,2,3,"#1a0a08");R(x,25,20,2,4,"#1a0a08");        // the heart's lobes
+  x.globalAlpha=0.55; R(x,23,23,1.4,1.4,"#7a2a24");R(x,25.5,25,1,1,"#7a2a24"); x.globalAlpha=1;
+  // ── the sealed ribcage ──
+  // five rib pairs curving down and in, cage-like over the heart
+  x.strokeStyle="#e8dcc0"; x.lineWidth=3.4; x.lineCap="round";
+  x.beginPath();
+  x.moveTo(23,11); x.quadraticCurveTo(4,13,8,27);           // rib 1 left
+  x.moveTo(25,11); x.quadraticCurveTo(44,13,40,27);         // rib 1 right
+  x.moveTo(23,16); x.quadraticCurveTo(7,18,10,30);          // rib 2 left
+  x.moveTo(25,16); x.quadraticCurveTo(41,18,38,30);         // rib 2 right
+  x.moveTo(23,21); x.quadraticCurveTo(10,23,13,34);         // rib 3 left
+  x.moveTo(25,21); x.quadraticCurveTo(38,23,35,34);         // rib 3 right
+  x.moveTo(23,26); x.quadraticCurveTo(13,28,15,38);         // rib 4 left
+  x.moveTo(25,26); x.quadraticCurveTo(35,28,33,38);         // rib 4 right
+  x.stroke();
+  // rib inner shading (a darker pass, offset inward)
+  x.strokeStyle="#8a7658"; x.lineWidth=1.2;
+  x.beginPath();
+  x.moveTo(23,12); x.quadraticCurveTo(6,14,9,27);
+  x.moveTo(25,12); x.quadraticCurveTo(42,14,39,27);
+  x.moveTo(23,17); x.quadraticCurveTo(9,19,11,30);
+  x.moveTo(25,17); x.quadraticCurveTo(39,19,37,30);
+  x.stroke();
+  // clavicle bar
+  R(x,8,10,32,3,"#e8dcc0");R(x,8,10,32,1,"#f0e8d0");
+  // arms: humerus + forearm, hanging idle at his sides
+  R(x,3,13,5,12,"#e8dcc0");R(x,3,25,4,10,"#d8d0b8");
+  R(x,40,13,5,12,"#e8dcc0");R(x,41,25,4,10,"#d8d0b8");
+  R(x,3,13,1.6,12,"#f0e8d0");R(x,40,13,1.6,12,"#f0e8d0");   // shaft highlights
+  // claw hands: three bony fingers each
+  R(x,2,35,6,3,"#e8dcc0");
+  R(x,1,38,2,5,"#c9bfa2");R(x,4,38,2,6,"#c9bfa2");R(x,7,38,1.6,4,"#c9bfa2");
+  R(x,40,35,6,3,"#e8dcc0");
+  R(x,41,38,2,5,"#c9bfa2");R(x,44,38,2,6,"#c9bfa2");R(x,38,38,1.6,4,"#c9bfa2");
+  // the skull: small against the cage
+  R(x,17,1,14,8,"#e8dcc0");
+  R(x,17,1,14,1.4,"#f0e8d0");
+  R(x,18.5,3,3,3,"#2a2216");R(x,26.5,3,3,3,"#2a2216");      // sockets
+  x.globalAlpha=0.5; R(x,19.3,3.8,1.4,1.4,"#7a2a24");R(x,27.3,3.8,1.4,1.4,"#7a2a24"); x.globalAlpha=1;
+  R(x,20,7.4,8,1.6,"#8a7658");                              // upper teeth band
+  for(let i=0;i<4;i++) R(x,20.6+i*2,7.4,0.8,1.6,"#e8dcc0"); // teeth
+  // vertebra crest rising from the crown
+  R(x,19,0,2,2,"#e8dcc0");R(x,22,0,4,2,"#e8dcc0");R(x,27,0,2,2,"#e8dcc0");
+  return c;
+ }
+
+ // Act 2: the ribs shattered. The cage is splayed open with jagged broken
+ // ends, and the black heart hangs fully exposed, pulsing faint red.
+ function buildBossBonefatherOpen(){
+  const c=mk(48,48),x=gx(c);
+  // feet, legs, pelvis, spine — unchanged skeleton
+  R(x,8,43,12,3,"#d8d0b8");R(x,28,43,12,3,"#d8d0b8");
+  R(x,8,43,12,1,"#f0e8d0");R(x,28,43,12,1,"#f0e8d0");
+  R(x,10,46,8,2,"#8a7658");R(x,30,46,8,2,"#8a7658");
+  R(x,10,33,4,10,"#e8dcc0");R(x,34,33,4,10,"#e8dcc0");
+  R(x,11,33,1.4,10,"#f0e8d0");
+  R(x,10,31,28,3,"#b8ac8c");
+  for(let i=0;i<7;i++) R(x,11+i*4,31.6,1.6,1.6,"#8a7658");
+  R(x,22,9,4,24,"#e8dcc0");
+  R(x,22,9,1.2,24,"#f0e8d0");
+  for(let i=0;i<8;i++) R(x,21,11+i*2.6,1.6,1.6,"#d8d0b8");
+  // the open interior: wider, darker
+  x.globalAlpha=0.95; x.fillStyle="#100a06";
+  x.beginPath(); x.ellipse(24,23,10,11,0,0,Math.PI*2); x.fill();
+  x.globalAlpha=1;
+  // ── the black heart, fully exposed ──
+  x.fillStyle="#0d0604";
+  x.beginPath(); x.ellipse(24,22,6,8,0,0,Math.PI*2); x.fill();
+  R(x,21,17,3,5,"#1a0a08");R(x,26,18,3,6,"#1a0a08");        // lobes
+  R(x,23.4,20,2.4,6,"#000000");                              // the cleft
+  // the faint pulse: dried-blood glints and a dim red aura
+  x.globalAlpha=0.35; x.fillStyle="#7a2a24";
+  x.beginPath(); x.ellipse(24,22,8,9.5,0,0,Math.PI*2); x.fill();
+  x.globalAlpha=0.8; R(x,22,19,1.6,1.6,"#a8353a");R(x,26,24,1.2,1.2,"#a8353a");
+  x.globalAlpha=1;
+  // ── the shattered ribs ──
+  // fewer, splayed outward, ending in jagged snapped tips
+  x.strokeStyle="#e8dcc0"; x.lineWidth=3.2; x.lineCap="round";
+  x.beginPath();
+  x.moveTo(23,12); x.quadraticCurveTo(6,14,5,24);           // left upper, flared wide
+  x.moveTo(25,12); x.quadraticCurveTo(42,14,43,24);         // right upper
+  x.moveTo(23,17); x.quadraticCurveTo(9,20,9,32);           // left mid
+  x.moveTo(25,17); x.quadraticCurveTo(39,20,39,32);         // right mid
+  x.moveTo(23,27); x.quadraticCurveTo(14,30,16,38);         // left low, shorter
+  x.moveTo(25,27); x.quadraticCurveTo(34,30,32,38);         // right low
+  x.stroke();
+  // jagged break-tips: small dark stubs where bone snapped
+  x.strokeStyle="#8a7658"; x.lineWidth=1.4;
+  x.beginPath();
+  x.moveTo(5,24); x.lineTo(3,27); x.moveTo(5,24); x.lineTo(7,27);
+  x.moveTo(43,24); x.lineTo(45,27); x.moveTo(43,24); x.lineTo(41,27);
+  x.moveTo(9,32); x.lineTo(8,35); x.moveTo(39,32); x.lineTo(40,35);
+  x.stroke();
+  // bone shards fallen into the dust below
+  R(x,14,45,3,1.6,"#c9bfa2");R(x,30,44.5,4,1.6,"#c9bfa2");R(x,23,46,2.4,1.2,"#b8ac8c");
+  // clavicle bar, cracked at its middle
+  R(x,8,10,32,3,"#e8dcc0");R(x,8,10,32,1,"#f0e8d0");
+  R(x,23,10,2.4,3,"#1a140c");                               // the crack
+  // arms — the cage broken open
+  R(x,3,13,5,12,"#e8dcc0");R(x,3,25,4,10,"#d8d0b8");
+  R(x,40,13,5,12,"#e8dcc0");R(x,41,25,4,10,"#d8d0b8");
+  R(x,3,13,1.6,12,"#f0e8d0");R(x,40,13,1.6,12,"#f0e8d0");
+  R(x,2,35,6,3,"#e8dcc0");
+  R(x,1,38,2,5,"#c9bfa2");R(x,4,38,2,6,"#c9bfa2");R(x,7,38,1.6,4,"#c9bfa2");
+  R(x,40,35,6,3,"#e8dcc0");
+  R(x,41,38,2,5,"#c9bfa2");R(x,44,38,2,6,"#c9bfa2");R(x,38,38,1.6,4,"#c9bfa2");
+  // the skull, jaw now hanging open
+  R(x,17,1,14,8,"#e8dcc0");
+  R(x,17,1,14,1.4,"#f0e8d0");
+  R(x,18.5,3,3,3,"#2a2216");R(x,26.5,3,3,3,"#2a2216");
+  x.globalAlpha=0.5; R(x,19.3,3.8,1.4,1.4,"#7a2a24");R(x,27.3,3.8,1.4,1.4,"#7a2a24"); x.globalAlpha=1;
+  R(x,19,7.4,10,2,"#2a2216");                               // the gaping dark
+  R(x,19,7.4,10,0.8,"#8a7658");R(x,19,9,10,0.6,"#8a7658");   // jaw, hanging
+  for(let i=0;i<4;i++) R(x,20+i*2.2,7.6,0.8,1.4,"#e8dcc0"); // upper teeth
+  R(x,19,0,2,2,"#e8dcc0");R(x,22,0,4,2,"#e8dcc0");R(x,27,0,2,2,"#e8dcc0");
+  return c;
+ }
+
+ // Registrations + attack frames. Both forms carry their own strike so the
+ // telegraph never shows the wrong body.
+ Delve.registerBossSprite("boss_bonefather", buildBossBonefather);
+ Delve.registerBossSprite("boss_bonefather_open", buildBossBonefatherOpen);
+ Delve.registerBossAttackSprite("boss_bonefather", function(idle){
+  return U.atkFrom(idle, [[0,13,6,6,"#e8dcc0"],[42,13,6,6,"#e8dcc0"],   // arms swing wide
+   [22,16,4,12,"#8a7658"],[20,30,8,3,"#e8dcc0"],                        // ribs flex in
+   [18.5,3,3,3,"#7a2a24"],[26.5,3,3,3,"#7a2a24"]]);                     // sockets flare red
+ });
+ Delve.registerBossAttackSprite("boss_bonefather_open", function(idle){
+  return U.atkFrom(idle, [[0,13,6,6,"#e8dcc0"],[42,13,6,6,"#e8dcc0"],
+   [20,18,8,10,"#a8353a"],[23,21,2.4,5,"#c84838"],                      // the heart flares on the swing
+   [2,34,5,3,"#e8dcc0"],[41,34,5,3,"#e8dcc0"]]);
+ });
+
  // sprites.js already ran buildAll() once without these; rebuild now.
  Delve.rebuildSprites();
 })();

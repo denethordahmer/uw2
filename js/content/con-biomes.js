@@ -47,6 +47,21 @@ window.Delve = window.Delve || {};
       swarmChance:0.25,      // "Frozen Cache" swarms
       swarmKind:"icebound_swarm",
       swarmMin:18, swarmMax:26
+    } },
+
+  { id:4, name:"The Bone Ossuary", floors:[31,40], biome:3,
+    roomMin:6, roomMax:10,
+    roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
+    roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
+    treasureChanceBase:0.10, treasureChanceLuck:0.018, treasureChanceCap:0.35,
+    secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
+    // Per-biome nudge to the rare + legendary weights (1 = neutral).
+    lootRarityMult:1,
+    special:{
+      floors:[2,9],              // ward-relative: floors 32-39
+      clustered:[2,3],           // 2-3 clustered-loot floors per run
+      sarcophagusChance:0.25,    // "Sarcophagus Hall" replaces this ward's swarms
+      sarcMin:6, sarcMax:10      // sealed tombs scattered across the floor
     } }
  ];
 
@@ -66,7 +81,8 @@ window.Delve = window.Delve || {};
  C.DRESSING = {
   1: { pillar:"prop_pillarWarden", banner:"prop_bannerWarden", wallBit:"prop_chainWarden", rubble:"prop_rubbleWarden", bone:"prop_bonesWarden", cluster:"prop_statueWarden" },
   2: { pillar:"prop_pillarThorn",  banner:"prop_bannerThorn",  wallBit:"prop_rootThorn",   rubble:"prop_rubbleThorn",  bone:"prop_huskThorn",    cluster:"prop_clusterThorn"  },
-  3: { pillar:"prop_pillarFrost",  banner:"prop_bannerFrost",  wallBit:"prop_icicleFrost", rubble:"prop_rubbleFrost",  bone:"prop_bonesFrost",   cluster:"prop_clusterFrost"  }
+  3: { pillar:"prop_pillarFrost",  banner:"prop_bannerFrost",  wallBit:"prop_icicleFrost", rubble:"prop_rubbleFrost",  bone:"prop_bonesFrost",   cluster:"prop_clusterFrost"  },
+  4: { pillar:"prop_pillarBone",   banner:"prop_shroudOssuary", wallBit:"prop_nicheOssuary", rubble:"prop_rubbleOssuary", bone:"prop_pileOssuary", cluster:"prop_tombOssuary" }
  };
 
  C.BIOMES = [
@@ -101,6 +117,16 @@ window.Delve = window.Delve || {};
     // Ground-cover sprite (js/ground.js): frozen puddles in the vault.
     groundCover:"ground_ice",
     // Fine snow falls through the vault and slants sideways as it drops.
-    ambient:{ type:"snow", count:22, col:"#eaffff", col2:"#a8e8ff", size:0.05, vy:0.22, drift:0.13, alpha:0.5 } }
+    ambient:{ type:"snow", count:22, col:"#eaffff", col2:"#a8e8ff", size:0.05, vy:0.22, drift:0.13, alpha:0.5 } },
+  { name:"The Bone Ossuary",
+    wall:"#cfc0a0", wallEdge:"#e8dcc0", wallBrick:"#8a7658", mortar:"#1a140c",
+    floor:"#8a7455", floor2:"#786447", moss:"#7a2a24",
+    water:"#4a1a18", torch:"#f0d888", light:"rgba(220,200,160,0.06)",
+    // Pale and bright on purpose: an ossuary lit by tallow, not a dark tomb.
+    clutter:"ossuary",
+    // Ground-cover sprite (js/ground.js): scattered bone fragments.
+    groundCover:"ground_bone",
+    // Dust hangs nearly still in the closed halls.
+    ambient:{ type:"dust", count:12, col:"#d8cbb0", col2:"#8a7658", size:0.05, vy:-0.03, drift:0.05, alpha:0.30 } }
  ];
 })();
