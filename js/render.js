@@ -406,24 +406,108 @@ const DEATH_LIFE = 460;
  }
 
  // ── WALL ─────────────────────────────────────────────────────
+ // Batch 17 — textured stone + depth. Each tile is its own shade of the biome's
+ // stone (never one flat colour), lit softly from above, with low-contrast
+ // joints, chips and dents, the biome's own growth (moss / frost — b.moss)
+ // creeping over its top edge, and a warm sheen where a brazier stands on or
+ // beside it. Casts its shadow onto the floor below and to the right
+ // (drawWallShadows), so walls read as raised, not printed on the ground.
+ // The offscreen tile cache means all of this is still drawn once per tile.
  function drawWallTile(ctx, sx, sy, ts, gx, gy, b){
   const n=hash2(gx,gy), n2=hash3(gx,gy,11), n3=hash3(gx,gy,23);
   const mood = n2<0.18?1:n2<0.38?2:n2<0.52?3:0;
-  ctx.fillStyle=b.wall; ctx.fillRect(sx,sy,ts,ts);
-  if(mood===2){ ctx.fillStyle="rgba(60,90,60,0.28)"; ctx.fillRect(sx,sy,ts,ts); }
-  if(mood===3){ const grad=ctx.createLinearGradient(sx+ts*0.5,sy,sx+ts*0.5,sy+ts); grad.addColorStop(0,"rgba(70,40,20,0.45)"); grad.addColorStop(0.6,"rgba(50,30,15,0.15)"); grad.addColorStop(1,"rgba(0,0,0,0)"); ctx.fillStyle=grad; ctx.fillRect(sx+ts*0.25,sy,ts*0.5,ts); }
-  ctx.fillStyle=b.wallEdge; ctx.fillRect(sx,sy,ts,Math.max(2,ts*0.09)); ctx.fillRect(sx,sy,Math.max(2,ts*0.06),ts);
+  // per-tile stone tone — weathered variation instead of a flat fill
+  let stone = blendHex(b.wall, "#0a0e12", n * 0.16);
+  if(n3 > 0.90) stone = blendHex(stone, "#ffffff", 0.05);
+  ctx.fillStyle=stone; ctx.fillRect(sx,sy,ts,ts);
+  // soft top-down light: lit top, shaded base
+  const lg=ctx.createLinearGradient(0,sy,0,sy+ts);
+  lg.addColorStop(0,"rgba(255,255,255,0.10)");
+  lg.addColorStop(0.35,"rgba(255,255,255,0.02)");
+  lg.addColorStop(1,"rgba(0,0,0,0.16)");
+  ctx.fillStyle=lg; ctx.fillRect(sx,sy,ts,ts);
+  if(mood===2){ ctx.fillStyle="rgba(60,90,60,0.22)"; ctx.fillRect(sx,sy,ts,ts); }
+  if(mood===3){ const grad=ctx.createLinearGradient(sx+ts*0.5,sy,sx+ts*0.5,sy+ts); grad.addColorStop(0,"rgba(70,40,20,0.40)"); grad.addColorStop(0.6,"rgba(50,30,15,0.14)"); grad.addColorStop(1,"rgba(0,0,0,0)"); ctx.fillStyle=grad; ctx.fillRect(sx+ts*0.25,sy,ts*0.5,ts); }
+  // feathered top + left edge light (the old hard wallEdge band, softened)
+  ctx.globalAlpha=0.55; ctx.fillStyle=b.wallEdge; ctx.fillRect(sx,sy,ts,Math.max(1.5,ts*0.05));
+  ctx.globalAlpha=0.28; ctx.fillRect(sx,sy,ts,Math.max(2,ts*0.10));
+  ctx.globalAlpha=0.40; ctx.fillRect(sx,sy,Math.max(1.5,ts*0.04),ts);
+  ctx.globalAlpha=0.20; ctx.fillRect(sx,sy,Math.max(2,ts*0.08),ts);
+  ctx.globalAlpha=1;
   if(ts>=20){
-   ctx.strokeStyle=b.wallBrick; ctx.lineWidth=1; ctx.globalAlpha=mood===1?0.75:0.5;
+   // joints: low contrast, so they texture rather than grid the wall
+   ctx.strokeStyle=b.wallBrick; ctx.lineWidth=1; ctx.globalAlpha=mood===1?0.55:0.38;
    ctx.beginPath(); ctx.moveTo(sx+1,sy+ts*0.50); ctx.lineTo(sx+ts-1,sy+ts*0.50);
    const vOff=(gy%2===0)?0.25:0.75; ctx.moveTo(sx+ts*vOff,sy+ts*0.50); ctx.lineTo(sx+ts*vOff,sy+ts-1);
    if(n>0.40){ const vOff2=(gy%2===0)?0.75:0.25; ctx.moveTo(sx+ts*vOff2,sy+1); ctx.lineTo(sx+ts*vOff2,sy+ts*0.50); }
    ctx.stroke(); ctx.globalAlpha=1;
-   if(mood===1){ const cr=hash3(gx,gy,89); const brickX=sx+(cr>0.5?ts*vOff:0)+2; const brickY=sy+(cr>0.5?0:ts*0.51); const brickW=ts*(cr>0.5?(1-vOff):vOff)-3; const brickH=ts*0.49-2; ctx.fillStyle="rgba(0,0,0,0.22)"; ctx.fillRect(brickX,brickY,brickW,brickH); ctx.fillStyle=b.wallBrick; ctx.fillRect(brickX+brickW*0.3,brickY-1,brickW*0.25,3); }
-   if(mood===2){ ctx.fillStyle=b.moss; ctx.globalAlpha=0.22; ctx.fillRect(sx+1,sy+ts*0.48,ts-2,4); ctx.globalAlpha=1; }
+   if(mood===1){ const cr=hash3(gx,gy,89); const brickX=sx+(cr>0.5?ts*vOff:0)+2; const brickY=sy+(cr>0.5?0:ts*0.51); const brickW=ts*(cr>0.5?(1-vOff):vOff)-3; const brickH=ts*0.49-2; ctx.fillStyle="rgba(0,0,0,0.18)"; ctx.fillRect(brickX,brickY,brickW,brickH); ctx.fillStyle=b.wallBrick; ctx.fillRect(brickX+brickW*0.3,brickY-1,brickW*0.25,3); }
   }
-  ctx.fillStyle="rgba(255,255,255,0.06)"; ctx.fillRect(sx,sy,ts,2);
-  ctx.fillStyle="rgba(0,0,0,0.35)"; ctx.fillRect(sx,sy+ts-2,ts,2);
+  // the biome's own growth creeping over the top edge: moss in the ruins,
+  // lichen in the Blackvein, frost in the Vault — colour comes from b.moss
+  if(hash3(gx,gy,171) < 0.45){
+   ctx.save(); ctx.globalAlpha = mood===2 ? 0.40 : 0.28;
+   ctx.fillStyle = b.moss;
+   const blobN = 2 + Math.floor(hash3(gx,gy,173)*3);
+   for(let i=0;i<blobN;i++){
+    const bx = sx + ts*(0.12 + hash3(gx,gy,175+i)*0.76);
+    const by = sy + ts*(0.06 + hash3(gx,gy,181+i)*0.14);
+    const rr = ts*(0.06 + hash3(gx,gy,187+i)*0.08);
+    ctx.beginPath(); ctx.ellipse(bx,by,rr,rr*0.7,0,0,Math.PI*2); ctx.fill();
+   }
+   if(hash3(gx,gy,193) < 0.4){
+    ctx.globalAlpha=0.20;
+    ctx.fillRect(sx + ts*(0.2+hash3(gx,gy,195)*0.6), sy+ts*0.10, Math.max(1,ts*0.04), ts*(0.18+hash3(gx,gy,197)*0.22));
+   }
+   ctx.restore();
+  }
+  // a chip or dent in the stone
+  if(n3 < 0.18){
+   ctx.save(); ctx.globalAlpha=0.35; ctx.fillStyle="#0a0e12";
+   ctx.beginPath();
+   ctx.ellipse(sx + ts*(0.15+hash3(gx,gy,211)*0.7), sy + ts*(0.15+hash3(gx,gy,213)*0.7),
+    ts*0.05, ts*0.035, hash3(gx,gy,217)*3, 0, Math.PI*2);
+   ctx.fill(); ctx.restore();
+  }
+  // warm sheen where a brazier is on or beside this tile
+  if(isTorchTile(gx,gy) || isTorchTile(gx-1,gy) || isTorchTile(gx+1,gy) || isTorchTile(gx,gy-1) || isTorchTile(gx,gy+1)){
+   const sg=ctx.createRadialGradient(sx+ts*0.5, sy+ts*0.35, 1, sx+ts*0.5, sy+ts*0.35, ts*0.9);
+   sg.addColorStop(0, b.torch+"33"); sg.addColorStop(1, "rgba(0,0,0,0)");
+   ctx.fillStyle=sg; ctx.fillRect(sx,sy,ts,ts);
+  }
+  // top highlight + bottom contact shade, feathered rather than hard lines
+  ctx.fillStyle="rgba(255,255,255,0.08)"; ctx.fillRect(sx,sy,ts,Math.max(1.5,ts*0.04));
+  const bg=ctx.createLinearGradient(0,sy+ts*0.72,0,sy+ts);
+  bg.addColorStop(0,"rgba(0,0,0,0)"); bg.addColorStop(1,"rgba(0,0,0,0.28)");
+  ctx.fillStyle=bg; ctx.fillRect(sx,sy+ts*0.72,ts,ts*0.28);
+ }
+
+ // Wall drop shadows (Batch 17, option D). Every wall throws a soft shadow onto
+ // the floor below it and the floor to its right, so the walls read as raised
+ // out of the ground instead of painted onto it. Direction is fixed everywhere
+ // (down + right) so the dungeon is lit consistently. Called after the floor
+ // and props are painted, before the walls — shadows land on the ground.
+ function drawWallShadows(ctx, camX, camY, vw, vh, ts){
+  const G = Delve.G, T = Delve.T;
+  if(!G || !G.grid) return;
+  for(let y=0;y<vh+1;y++) for(let x=0;x<vw+1;x++){
+   const gx=camX+x, gy=camY+y;
+   if(tileAt(gx,gy) !== T.WALL) continue;
+   const below = tileAt(gx, gy+1);
+   if(below !== null && below !== T.WALL){
+    const sy=(y+1)*ts;
+    const g=ctx.createLinearGradient(0,sy,0,sy+ts*0.5);
+    g.addColorStop(0,"rgba(4,6,10,0.34)"); g.addColorStop(1,"rgba(4,6,10,0)");
+    ctx.fillStyle=g; ctx.fillRect(x*ts, sy, ts, ts*0.5);
+   }
+   const right = tileAt(gx+1, gy);
+   if(right !== null && right !== T.WALL){
+    const sx=(x+1)*ts;
+    const g2=ctx.createLinearGradient(sx,0,sx+ts*0.35,0);
+    g2.addColorStop(0,"rgba(4,6,10,0.26)"); g2.addColorStop(1,"rgba(4,6,10,0)");
+    ctx.fillStyle=g2; ctx.fillRect(sx, y*ts, ts*0.35, ts);
+   }
+  }
  }
 
  // ── TORCH ────────────────────────────────────────────────────
@@ -780,6 +864,8 @@ const DEATH_LIFE = 460;
   Delve.drawGroundCover(ctx,camX,camY,vw,vh,ts);
   // floor props first, so wall edges and their shadows fall over the bases
   drawDecor(ctx,camX,camY,vw,vh,ts,"floor");
+  // wall drop shadows, onto the floor below/right before the walls themselves
+  drawWallShadows(ctx,camX,camY,vw,vh,ts);
   // walls
   for(let y=0;y<vh+1;y++) for(let x=0;x<vw+1;x++){
    const gx=camX+x, gy=camY+y, t=tileAt(gx,gy);
