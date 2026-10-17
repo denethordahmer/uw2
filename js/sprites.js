@@ -230,35 +230,192 @@ window.Delve = window.Delve || {};
  // Drawn flat under all other sprites — no shadow, no glow, no movement.
  function buildGroundMushroom(){
   const c=mk(24,24),x=gx(c);
-  // faint life-glow pooling at the roots
-  x.globalAlpha=0.22; R(x,6,17,12,4,"#7ec8b0"); x.globalAlpha=1;
-  // mushrooms: pale caps over darker stems
-  R(x,8,19,4,3,"#7a7058"); R(x,7,15,6,4,"#e8e4d8"); R(x,7,15,6,1,"#f4f0e6");
-  R(x,13,20,3,2,"#7a7058"); R(x,12,17,5,3,"#e8e4d8"); R(x,12,17,5,1,"#f4f0e6");
-  R(x,4,20,3,2,"#7a7058"); R(x,3,18,5,2,"#e8e4d8");
-  R(x,16,20,2,2,"#7a7058"); R(x,15,18,4,2,"#e8e4d8");
+  // ── the crack in the stone ──
+  // a dark fissure the mushrooms sprout from, with a faint lip of light on
+  // its upper edge so it reads as recessed rather than painted on
+  x.strokeStyle="#12161c"; x.lineWidth=2; x.lineCap="round";
+  x.beginPath(); x.moveTo(3,19); x.quadraticCurveTo(8,17,12,19); x.quadraticCurveTo(16,21,21,19); x.stroke();
+  x.strokeStyle="rgba(232,228,216,0.16)"; x.lineWidth=1;
+  x.beginPath(); x.moveTo(4,17.5); x.quadraticCurveTo(8,15.8,12,17.5); x.quadraticCurveTo(16,19.2,20,17.5); x.stroke();
+  // hairline forks off the main fissure
+  x.globalAlpha=0.65; x.strokeStyle="#181c22"; x.lineWidth=1;
+  x.beginPath(); x.moveTo(10,18.4); x.lineTo(9,15.5); x.moveTo(16,19.4); x.lineTo(17.5,16.8); x.stroke();
+  x.globalAlpha=1;
+  // ── faint green-blue glow pooling at the base ──
+  const glow=x.createRadialGradient(12,19,1,12,19,10);
+  glow.addColorStop(0,"rgba(126,200,176,0.28)");
+  glow.addColorStop(0.6,"rgba(126,200,176,0.10)");
+  glow.addColorStop(1,"rgba(126,200,176,0)");
+  x.fillStyle=glow; x.fillRect(2,9,20,14);
+  // ── mushroom helper: curved cap over a tapering stem ──
+  // (cx, capY) is where the cap sits; scale 1 = the tall one
+  function shroom(cx,capY,s){
+   const w=3.4*s;                       // cap half-width
+   // stem, tapering slightly into the crack
+   x.fillStyle="#7a7058";
+   x.beginPath();
+   x.moveTo(cx-1.7*s,capY+0.5*s);
+   x.lineTo(cx-1.1*s,capY+6.5*s);
+   x.lineTo(cx+1.1*s,capY+6.5*s);
+   x.lineTo(cx+1.7*s,capY+0.5*s);
+   x.closePath(); x.fill();
+   // stem shading: darker at its foot
+   x.fillStyle="rgba(18,22,28,0.35)";
+   x.fillRect(cx-1.1*s,capY+5.2*s,2.2*s,1.3*s);
+   // cap: an ellipse arc, domed with a flat underside
+   x.fillStyle="#e8e4d8";
+   x.beginPath();
+   x.ellipse(cx,capY,w,2.6*s,0,Math.PI,0);
+   x.closePath(); x.fill();
+   // cap rim shadow (underside), then gill hint
+   x.fillStyle="#b8b2a2";
+   x.fillRect(cx-w,capY-0.4*s,2*w,0.7*s);
+   x.fillStyle="rgba(122,112,88,0.5)";
+   x.fillRect(cx-w*0.6,capY+0.1*s,1.2*s,0.5*s);
+   // pale sheen across the top of the cap
+   x.fillStyle="rgba(250,248,240,0.75)";
+   x.beginPath(); x.ellipse(cx-w*0.3,capY-1.1*s,w*0.55,0.7*s,-0.25,0,Math.PI*2); x.fill();
+   // faint freckles
+   x.fillStyle="rgba(122,112,88,0.35)";
+   x.beginPath(); x.arc(cx+w*0.25,capY-1.3*s,0.45*s,0,Math.PI*2); x.fill();
+   x.beginPath(); x.arc(cx-w*0.55,capY-0.6*s,0.35*s,0,Math.PI*2); x.fill();
+  }
+  // ── three mushrooms of different heights, sprouting from the crack ──
+  shroom(8.5,12.6,1.0);    // the tall one, left of centre
+  shroom(14.5,14.6,0.78);  // medium, right
+  shroom(19,17.4,0.5);     // small, far right
+  shroom(4.5,16.2,0.42);   // small, far left
+  // ── tiny sprouts + specks so a cluster reads as spreading ──
+  x.fillStyle="rgba(232,228,216,0.8)";
+  x.fillRect(6,20.5,1,1); x.fillRect(11.5,21,1,1); x.fillRect(17,20,1,1);
+  x.fillStyle="rgba(126,200,176,0.5)";
+  x.fillRect(12.5,20,1,1); x.fillRect(5.5,21,1,1);
   return c;
  }
  function buildGroundMoss(){
   const c=mk(24,24),x=gx(c);
-  R(x,5,15,14,5,"#7a2a24");                            // the spreading body
-  R(x,7,14,10,3,"#a8353a");                            // raised wet highlights
-  R(x,10,16,4,2,"#a8353a");
-  R(x,6,19,5,1,"#c8a838"); R(x,15,17,4,1,"#c8a838");   // sickly yellow rim
-  R(x,4,16,2,2,"#7a2a24"); R(x,18,16,2,2,"#7a2a24");   // small lobes creeping out
-  R(x,12,13,3,2,"#7a2a24");                            // a lobe reaching upward
+  // ── the spreading body ──
+  // an irregular, blobby silhouette hugging the tile's lower half — the
+  // corruption creeping along the ground, never a neat stain
+  x.fillStyle="#7a2a24";
+  x.beginPath();
+  x.ellipse(11,17,8.5,4.2,0,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(17,18,5,3.4,0.2,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(6,18.5,4,2.8,-0.15,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(13,14.5,5.5,2.4,0.1,0,Math.PI*2); x.fill();
+  // ── creeping tendrils reaching outward ──
+  // tapered, rounded, some hooked slightly upward — it *reaches*
+  x.strokeStyle="#7a2a24"; x.lineCap="round";
+  x.lineWidth=2.4;
+  x.beginPath(); x.moveTo(4,17); x.quadraticCurveTo(1.5,16,1,13.5); x.stroke();
+  x.beginPath(); x.moveTo(19,16); x.quadraticCurveTo(22,14.5,22.5,11.5); x.stroke();
+  x.lineWidth=1.6;
+  x.beginPath(); x.moveTo(9,14); x.quadraticCurveTo(8.5,11.5,10,9.5); x.stroke();
+  x.beginPath(); x.moveTo(15,13.5); x.quadraticCurveTo(16,11,15,9); x.stroke();
+  // tendril tips, rounded droplets
+  x.fillStyle="#7a2a24";
+  x.beginPath(); x.arc(1,13.5,1.3,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(22.5,11.5,1.3,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(10,9.5,0.9,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(15,9,0.9,0,Math.PI*2); x.fill();
+  // ── wet raised highlights on the body ──
+  x.fillStyle="#a8353a";
+  x.beginPath(); x.ellipse(9,15.5,4,1.6,-0.12,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(15,16.5,3.4,1.4,0.18,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(12,13.8,3,1.1,0.08,0,Math.PI*2); x.fill();
+  // darker pits for depth
+  x.fillStyle="#4a1410";
+  x.beginPath(); x.ellipse(13.5,17.5,1.6,0.9,0.2,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(7,18,1.3,0.7,-0.2,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(17.5,15,0.8,0,Math.PI*2); x.fill();
+  // tiny fungal speckles
+  x.fillStyle="rgba(168,53,58,0.85)";
+  x.beginPath(); x.arc(5.5,16.5,0.55,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(11,16.8,0.5,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(16,13.2,0.55,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(20,17.5,0.5,0,Math.PI*2); x.fill();
+  // ── the sickly rim: brightest where the growth is newest ──
+  x.strokeStyle="#c8a838"; x.lineCap="round";
+  x.lineWidth=0.9; x.globalAlpha=0.85;
+  x.beginPath(); x.moveTo(1.2,12.6); x.quadraticCurveTo(1.6,14.8,3,16); x.stroke();   // left tendril
+  x.beginPath(); x.moveTo(22.4,10.6); x.quadraticCurveTo(22,13.4,20.6,14.6); x.stroke(); // right tendril
+  x.beginPath(); x.moveTo(9.7,9.9); x.lineTo(9.3,11.6); x.stroke();                    // mid tendril
+  x.globalAlpha=0.6;
+  x.beginPath(); x.ellipse(11,13.3,5.6,1.6,0.1,Math.PI,0); x.stroke();                 // upper rim of the body
+  x.globalAlpha=0.5;
+  x.beginPath(); x.ellipse(17,15.6,4,1.4,0.2,Math.PI,0); x.stroke();                   // right lobe rim
+  x.globalAlpha=1;
+  // ── faint spores hanging above the patch ──
+  x.fillStyle="rgba(200,168,56,0.4)";
+  x.beginPath(); x.arc(7,8,0.5,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(13,6.5,0.4,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(18,9,0.5,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(10,11,0.4,0,Math.PI*2); x.fill();
   return c;
  }
  function buildGroundIce(){
   const c=mk(24,24),x=gx(c);
-  R(x,5,13,14,7,"#b8d8e8");            // pale sheet of ice
-  R(x,5,13,14,1,"#dff0ff");            // top sheen
-  R(x,5,13,1,7,"#9cc0d4");             // deeper frozen edge
-  R(x,8,19,6,1,"#9cc0d4");             // thin shadow under the sheet
-  // thin frozen veins (light 1px cracks) across the surface
-  R(x,8,15,1,4,"#eaffff"); R(x,9,15,3,1,"#eaffff"); R(x,12,15,1,3,"#eaffff");
-  R(x,10,18,3,1,"#eaffff"); R(x,15,16,1,3,"#eaffff"); R(x,14,16,2,1,"#eaffff");
-  R(x,8,16,1,1,"#eaffff");
+  // ── the frozen sheet ──
+  // an irregular, slightly squashed puddle hugging the tile's mid/lower area;
+  // deeper blue toward its lower edge so it reads as a shallow pool
+  x.fillStyle="#b8d8e8";
+  x.beginPath();
+  x.ellipse(11,15,8.5,4.6,0,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(17,16.5,5.2,3.4,0.15,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(6,16.5,4.4,3,-0.1,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(12,12.5,5.8,2.6,-0.05,0,Math.PI*2); x.fill();
+  // the pool's depth: a cold wash toward the lower edge
+  const deep=x.createLinearGradient(0,12,0,20);
+  deep.addColorStop(0,"rgba(90,122,148,0)");
+  deep.addColorStop(1,"rgba(90,122,148,0.30)");
+  x.fillStyle=deep;
+  x.beginPath(); x.ellipse(11,15,9.2,5,0,0,Math.PI); x.fill();
+  // ── crisp pale rim on the upper/left lip ──
+  x.strokeStyle="#eaffff"; x.lineCap="round"; x.lineWidth=1; x.globalAlpha=0.8;
+  x.beginPath(); x.ellipse(11,13.4,7.4,2.8,-0.06,Math.PI*1.05,Math.PI*1.95); x.stroke();
+  x.globalAlpha=0.55;
+  x.beginPath(); x.ellipse(17,15.6,4.6,2.6,0.15,Math.PI*1.1,Math.PI*1.9); x.stroke();
+  x.globalAlpha=1;
+  // ── frozen veins: etched into the ice, branching ──
+  x.strokeStyle="rgba(240,250,255,0.9)"; x.lineWidth=0.9;
+  x.beginPath();
+  x.moveTo(4,16.5);
+  x.quadraticCurveTo(9,15,13,16.2);            // the main vein, wavering
+  x.quadraticCurveTo(17,17.4,21,16.4);
+  x.stroke();
+  // hairline forks off the main vein
+  x.strokeStyle="rgba(240,250,255,0.65)"; x.lineWidth=0.7;
+  x.beginPath();
+  x.moveTo(9,15.6); x.lineTo(8,12.8);           // fork up-left
+  x.moveTo(13,16.2); x.lineTo(14.5,13.4);       // fork up-right
+  x.moveTo(17.5,17.2); x.lineTo(19,19);         // fork down-right
+  x.stroke();
+  // a second, fainter vein lower in the sheet
+  x.strokeStyle="rgba(240,250,255,0.4)"; x.lineWidth=0.7;
+  x.beginPath(); x.moveTo(6,19); x.quadraticCurveTo(11,20,16,19.2); x.stroke();
+  // ── faint reflections of the surrounding walls ──
+  // soft vertical smudges in the wall-tone blue, very low alpha
+  x.fillStyle="rgba(58,74,94,0.16)";
+  x.beginPath(); x.ellipse(9,15,1.6,3.4,0,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(16,16,1.3,2.8,0.1,0,Math.PI*2); x.fill();
+  x.fillStyle="rgba(122,154,192,0.14)";
+  x.beginPath(); x.ellipse(12.5,17.5,1.8,2.4,0,0,Math.PI*2); x.fill();
+  // ── a small frost bloom at the sheet's edge ──
+  // three needle crystals fanning out from one point
+  x.strokeStyle="#eaffff"; x.lineWidth=0.9; x.lineCap="round"; x.globalAlpha=0.9;
+  x.beginPath();
+  x.moveTo(20.5,12.5); x.lineTo(23,10);         // needle up-right
+  x.moveTo(20.5,12.5); x.lineTo(23.4,12.8);     // needle right
+  x.moveTo(20.5,12.5); x.lineTo(21.8,9.8);      // needle between
+  x.stroke();
+  x.globalAlpha=0.7;
+  x.beginPath(); x.arc(23.2,9.9,0.8,0,Math.PI*2); x.stroke();  // a small hexagonal glint
+  x.globalAlpha=1;
+  // ── micro glitter on the surface ──
+  x.fillStyle="rgba(255,255,255,0.5)";
+  x.fillRect(7.5,14.5,0.8,0.8); x.fillRect(14,17,0.8,0.8);
+  x.fillRect(18,14,0.7,0.7); x.fillRect(10,18.5,0.7,0.7);
+  x.fillRect(5.5,17.5,0.6,0.6);
   return c;
  }
 
