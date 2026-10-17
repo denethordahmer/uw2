@@ -327,6 +327,18 @@ window.Delve = window.Delve || {};
  Delve.refreshHub = function(){
   $("hubShards").textContent = Delve.save.shards;
   const shop = $("shop"); shop.innerHTML = "";
+  // A run in progress locks the whole hub (§6.12.2, owner's rule 16 Oct). Shown as a banner
+  // rather than by hiding anything: the player can look at every upgrade and buy none of it.
+  const locked = Delve.runInProgress ? Delve.runInProgress() : false;
+  const lockFloor = (Delve.hasSavedRun && Delve.hasSavedRun()) ? Delve.savedRunFloor()
+   : (Delve.G ? Delve.G.floor : 0);
+  if(locked){
+   const note = document.createElement("div");
+   note.className = "hub-locked-note";
+   note.textContent = "Your run is still going — floor " + lockFloor +
+    ". Upgrades unlock when it ends.";
+   shop.appendChild(note);
+  }
   Delve.CONFIG.ATTR_ORDER.forEach(function(id){
    const a = Delve.CONFIG.ATTRS[id];
    if(a.kind === "dormant") return;
@@ -349,8 +361,10 @@ window.Delve = window.Delve || {};
    }
    const btn = document.createElement("button"); btn.className = "btn";
    btn.textContent = capped ? "MAX" : String(cost);
-   btn.disabled = capped || Delve.save.shards < cost;
+   btn.disabled = locked || capped || Delve.save.shards < cost;
    btn.addEventListener("click", function(){
+    // Asked again at click time rather than trusted from render time — the screen can sit open.
+    if(Delve.runInProgress && Delve.runInProgress()) return;
     const c = Delve.attrCost(id);
     if(Delve.save.shards < c) return;
     Delve.save.shards -= c; Delve.save.lvls[id] = (Delve.save.lvls[id] || 0) + 1;
@@ -359,6 +373,13 @@ window.Delve = window.Delve || {};
    row.appendChild(info); row.appendChild(btn);
    shop.appendChild(row);
   });
+
+  // The footer button follows the same rule: with a run parked it is the way BACK INTO that
+  // run, not the way to start a second one — starting a fresh run here would overwrite the
+  // checkpoint without a word (§6.12.2). The title button appears for the same reason: with
+  // a run parked, the hub has no other way back out.
+  $("startBtn").textContent = locked ? ("RESUME FLOOR " + lockFloor) : "START RUN";
+  $("hubTitleBtn").style.display = locked ? "" : "none";
 
   (Delve._hooks && Delve._hooks.hubLoaded || []).forEach(function(fn){ fn(); });
  };
@@ -670,8 +691,15 @@ window.Delve = window.Delve || {};
  };
 
  // ── WIRING ───────────────────────────────────────────────────
- $("startBtn").addEventListener("click", Delve.startRun);
+ $("startBtn").addEventListener("click", function(){
+  // With a run parked, this button carries the player back into it (§6.12.2).
+  if(Delve.runInProgress && Delve.runInProgress() && Delve.resumeRun){ Delve.resumeRun(); return; }
+  Delve.startRun();
+ });
  $("deathBtn").addEventListener("click", Delve.showHub);
+ $("hubTitleBtn").addEventListener("click", function(){
+  if(Delve.showTitle) Delve.showTitle(); else Delve.showHub();
+ });
 
  $("minimapBtn").addEventListener("click", function(){
   const w = $("minimapWrap");
@@ -680,9 +708,17 @@ window.Delve = window.Delve || {};
  });
 
  $("gearBtn").addEventListener("click", function(){
-  if(Delve.G && !Delve.G.runEnded) $("pauseMenu").style.display = "flex";
+  if(Delve.G && !Delve.G.runEnded){
+   // Name the floor in the save button while the name is accurate (§6.12).
+   $("pauseSaveBtn").textContent = "💾 Save floor " + Delve.G.floor + " & exit";
+   $("pauseMenu").style.display = "flex";
+  }
  });
  $("pauseCloseBtn").addEventListener("click", function(){ $("pauseMenu").style.display = "none"; });
+ $("pauseSaveBtn").addEventListener("click", function(){
+  $("pauseMenu").style.display = "none";
+  Delve.saveAndExit();   // combat.js: keeps the run and its floor, banks nothing (§6.12)
+ });
  $("pauseRetreatBtn").addEventListener("click", function(){
   $("pauseMenu").style.display = "none";
   Delve.retreat();

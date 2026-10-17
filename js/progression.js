@@ -74,6 +74,9 @@ window.Delve = window.Delve || {};
  const panel = $("treePanel");
  if(!panel) return;
  panel.innerHTML = "";
+ // A run in progress locks the tree too (§6.12.2). Computed once, then used for the card
+ // class, the dimmed cost and whether a click handler is attached at all.
+ const locked = Delve.runInProgress ? Delve.runInProgress() : false;
  const nodes = NODES[treeId] || [];
  const tiers = {};
  nodes.forEach(function(n){ (tiers[n.tier] = tiers[n.tier] || []).push(n); });
@@ -90,7 +93,7 @@ window.Delve = window.Delve || {};
  const card = document.createElement("div");
  card.className = "node-card";
  if(owned(n.id)) card.classList.add("owned");
- else if(!tierUnlocked(treeId, t) || !reqMet(n)) card.classList.add("locked");
+ else if(locked || !tierUnlocked(treeId, t) || !reqMet(n)) card.classList.add("locked");
  else card.classList.add("available");
 
  const info = document.createElement("div");
@@ -109,13 +112,14 @@ window.Delve = window.Delve || {};
  cost.textContent = "⭐";
  } else {
  cost.textContent = n.cost + "◇";
- if(Delve.save.shards < n.cost) cost.classList.add("cant");
+ if(locked || Delve.save.shards < n.cost) cost.classList.add("cant");
  }
  card.appendChild(cost);
 
- if(!owned(n.id) && tierUnlocked(treeId, t) && reqMet(n) && Delve.save.shards >= n.cost){
+ if(!owned(n.id) && !locked && tierUnlocked(treeId, t) && reqMet(n) && Delve.save.shards >= n.cost){
  card.addEventListener("click", function(){
  if(owned(n.id)) return;
+ if(Delve.runInProgress && Delve.runInProgress()) return;   // asked again at click time
  if(Delve.save.shards < n.cost) return;
  Delve.save.shards -= n.cost;
  Delve.save.shards = Math.max(0, Delve.save.shards);

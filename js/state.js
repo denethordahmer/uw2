@@ -132,6 +132,17 @@ Delve.savedRunFloor = function(){
  return Delve.hasSavedRun() ? Math.round(Delve.save.run.floor) : 0;
 };
 
+// "Is a run unfinished?" — the question the hub asks before it takes any shards. True while a
+// run is parked in the save (§6.12), and also while a live run is still going, so the two
+// cannot drift apart. The owner's rule, 16 Oct: shards are spendable only once the run they
+// were earned in has ended — dying, retreating or winning the ward. That is what lets the hub
+// be reachable with a run parked without becoming a mid-run shopping trip.
+Delve.runInProgress = function(){
+ if(Delve.hasSavedRun && Delve.hasSavedRun()) return true;
+ const G = Delve.G;
+ return !!(G && !G.runEnded && !G.dead);
+};
+
 // Rebuild G from the checkpoint. The caller (ui.js resumeRun) handles the screen.
 // newRun() is used deliberately: it builds a correct, fully-formed run object and fires the
 // runStart hooks, after which the snapshot overwrites the parts that matter. It is slightly

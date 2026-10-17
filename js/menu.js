@@ -62,8 +62,12 @@ window.Delve = window.Delve || {};
   // the player back to, and continuePressed() below resumes it (§6.12).
   if(Delve.hasSavedRun && Delve.hasSavedRun()){
    $("titleContinueBtn").textContent = "FLOOR " + Delve.savedRunFloor();
+   // HUB appears only now. With no run parked the main button already leads to the hub, so a
+   // second door would be clutter — and it would imply the hub is always a separate place.
+   $("titleHubBtn").style.display = "";
    return;
   }
+  $("titleHubBtn").style.display = "none";
   $("titleContinueBtn").textContent = isFreshSave() ? "BEGIN" : "CONTINUE";
  }
 
@@ -155,6 +159,7 @@ window.Delve = window.Delve || {};
 
  // ── Wiring ───────────────────────────────────────────────────
  $("titleContinueBtn").addEventListener("click", continuePressed);
+ $("titleHubBtn").addEventListener("click", function(){ Delve.showHub(); });
  $("titleSettingsBtn").addEventListener("click", openSettings);
  $("titleSettingsClose").addEventListener("click", closeSettings);
  $("titleResetBtn").addEventListener("click", openResetConfirm);

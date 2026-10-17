@@ -68,6 +68,43 @@ window.Delve = window.Delve || {};
  Delve.endRun("retreat", { shards: banked || gained });
  };
 
+ // ── Save floor & exit — a PAUSE, not an end (§6.12) ──────────
+ // The pause menu's way out that keeps the run: the floor is checkpointed, the player lands
+ // on the title screen, and the main button reads FLOOR n so they can carry on later.
+ //
+ // It deliberately does NOT re-take the checkpoint, and that is the whole trick. The
+ // checkpoint belongs to the moment the player WALKED INTO this floor; re-taking it here
+ // would snapshot their current gold, XP, items and health — everything this floor has
+ // already handed them — while a resume rebuilds the floor fresh, chests, monsters and rest
+ // spots included. Half-clearing a floor, saving, quitting and resuming would then be
+ // repeatable for profit. Leaving the checkpoint where it is means a resumed floor is worth
+ // exactly what it was worth the first time. (A checkpoint is only taken here in the rare
+ // case that none exists at all, which cannot be farmed because there is nothing to reset.)
+ //
+ // It also does NOT bank the run's shards: leaving the game is not ending the run (§6.10).
+ // Banking here would be a duplication bug on top of that — the resumed run restores the
+ // same pending amount, so death or retreat afterwards would bank it a second time.
+ //
+ // Allowed during a fight, unlike Flee: it ends nothing and banks nothing, so it is the same
+ // escape a killed tab already gives, priced the same way (that floor's loot and XP).
+ Delve.saveAndExit = function(){
+  const G = Delve.G;
+  if(!G || G.dead || G.runEnded) return false;
+  if(!Delve.hasSavedRun()) Delve.setFloorCheckpoint();  // before runEnded — capture refuses after
+  G.runEnded = true;                 // stops the loop and every input guard; NOT a death
+  G.inCombat = false;
+  if(G.combatTimer){ clearInterval(G.combatTimer); G.combatTimer = null; }
+  if(Delve.sfxStopAmbience) Delve.sfxStopAmbience();
+  Delve.persist();
+  const pend = Delve.pendingRunShards ? Delve.pendingRunShards() : (G.runShards || 0);
+  if(Delve.logSystem) Delve.logSystem("Saved at floor " + G.floor + " — " + pend + " shards carried, not yet banked.");
+  // menu.js owns the title screen: it closes the overlays, hides the HUD, stops the ambience
+  // and re-reads the checkpoint, so the main button reads FLOOR n on the way in.
+  if(Delve.showTitle) Delve.showTitle();
+  else if(Delve.showHub) Delve.showHub();
+  return true;
+ };
+
  // ── Start auto-combat ────────────────────────────────────────
  Delve.startCombat = function(m){
  const G = Delve.G;

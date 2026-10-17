@@ -776,6 +776,8 @@ const DEATH_LIFE = 460;
    blitTile(ctx,gx,gy,sx,sy,ts,b,t);
    if(t===T.FLOOR) drawClutter(ctx,sx,sy,ts,gx,gy,b);
   }
+  // biome ground cover, flat on the floor before any prop sits over it
+  Delve.drawGroundCover(ctx,camX,camY,vw,vh,ts);
   // floor props first, so wall edges and their shadows fall over the bases
   drawDecor(ctx,camX,camY,vw,vh,ts,"floor");
   // walls

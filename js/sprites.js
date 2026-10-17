@@ -223,6 +223,45 @@ window.Delve = window.Delve || {};
  }
  function buildBarrel(){ const c=mk(24,24),x=gx(c); R(x,6,7,12,12,"#6d4a2f");R(x,6,7,2,12,"#5a3c24");R(x,16,7,2,12,"#5a3c24");R(x,8,8,1,10,"#8a5f3d");R(x,12,8,1,10,"#8a5f3d");R(x,15,8,1,10,"#8a5f3d");R(x,5,6,14,2,"#3f3f45");R(x,5,18,14,2,"#3f3f45");R(x,5,12,14,2,"#3f3f45");R(x,8,7,1,11,"#9a7048"); return c; }
 
+ // =========================== GROUND COVER ==========================
+ // Per-biome floor decoration (Batch 16). A tile draws its own little piece, so
+ // adjacent tiles in a cluster never need to line up. Which key a biome uses is
+ // BIOMES[n].groundCover (con-biomes.js); shapes + placement are js/ground.js.
+ // Drawn flat under all other sprites — no shadow, no glow, no movement.
+ function buildGroundMushroom(){
+  const c=mk(24,24),x=gx(c);
+  // faint life-glow pooling at the roots
+  x.globalAlpha=0.22; R(x,6,17,12,4,"#7ec8b0"); x.globalAlpha=1;
+  // mushrooms: pale caps over darker stems
+  R(x,8,19,4,3,"#7a7058"); R(x,7,15,6,4,"#e8e4d8"); R(x,7,15,6,1,"#f4f0e6");
+  R(x,13,20,3,2,"#7a7058"); R(x,12,17,5,3,"#e8e4d8"); R(x,12,17,5,1,"#f4f0e6");
+  R(x,4,20,3,2,"#7a7058"); R(x,3,18,5,2,"#e8e4d8");
+  R(x,16,20,2,2,"#7a7058"); R(x,15,18,4,2,"#e8e4d8");
+  return c;
+ }
+ function buildGroundMoss(){
+  const c=mk(24,24),x=gx(c);
+  R(x,5,15,14,5,"#7a2a24");                            // the spreading body
+  R(x,7,14,10,3,"#a8353a");                            // raised wet highlights
+  R(x,10,16,4,2,"#a8353a");
+  R(x,6,19,5,1,"#c8a838"); R(x,15,17,4,1,"#c8a838");   // sickly yellow rim
+  R(x,4,16,2,2,"#7a2a24"); R(x,18,16,2,2,"#7a2a24");   // small lobes creeping out
+  R(x,12,13,3,2,"#7a2a24");                            // a lobe reaching upward
+  return c;
+ }
+ function buildGroundIce(){
+  const c=mk(24,24),x=gx(c);
+  R(x,5,13,14,7,"#b8d8e8");            // pale sheet of ice
+  R(x,5,13,14,1,"#dff0ff");            // top sheen
+  R(x,5,13,1,7,"#9cc0d4");             // deeper frozen edge
+  R(x,8,19,6,1,"#9cc0d4");             // thin shadow under the sheet
+  // thin frozen veins (light 1px cracks) across the surface
+  R(x,8,15,1,4,"#eaffff"); R(x,9,15,3,1,"#eaffff"); R(x,12,15,1,3,"#eaffff");
+  R(x,10,18,3,1,"#eaffff"); R(x,15,16,1,3,"#eaffff"); R(x,14,16,2,1,"#eaffff");
+  R(x,8,16,1,1,"#eaffff");
+  return c;
+ }
+
  // ======================= ARENA PROPS ===============================
  // Decoration for boss arenas (Batch 8). These are drawn from G.decor, never as
  // tiles, so they cannot block movement, be tapped, or show on the minimap.
@@ -580,6 +619,12 @@ window.Delve = window.Delve || {};
     chestClosed: buildChest(false),
     chestOpen: buildChest(true),
     barrel: buildBarrel(),
+    // Biome ground cover (Batch 16) — named by BIOMES[n].groundCover, placed by
+    // js/ground.js. One self-contained little drawing per tile; tiles in a
+    // cluster never need to line up.
+    ground_mushroom: buildGroundMushroom(),
+    ground_moss: buildGroundMoss(),
+    ground_ice: buildGroundIce(),
     // Arena props (Batch 9). Every boss gets its OWN set: bespoke silhouettes in that
     // boss's own colours, rather than one shape recoloured three ways.
     // Which ward uses which is CONFIG.DRESSING (con-biomes.js); where they go is

@@ -320,6 +320,9 @@ window.Delve = window.Delve || {};
   };
   // Dress the arena (Batch 8). Read-only with respect to the grid.
   G.decor = dressBossArena(G, ward, G.boss, G.bossArena);
+  // Biome ground cover (Batch 16) — placed after the arena so it avoids the
+  // boss and the spawn; read-only decoration, like the props above.
+  Delve.placeGroundCover(G);
  };
 
  Delve.genFloor = function(){
@@ -335,6 +338,7 @@ window.Delve = window.Delve || {};
   G.boss = null;
   G.bossArena = null;
   G.decor = [];   // arena props (Batch 8): decoration only, never tiles
+  G.groundCover = [];   // biome floor clusters (Batch 16): decoration only, never tiles
   G.shop = { x:-1, y:-1 };
   G.stairs = null;
   // FIX: floorData used to persist across floors, so a secret room found on
@@ -518,6 +522,9 @@ window.Delve = window.Delve || {};
     G.floorData.secretRoom = { falseWallX:w.x, falseWallY:w.y };
    }
   }
+  // Biome ground cover (Batch 16) — placed last so it avoids the stairs, shop,
+  // chests and monsters this floor has just laid down.
+  Delve.placeGroundCover(G);
  };
 
  // monster spawn helper: respects safety radius and tile state
