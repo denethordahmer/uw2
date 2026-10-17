@@ -90,7 +90,7 @@ These shape every decision. Do not propose solutions that break them.
 
 ## 3. File map
 
-27 scripts. This is the `index.html` load order (§5 has the constraints).
+28 scripts. This is the `index.html` load order (§5 has the constraints).
 
 ### 3.1 Content — data only, safe to edit blind
 
@@ -218,6 +218,15 @@ Single source of level generation. Boss floors branch out early (§6.6).
 `genFloor` resets `G.floorData = {}` each floor — needed so a secret room found on one
 floor can't leave a phantom false-wall on the next.
 
+**`js/ground.js`**
+`Delve.placeGroundCover`, `Delve.drawGroundCover`. Biome floor decoration (§6.14): a shared
+10-shape library placed as 2–3 clusters per floor on valid, clear floor tiles, then drawn
+flat by the renderer between the floor and the props. The shapes live here; each biome's art
+is a `SPR.world["ground_*"]` sprite named by `BIOMES[n].groundCover`. `placeGroundCover` is
+called from the end of both `genFloor` and `genBossFloor`. Everything is read at call time,
+so the file has no load-order position of its own — it sits after `levels.js` only to group
+generation code.
+
 ### 3.4 Engine — progression, combat, movement, economy
 
 **`js/traits.js`**
@@ -273,9 +282,10 @@ Two destinations: a rolling strip (`#combatLog`) and a modal (`#logWindowContent
 `Delve.draw`, `addFloater`, `addShake`, `addDeath`, `isTorchTile`, tile/floor/wall/torch/stairs
 drawing, sprite drawing (idle / hurt / elite / **attack** frames, plus the hurt-recoil
 and the attack-lunge offsets), the offscreen tile cache, the per-biome decoration
-families and the drifting ambience layer, `Delve.drawPaperDoll`, `Delve.markVisited`,
+families, the drifting ambience layer and the biome ground-cover layer,
+`Delve.drawPaperDoll`, `Delve.markVisited`,
 `Delve.renderMinimap`.
-Draw order is: floored tiles (+ their biome clutter) → **floor props** → walls (+ torches
+Draw order is: floored tiles (+ their biome clutter) → **biome ground cover** → **floor props** → walls (+ torches
 and the secret-wall shimmer) → **hanging props** → path highlight →
 chests/items/gold/barrels/shop → monsters and boss (a boss gets a pool of torchlight
 underneath it) → player → ambience → floaters → per-biome colour wash → vignette.
@@ -500,19 +510,21 @@ update both in the same order.**
 11  js/content/con-bosssprites.js      ← ordering exception (needs sprites.js)
 12  js/state.js
 13  js/levels.js
-14  js/traits.js
-15  js/combat.js
-16  js/movement.js                     ← follows combat.js
-17  js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
-18  js/effects.js
-19  js/sfx.js
-20  js/log.js
-21  js/render.js
-22  js/pathfind.js
-23  js/input.js
-24  js/ui.js
-25  js/progression.js
-26  js/main.js
+ 14  js/ground.js                       ← no load-dependency; grouped with generation
+15  js/traits.js
+16  js/combat.js
+17  js/movement.js                     ← follows combat.js
+18  js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
+19  js/effects.js
+20  js/sfx.js
+21  js/log.js
+22  js/render.js
+23  js/pathfind.js
+24  js/input.js
+25  js/ui.js
+26  js/menu.js
+27  js/progression.js
+28  js/main.js
 ```
 
 ### Hard constraints (violate = silent breakage)
@@ -907,6 +919,23 @@ save.
   a crit now shakes the screen by 2, and the crit sound (`sounds.crit`, already wired) still plays.
   A crit should be felt, not only read.
 
+### 6.14 Biome ground cover (Batch 16)
+Each biome sprinkles small decorative clusters on the floor — mushrooms in the Upper Ruins,
+blood moss in the Blackvein, frozen puddles in the Frosted Vault. Two or three clusters per
+floor, on every floor (boss arenas included). Pure decoration: painted flat, never written
+into the grid, so they cannot block movement, be tapped, or show on the minimap, and they
+stay out of the run snapshot.
+- A shared library of ten shapes (`SHAPES` in `js/ground.js`) is rotated and mirrored at
+  placement, so ten become eighty layouts. The chosen clusters land in `G.groundCover` as
+  `{shapeId, x, y, rotation, mirror}`.
+- Placement validates every tile of the shape against the grid — plain `FLOOR`, clear of the
+  spawn, stairs, shop, chests, monsters, other clusters and the boss's body. Failing all ten
+  retries just skips that cluster, so generation can't loop forever.
+- `js/render.js` calls `Delve.drawGroundCover` after the floor tiles and clutter, before the
+  floor props; each occupied tile draws its own little sprite (with a per-tile mirror to
+  break up repetition). Art is `SPR.world["ground_*"]`, named per biome by
+  `BIOMES[n].groundCover`; a biome without one simply has no cover.
+
 ---
 
 ## 7. Extension recipes
@@ -927,8 +956,9 @@ save.
 
 **Add a ward (10-floor band)**
 1. `con-biomes.js`: a `WARDS` entry (floor band + generation tuning), a `BIOMES`
-   palette, which must also declare `clutter` and `ambient` (§3 — `test.html` §4 enforces
-   it), and a `DRESSING[wardId]` entry naming that ward's arena props (§6.6 — omit it and
+   palette, which must also declare `clutter`, `ambient` (§3 — `test.html` §4 enforces it)
+   and `groundCover` (§6.14 — the `SPR.world["ground_*"]` sprite, built in `sprites.js`),
+   and a `DRESSING[wardId]` entry naming that ward's arena props (§6.6 — omit it and
    the arena is simply bare). Optionally a `bossArena: {...}` block, and a `special: {...}`
    block for swarm / clustered-loot floors (offsets are ward-relative; Blackvein's and the
    Frosted Vault's are both spelled out there as examples).
