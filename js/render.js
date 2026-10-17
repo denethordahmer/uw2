@@ -301,42 +301,82 @@ const DEATH_LIFE = 460;
  // growing with every ward.
 
  // ── WALL ─────────────────────────────────────────────────────
- // Batch 17 — textured stone + depth. Each tile is its own shade of the biome's
- // stone (never one flat colour), lit softly from above, with low-contrast
- // joints, chips and dents, the biome's own growth (moss / frost — b.moss)
- // creeping over its top edge, and a warm sheen where a brazier stands on or
- // beside it. Casts its shadow onto the floor below and to the right
- // (drawWallShadows), so walls read as raised, not printed on the ground.
- // The offscreen tile cache means all of this is still drawn once per tile.
+ // Batch 17 gave walls texture (per-tile tone, top-down light, growth, chips,
+ // torch sheen, a drop-shadow pass). Batch 20 removes the square read: each
+ // tile looks at its four neighbours, and any edge facing open floor is
+ // "exposed" — inset a couple of pixels over the dark mortar base, bowed
+ // slightly off straight by a hash, with rounded corners where two exposed
+ // edges meet. Edges facing another wall stay full-bleed, so a run of walls
+ // merges into one continuous mass with no internal seams, and the old hard
+ // top/bottom strips are gone (which also kills the horizontal banding).
+ // Still deterministic and cached once per tile.
  function drawWallTile(ctx, sx, sy, ts, gx, gy, b){
   const n=hash2(gx,gy), n2=hash3(gx,gy,11), n3=hash3(gx,gy,23);
   const mood = n2<0.18?1:n2<0.38?2:n2<0.52?3:0;
+  // exposure: the neighbour exists and is not a wall (out of grid = never seen)
+  const exposed = function(x,y){ const t = tileAt(x,y); return t !== null && t !== Delve.T.WALL; };
+  const eT = exposed(gx,gy-1), eB = exposed(gx,gy+1), eL = exposed(gx-1,gy), eR = exposed(gx+1,gy);
+  const ins = Math.max(1.5, ts*0.045);
+  const x0 = sx+(eL?ins:0), y0 = sy+(eT?ins:0);
+  const x1 = sx+ts-(eR?ins:0), y1 = sy+ts-(eB?ins:0);
+  const midX = (x0+x1)/2, midY = (y0+y1)/2;
+  // corners round only where two exposed edges meet — a T-junction with a
+  // contiguous neighbour stays square so the two masses merge cleanly
+  const rc = ts*0.18;
+  const rTL=(eT&&eL)?rc:0, rTR=(eT&&eR)?rc:0, rBR=(eB&&eR)?rc:0, rBL=(eB&&eL)?rc:0;
+  // exposed edges bow slightly off straight; direction comes from the hash
+  const wob = ts*0.05;
+  const wT = eT?(hash3(gx,gy,331)-0.5)*2*wob:0;
+  const wR = eR?(hash3(gx,gy,337)-0.5)*2*wob:0;
+  const wB = eB?(hash3(gx,gy,341)-0.5)*2*wob:0;
+  const wL = eL?(hash3(gx,gy,343)-0.5)*2*wob:0;
+  const wallPath = function(){
+   ctx.beginPath();
+   ctx.moveTo(x0+rTL, y0);
+   if(eT) ctx.quadraticCurveTo(midX, y0+wT, x1-rTR, y0); else ctx.lineTo(x1, y0);
+   if(rTR) ctx.arcTo(x1, y0, x1, y0+rTR, rTR);
+   if(eR) ctx.quadraticCurveTo(x1+wR, midY, x1, y1-rBR); else ctx.lineTo(x1, y1);
+   if(rBR) ctx.arcTo(x1, y1, x1-rBR, y1, rBR);
+   if(eB) ctx.quadraticCurveTo(midX, y1+wB, x0+rBL, y1); else ctx.lineTo(x0, y1);
+   if(rBL) ctx.arcTo(x0, y1, x0, y1-rBL, rBL);
+   if(eL) ctx.quadraticCurveTo(x0+wL, midY, x0, y0+rTL); else ctx.lineTo(x0, y0);
+   if(rTL) ctx.arcTo(x0, y0, x0+rTL, y0, rTL);
+   ctx.closePath();
+  };
+  // the dark base shows only at the exposed insets — the mortar between stones
+  ctx.fillStyle=b.mortar; ctx.fillRect(sx,sy,ts,ts);
   // per-tile stone tone — weathered variation instead of a flat fill
   let stone = blendHex(b.wall, "#0a0e12", n * 0.16);
   if(n3 > 0.90) stone = blendHex(stone, "#ffffff", 0.05);
-  ctx.fillStyle=stone; ctx.fillRect(sx,sy,ts,ts);
-  // soft top-down light: lit top, shaded base
-  const lg=ctx.createLinearGradient(0,sy,0,sy+ts);
-  lg.addColorStop(0,"rgba(255,255,255,0.10)");
-  lg.addColorStop(0.35,"rgba(255,255,255,0.02)");
-  lg.addColorStop(1,"rgba(0,0,0,0.16)");
+  wallPath(); ctx.fillStyle=stone; ctx.fill();
+  // everything below paints inside the stone shape
+  ctx.save(); wallPath(); ctx.clip();
+  // soft top-down light, the biome's edge tone at the crest
+  const lg=ctx.createLinearGradient(0,y0,0,y1);
+  lg.addColorStop(0, b.wallEdge+"55");
+  lg.addColorStop(0.30,"rgba(255,255,255,0.06)");
+  lg.addColorStop(1,"rgba(0,0,0,0.18)");
   ctx.fillStyle=lg; ctx.fillRect(sx,sy,ts,ts);
   if(mood===2){ ctx.fillStyle="rgba(60,90,60,0.22)"; ctx.fillRect(sx,sy,ts,ts); }
   if(mood===3){ const grad=ctx.createLinearGradient(sx+ts*0.5,sy,sx+ts*0.5,sy+ts); grad.addColorStop(0,"rgba(70,40,20,0.40)"); grad.addColorStop(0.6,"rgba(50,30,15,0.14)"); grad.addColorStop(1,"rgba(0,0,0,0)"); ctx.fillStyle=grad; ctx.fillRect(sx+ts*0.25,sy,ts*0.5,ts); }
-  // feathered top + left edge light (the old hard wallEdge band, softened)
-  ctx.globalAlpha=0.55; ctx.fillStyle=b.wallEdge; ctx.fillRect(sx,sy,ts,Math.max(1.5,ts*0.05));
-  ctx.globalAlpha=0.28; ctx.fillRect(sx,sy,ts,Math.max(2,ts*0.10));
-  ctx.globalAlpha=0.40; ctx.fillRect(sx,sy,Math.max(1.5,ts*0.04),ts);
-  ctx.globalAlpha=0.20; ctx.fillRect(sx,sy,Math.max(2,ts*0.08),ts);
-  ctx.globalAlpha=1;
   if(ts>=20){
-   // joints: low contrast, so they texture rather than grid the wall
+   // sagging course line + jittered verticals: masonry, not a grid
    ctx.strokeStyle=b.wallBrick; ctx.lineWidth=1; ctx.globalAlpha=mood===1?0.55:0.38;
-   ctx.beginPath(); ctx.moveTo(sx+1,sy+ts*0.50); ctx.lineTo(sx+ts-1,sy+ts*0.50);
-   const vOff=(gy%2===0)?0.25:0.75; ctx.moveTo(sx+ts*vOff,sy+ts*0.50); ctx.lineTo(sx+ts*vOff,sy+ts-1);
-   if(n>0.40){ const vOff2=(gy%2===0)?0.75:0.25; ctx.moveTo(sx+ts*vOff2,sy+1); ctx.lineTo(sx+ts*vOff2,sy+ts*0.50); }
+   ctx.beginPath();
+   const sag=(hash3(gx,gy,347)-0.5)*ts*0.10;
+   ctx.moveTo(x0+2, midY); ctx.quadraticCurveTo(midX, midY+sag, x1-2, midY);
+   const v1 = x0+(x1-x0)*(0.30+(hash3(gx,gy,349)-0.5)*0.16);
+   const v2 = x0+(x1-x0)*(0.72+(hash3(gx,gy,353)-0.5)*0.16);
+   if(hash3(gx,gy,359)<0.5){ ctx.moveTo(v1,y0+2); ctx.lineTo(v1,midY); ctx.moveTo(v2,y0+2); ctx.lineTo(v2,midY); }
+   else { ctx.moveTo(v1,midY); ctx.lineTo(v1,y1-2); ctx.moveTo(v2,midY); ctx.lineTo(v2,y1-2); }
    ctx.stroke(); ctx.globalAlpha=1;
-   if(mood===1){ const cr=hash3(gx,gy,89); const brickX=sx+(cr>0.5?ts*vOff:0)+2; const brickY=sy+(cr>0.5?0:ts*0.51); const brickW=ts*(cr>0.5?(1-vOff):vOff)-3; const brickH=ts*0.49-2; ctx.fillStyle="rgba(0,0,0,0.18)"; ctx.fillRect(brickX,brickY,brickW,brickH); ctx.fillStyle=b.wallBrick; ctx.fillRect(brickX+brickW*0.3,brickY-1,brickW*0.25,3); }
+   if(mood===1){
+    const left = hash3(gx,gy,89)<0.5, top = hash3(gx,gy,363)<0.5;
+    const bx0 = left? x0+2 : v1+1, bx1 = left? v1-1 : x1-2;
+    const by0 = top? y0+2 : midY+2, by1 = top? midY-1 : y1-2;
+    ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(bx0,by0,bx1-bx0,by1-by0);
+    ctx.fillStyle=b.wallBrick; ctx.fillRect(bx0+(bx1-bx0)*0.3, by0-1, (bx1-bx0)*0.25, 2);
+   }
   }
   // the biome's own growth creeping over the top edge: moss in the ruins,
   // lichen in the Blackvein, frost in the Vault — colour comes from b.moss
@@ -370,11 +410,14 @@ const DEATH_LIFE = 460;
    sg.addColorStop(0, b.torch+"33"); sg.addColorStop(1, "rgba(0,0,0,0)");
    ctx.fillStyle=sg; ctx.fillRect(sx,sy,ts,ts);
   }
-  // top highlight + bottom contact shade, feathered rather than hard lines
-  ctx.fillStyle="rgba(255,255,255,0.08)"; ctx.fillRect(sx,sy,ts,Math.max(1.5,ts*0.04));
-  const bg=ctx.createLinearGradient(0,sy+ts*0.72,0,sy+ts);
-  bg.addColorStop(0,"rgba(0,0,0,0)"); bg.addColorStop(1,"rgba(0,0,0,0.28)");
-  ctx.fillStyle=bg; ctx.fillRect(sx,sy+ts*0.72,ts,ts*0.28);
+  // grounding shade along an exposed bottom edge only — a contiguous wall
+  // below gets none, so stacked rows no longer band
+  if(eB){
+   const bg=ctx.createLinearGradient(0,y1-ts*0.30,0,y1);
+   bg.addColorStop(0,"rgba(0,0,0,0)"); bg.addColorStop(1,"rgba(0,0,0,0.30)");
+   ctx.fillStyle=bg; ctx.fillRect(x0, y1-ts*0.30, x1-x0, ts*0.30);
+  }
+  ctx.restore();
  }
 
  // Wall drop shadows (Batch 17, option D). Every wall throws a soft shadow onto
