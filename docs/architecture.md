@@ -957,15 +957,23 @@ stay out of the run snapshot.
   break up repetition). Art is `SPR.world["ground_*"]`, named per biome by
   `BIOMES[n].groundCover`; a biome without one simply has no cover.
 
-### 6.15 Wall look — textured stone + drop shadows (Batch 17)
+### 6.15 Wall look — textured stone + drop shadows (Batch 17, silhouette Batch 20)
 Owner's choice from a four-option menu (soft top-down light, rounded caps, textured stone,
 drop shadows — stone + shadows taken, 16 Oct). All of it lives in `render.js`:
 - **`drawWallTile`** — each tile is its own shade of the biome's stone (`blendHex` against
-  near-black by a hash, a few tiles lighter), a soft top-down light gradient, the
-  `wallEdge`/`wallBrick` colours kept but feathered and low-contrast so joints texture rather
-  than grid, the biome's `moss` colour creeping over the top edge (moss / lichen / frost,
-  ~45% of tiles, plus the occasional drip), chips and dents, a warm `torch`-tinted sheen on
-  or beside a brazier tile, and a feathered top highlight / bottom contact shade.
+  near-black by a hash, a few tiles lighter), a soft top-down light gradient tinted by
+  `wallEdge` at the crest, low-contrast sagging course lines + jittered verticals so the
+  masonry textures rather than grids, the biome's `moss` colour creeping over the top edge
+  (moss / lichen / frost, ~45% of tiles, plus the occasional drip), chips and dents, and a
+  warm `torch`-tinted sheen on or beside a brazier tile.
+- **Batch 20 — organic silhouette.** The tile is no longer a full square: it checks its
+  four neighbours, and an edge facing open floor is **exposed** — inset a couple of pixels
+  over the dark `mortar` base, bowed slightly off straight by a hash, with corners rounded
+  (`ts*0.18`) only where two exposed edges meet. Edges facing another wall stay full-bleed,
+  so a run of walls merges into one continuous mass with no internal seams. The old hard
+  top/bottom strips are gone; the grounding shade applies only along an exposed bottom
+  edge, which kills the horizontal banding. Everything (light, growth, chips, sheen) is
+  clipped inside the stone shape.
 - **`drawWallShadows`** — a pass after the floor props and before the walls: every wall
   throws a soft gradient shadow onto the floor below it and to its right. Direction is fixed
   everywhere, so the whole dungeon reads as lit the same way. Shadows land on whatever is
