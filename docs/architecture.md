@@ -90,7 +90,7 @@ These shape every decision. Do not propose solutions that break them.
 
 ## 3. File map
 
-28 scripts. This is the `index.html` load order (§5 has the constraints).
+29 scripts. This is the `index.html` load order (§5 has the constraints).
 
 ### 3.1 Content — data only, safe to edit blind
 
@@ -138,6 +138,14 @@ Canvases are **24px per tile**, so a `size:{w:2,h:2}` boss is 48×48; `test.html
 fails if a canvas disagrees with the declared size.
 **Must load AFTER `js/sprites.js`** — it needs `Delve._spriteUtils` and
 `Delve.rebuildSprites`.
+
+**`js/content/con-worldart.js`** — ⚠️ **shares that ordering constraint.**
+World art as content: the boss-arena props (Batches 8/9) and the biome ground-cover
+sprites (Batch 16) moved here from `sprites.js` on 16 Oct, plus the per-biome floor
+clutter/growth families moved from `render.js`. Registers via
+`Delve.registerWorldSprite(key, fn)` and `Delve.registerClutter(name, {clutter, weed})`,
+then calls `rebuildSprites()`. **Must load AFTER `js/sprites.js`.** A new biome adds
+builders and registrations here; the engine files never need editing for art.
 
 ### 3.2 Engine — foundation
 
@@ -189,11 +197,13 @@ stat field names. **All shop-domain logic lives here** (stock, pricing, shop-flo
 predicate, heal cost).
 
 **`js/sprites.js`**
-`Delve.SPR`, `Delve._spriteUtils`, `Delve.registerBossSprite`,
-`Delve._bossSpriteBuilders`, `Delve.rebuildSprites`.
-Runs a build-all at load; boss sprites come from the registry, so
-`con-bosssprites.js` calls `rebuildSprites()` after registering. `test.html` §5 verifies
-every `BOSS_DEFS.sprite` is registered and built.
+`Delve.SPR`, `Delve._spriteUtils`, `Delve.registerBossSprite`, `Delve._bossSpriteBuilders`,
+`Delve.registerWorldSprite`, `Delve._worldSpriteBuilders`, `Delve.registerClutter`,
+`Delve._clutterFamilies`, `Delve.rebuildSprites`.
+Runs a build-all at load; boss sprites and world art (arena props, ground cover) come from
+registries, so `con-bosssprites.js` and `con-worldart.js` call `rebuildSprites()` after
+registering. `test.html` §5 verifies every `BOSS_DEFS.sprite` is registered and built; §4
+verifies `DRESSING` and `groundCover` keys resolve in `SPR.world`.
 
 ### 3.3 Engine — state & world
 
@@ -281,8 +291,9 @@ Two destinations: a rolling strip (`#combatLog`) and a modal (`#logWindowContent
 **`js/render.js`**
 `Delve.draw`, `addFloater`, `addShake`, `addDeath`, `isTorchTile`, tile/floor/wall/torch/stairs
 drawing, sprite drawing (idle / hurt / elite / **attack** frames, plus the hurt-recoil
-and the attack-lunge offsets), the offscreen tile cache, the per-biome decoration
-families, the drifting ambience layer and the biome ground-cover layer,
+and the attack-lunge offsets), the offscreen tile cache, the drifting ambience layer, the
+biome ground-cover layer and the wall texture/shadow pass (§6.15). Per-biome clutter/growth
+painters are registered content (con-worldart.js) — only the ruins fallback stays here.
 `Delve.drawPaperDoll`, `Delve.markVisited`,
 `Delve.renderMinimap`.
 Draw order is: floored tiles (+ their biome clutter) → **biome ground cover** → **floor props** →
@@ -347,7 +358,8 @@ Uses a **guarded `$()`** that returns an inert stub instead of `null` for missin
 recording misses in `Delve.missingEls` — so one missing element can't kill the rest of
 the file. Every id that wiring asks for must exist in **both** `index.html` and
 `test.html`'s `#fixtures` block, or `test.html` §9 reports it (and says which of the two
-you are looking at). Still the largest file (~600 lines), but no longer multi-purpose.
+you are looking at). No longer the largest file — `render.js` is — and no longer
+multi-purpose.
 
 **`js/progression.js`**
 `hasProgression`, `markRunTrait`, `_hooks` registration, `renderTabs`, `renderTree`,
@@ -509,23 +521,24 @@ update both in the same order.**
  9  js/items.js
 10  js/sprites.js
 11  js/content/con-bosssprites.js      ← ordering exception (needs sprites.js)
-12  js/state.js
-13  js/levels.js
- 14  js/ground.js                       ← no load-dependency; grouped with generation
-15  js/traits.js
-16  js/combat.js
-17  js/movement.js                     ← follows combat.js
-18  js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
-19  js/effects.js
-20  js/sfx.js
-21  js/log.js
-22  js/render.js
-23  js/pathfind.js
-24  js/input.js
-25  js/ui.js
-26  js/menu.js
-27  js/progression.js
-28  js/main.js
+12  js/content/con-worldart.js         ← same constraint (needs sprites.js)
+13  js/state.js
+14  js/levels.js
+15  js/ground.js                       ← no load-dependency; grouped with generation
+16  js/traits.js
+17  js/combat.js
+18  js/movement.js                     ← follows combat.js
+19  js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
+20  js/effects.js
+21  js/sfx.js
+22  js/log.js
+23  js/render.js
+24  js/pathfind.js
+25  js/input.js
+26  js/ui.js
+27  js/menu.js
+28  js/progression.js
+29  js/main.js
 ```
 
 ### Hard constraints (violate = silent breakage)
@@ -1032,8 +1045,8 @@ the write-to-storage whitelist.
 - **`bossIntroOverlay` is not in `uiBlocked()`.** Removing it was a decision: the intro
   draws over the map while the player is meant to be walking up the corridor. The card
   still shows and fades.
-- **The floors 10/20 `boss:true` bands** in `con-monsters.js` are inert. Safe to delete
-  or leave.
+- **The floors 10/20 `boss:true` bands were removed** from `con-monsters.js` in the
+  tidy-up pass (§3.1). If you ever see one, it's a leftover — nothing reads it.
 - **`addAbility` silently drops the oldest ability** past `levelMaxAbilities`. UI
   surfacing is deferred, not forgotten.
 - **`ui.js`'s guarded `$()`** returns an inert stub for missing ids on purpose.
