@@ -52,9 +52,9 @@ one global namespace (`Delve`).
    `localStorage`. Nothing is banked before the run ends.
 
 ### Content that exists
-- Three wards: **Upper Ruins** (floors 1–10), **The Blackvein** (11–20) and
-  **The Frosted Vault** (21–30).
-- Nothing beyond floor 30 yet. The plan is ~10 wards / 100 floors; loot and
+- Four wards: **Upper Ruins** (floors 1–10), **The Blackvein** (11–20),
+  **The Frosted Vault** (21–30) and **The Bone Ossuary** (31–40).
+- Nothing beyond floor 40 yet. The plan is ~10 wards / 100 floors; loot and
   difficulty scale with depth, with no ward count baked into the engine.
 - ~100 items, a roster of monsters, 6 progression trees, passives/uniques/abilities.
 
@@ -90,7 +90,7 @@ These shape every decision. Do not propose solutions that break them.
 
 ## 3. File map
 
-29 scripts. This is the `index.html` load order (§5 has the constraints).
+30 scripts. This is the `index.html` load order (§5 has the constraints).
 
 ### 3.1 Content — data only, safe to edit blind
 
@@ -146,6 +146,12 @@ clutter/growth families moved from `render.js`. Registers via
 `Delve.registerWorldSprite(key, fn)` and `Delve.registerClutter(name, {clutter, weed})`,
 then calls `rebuildSprites()`. **Must load AFTER `js/sprites.js`.** A new biome adds
 builders and registrations here; the engine files never need editing for art.
+
+**`js/content/con-monstersprites.js`** — ⚠️ **same ordering constraint.**
+Monster art as content: one builder per roster kind, registered via
+`Delve.registerMonsterSprite(kind, idleBuilder, atkRects)` — buildAll() then gives every
+registered monster its hurt / elite / attack variants automatically. Introduced 16 Oct
+with the Bone Ossuary's eight creatures. **Must load AFTER `js/sprites.js`.**
 
 ### 3.2 Engine — foundation
 
@@ -522,23 +528,24 @@ update both in the same order.**
 10  js/sprites.js
 11  js/content/con-bosssprites.js      ← ordering exception (needs sprites.js)
 12  js/content/con-worldart.js         ← same constraint (needs sprites.js)
-13  js/state.js
-14  js/levels.js
-15  js/ground.js                       ← no load-dependency; grouped with generation
-16  js/traits.js
-17  js/combat.js
-18  js/movement.js                     ← follows combat.js
-19  js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
-20  js/effects.js
-21  js/sfx.js
-22  js/log.js
-23  js/render.js
-24  js/pathfind.js
-25  js/input.js
-26  js/ui.js
-27  js/menu.js
-28  js/progression.js
-29  js/main.js
+13  js/content/con-monstersprites.js   ← same constraint (needs sprites.js)
+14  js/state.js
+15  js/levels.js
+16  js/ground.js                       ← no load-dependency; grouped with generation
+17  js/traits.js
+18  js/combat.js
+19  js/movement.js                     ← follows combat.js
+20  js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
+21  js/effects.js
+22  js/sfx.js
+23  js/log.js
+24  js/render.js
+25  js/pathfind.js
+26  js/input.js
+27  js/ui.js
+28  js/menu.js
+29  js/progression.js
+30  js/main.js
 ```
 
 ### Hard constraints (violate = silent breakage)
@@ -966,6 +973,31 @@ drop shadows — stone + shadows taken, 16 Oct). All of it lives in `render.js`:
   Still deterministic per tile and still cached per floor — no per-frame cost beyond the
   shadow pass itself.
 
+### 6.16 Boss shield — the two-act fight (Batch 18)
+A boss may declare `shieldHp` in its `BOSS_DEFS` entry (and `spriteOpen`, the Act-2 art).
+Damage from **any** source — weapon swings and abilities alike — soaks into the shield
+first; only the remainder reaches HP. `Delve.absorbBossShield` (`combat.js`) owns it:
+floaters read `ribs -N` while it holds, and when it breaks it flashes, shakes, logs
+"the black heart is exposed", sets `m.shieldBroken`, and **never regrows** — Act 2, once
+begun, stays begun. `render.js` swaps the drawn sprite to `spriteOpen` while
+`shieldBroken` is set, so the player can see exactly why the damage changed. The shield
+lives on the boss object, which is rebuilt fresh every floor — nothing to save.
+The Bonefather (ward 4) is the first user: 280 HP behind 120 ribs.
+
+### 6.17 The Sarcophagus Hall (Batch 19 — ward 4's special floor)
+Replaces the swarm floors in the Bone Ossuary: a ward's `special` block may declare
+`sarcophagusChance` (+ `sarcMin`/`sarcMax`) and `ensureWardPlan` rolls it per eligible
+floor exactly like swarm chance. `applySarcophagusFloor` (`levels.js`) scatters 6–10
+sealed tombs on clear floor tiles — clear of spawn, stairs, shop.
+- A tomb rides the **CHEST tile** flagged `sarcophagus:true`, so taps reach `openChest`
+  with no new input path; `drawChest` (`render.js`) paints it with `tombSealed`/`tombOpen`
+  instead of the chest art.
+- Opening one rolls the agreed table: item 30% / gold 25% / **a monster bursts out** 20%
+  (spawned on the tomb's own tile via `spawnMonsterKind`, with the ward's band) /
+  potion 15% / already empty 10%. How many tombs the player opens is their choice.
+- Provenance stamps `kind:"sarcophagus"`, so a legendary from a tomb is traceable in the
+  run stats like any other source.
+
 ---
 
 ## 7. Extension recipes
@@ -1174,7 +1206,7 @@ Tests: https://<user>.github.io/underward/test.html
 | 4 | All content registries; every band weight maps to a real roster row; every ability has `data`; **every shard-tree node type is one the engine consumes** |
 | 5 | Every `BOSS_DEFS.sprite` is registered and actually built |
 | 6 | Save schema complete; a persist() round-trip preserves node purchases |
-| 7 | 50 floor generations across both wards; spawn safety; boss floors contain nothing but the arena |
+| 7 | 50 floor generations across all built wards; spawn safety; boss floors contain nothing but the arena |
 | 8 | Movement regression: `tryAct`, `tryRest`, `findPath`, `stepPath`, `uiBlocked` gating, **and null-`G` safety across 9 entry points** |
 | 9 | DOM integrity via `missingEls`, split into **real** dead references (an id no page has) versus the **test fixture** lagging `index.html` (the game page has the element, this page's `#fixtures` block doesn't) |
 | 10 | Tier rolls return 1–4 and stay mostly common/uncommon, **plus** the legendary weight curve is positive on floor 1 and rises with depth and with Luck |

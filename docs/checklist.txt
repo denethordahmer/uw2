@@ -18,15 +18,15 @@ MENU (deferred, not started)
   adapt before applying.
 
 NEW CONTENT
-- Ward 4: Bone Ossuary, floors 31-40. Boss: The Bonefather.
-  Designed but not built. Includes: palette, eight monsters with new
-  sprites, boss sprite and intro, its own special-floor behaviour, and
-  the boss card.
-- Wards 5 through 10: unbuilt. Each is 10 floors with its own boss.
-  Plan is roughly 100 floors total.
-- Per-ward content so far has followed the same recipe: new palette,
-  new monster roster, new boss with its own sprite and intro, its own
-  special floors. Ward 4 is the next one to build.
+- Ward 4: Bone Ossuary, floors 31-40. Boss: The Bonefather. BUILT.
+  Palette, eight monsters with sprites (incl. the Reassembled gimmick),
+  boss sprite + intro + two-act rib-shield fight, bone ground cover and
+  ossuary clutter, the Sarcophagus Hall special floor, arena dressing.
+- Wards 5 through 10: unbuilt. Ward 5 (Ashen Forge) has a spec in
+  docs/ward5.md. Each is 10 floors with its own boss. ~100 floors total.
+- Per-ward content has followed the same recipe: new palette, new monster
+  roster, new boss with its own sprite and intro, its own special floors.
+  Ward 5 is the next one to build.
 
 TUNING AND POLISH (worth considering)
 - Legendary drop rate and overall loot pacing. The current curve is

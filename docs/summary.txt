@@ -39,13 +39,14 @@ Hosted on GitHub Pages. Save key: underward_save_v3.
 Everything is authored and managed from Termux on Android.
 
 FOLDERS
-- index.html, test.html, manifest, architecture.md, checklist.txt,
-  summary.txt
+- index.html, test.html, manifest
+- docs/   (architecture.md, checklist.txt, summary.txt, cp.txt, ground.md,
+           ward4.md, ward5.md — project reference, specs and to-do live here)
 - icons/  (icon-192.png, icon-512.png)
 - fonts/  (title.ttf, sub.ttf, buttons.ttf)
-- js/     (engine files, 26 scripts)
-- js/content/  (con-*.js — data only: monsters, items, biomes, traits,
-                 progression, boss sprites)
+- js/     (engine files, 19 scripts)
+- js/content/  (con-*.js — data and registered art: monsters, items, biomes,
+                traits, progression, boss sprites, monster sprites, world art)
 
 WARD STRUCTURE
 Each ward is 10 floors. The 10th floor of each ward is its own boss
