@@ -199,6 +199,13 @@ body{
   border-top:1px solid #202b36;background:rgba(8,11,15,.98);
 }
 #hubFooter #startBtn{ width:100%;max-width:none;margin:0; }
+#hubFooter #hubTitleBtn{ width:100%;max-width:none;margin:0; }
+/* The "you can look, not buy" banner while a run is parked (§6.12.2). */
+.hub-locked-note{
+  width:100%;max-width:480px;box-sizing:border-box;margin:0 0 10px;padding:10px 12px;
+  border:1px solid #ffd75e44;border-radius:12px;background:#1a1508;
+  color:#ffd75e;font-size:12px;font-weight:700;line-height:1.45;text-align:center;
+}
 
 /* ── Level-up ── */
 #levelupScreen{ display:none;padding:22px 18px calc(22px + env(safe-area-inset-bottom)); }
@@ -391,6 +398,13 @@ body{
   cursor:pointer;touch-action:manipulation;font-family:inherit;text-align:center;
 }
 #pauseRetreatBtn:active{ background:#28141a; }
+#pauseSaveBtn{
+  background:#0f1a24;border:1px solid #7ee0ff44;border-radius:12px;
+  color:#7ee0ff;font-size:15px;font-weight:800;padding:13px;
+  cursor:pointer;touch-action:manipulation;font-family:inherit;text-align:center;
+}
+#pauseSaveBtn:active{ background:#16283a; }
+.pause-save-note{ font-size:11px;color:#7f94a8;text-align:center;line-height:1.4; }
 #pauseCloseBtn{
   background:#141b23;border:1px solid #2a3440;border-radius:12px;
   color:#a9bccd;font-size:15px;font-weight:800;padding:13px;
@@ -524,7 +538,7 @@ body{
   border-radius:16px; border-color:#7ee0ff33;
   box-shadow:0 4px 14px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.04);
 }
-#icPrimaryBtn, #icSecondaryBtn, #stairsYes, #stairsNo, #pauseRetreatBtn, #pauseCloseBtn{
+#icPrimaryBtn, #icSecondaryBtn, #stairsYes, #stairsNo, #pauseSaveBtn, #pauseRetreatBtn, #pauseCloseBtn{
   border-radius:14px;
   box-shadow:0 4px 14px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
 }
@@ -794,6 +808,7 @@ body{
       <p id="titleTagline">Earn shards. Spend them. Go deeper.</p>
       <div id="titleButtons">
         <button class="btn big" id="titleContinueBtn">CONTINUE</button>
+        <button class="btn" id="titleHubBtn" style="display:none">HUB</button>
         <button class="btn" id="titleSettingsBtn">SETTINGS</button>
       </div>
     </div>
@@ -839,6 +854,7 @@ body{
     </div>
     <div id="hubFooter">
       <button class="btn big" id="startBtn">START RUN</button>
+      <button class="btn" id="hubTitleBtn" style="display:none">TITLE SCREEN</button>
     </div>
   </div>
 
@@ -872,6 +888,8 @@ body{
           </div>
         </div>
       <hr class="pause-divider">
+      <button id="pauseSaveBtn">💾 Save floor &amp; exit</button>
+      <div class="pause-save-note">The floor is kept — carry on from the title screen.</div>
       <button id="pauseRetreatBtn">🏃 Flee to surface</button>
       <div class="pause-retreat-note">Gold converts to shards at 10:1. Run ends.</div>
       <button id="pauseCloseBtn">↩ Resume</button>
@@ -926,6 +944,7 @@ body{
 <script src="js/content/con-bosssprites.js"></script>
 <script src="js/state.js"></script>
 <script src="js/levels.js"></script>
+<script src="js/ground.js"></script>
 <script src="js/traits.js"></script>
 <script src="js/combat.js"></script>
 <script src="js/movement.js"></script>

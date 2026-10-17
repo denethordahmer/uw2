@@ -68,10 +68,10 @@
   <div id="shopScreen"><span id="shopGold"></span><span id="shopGreeting"></span>
     <div id="shopStock"></div><button id="shopHealBtn"></button><button id="shopLeaveBtn"></button></div>
 
-  <div id="titleScreen"><h1 id="titleWord" data-text="underward"></h1><div id="titleButtons"><button id="titleContinueBtn"></button><button id="titleSettingsBtn"></button></div><div id="titleSettingsPane"><button id="titleMuteBtn"></button><input type="range" id="titleVolumeSlider"><input type="range" id="titleMusicSlider"><button id="titleHapticsBtn"></button><button id="titleSettingsClose"></button><button id="titleResetBtn"></button><div id="titleResetConfirm"><p id="titleResetNote"></p><button id="titleResetYes"></button><button id="titleResetNo"></button></div><p id="titleResetDone"></p></div></div>
+  <div id="titleScreen"><h1 id="titleWord" data-text="underward"></h1><div id="titleButtons"><button id="titleContinueBtn"></button><button id="titleHubBtn"></button><button id="titleSettingsBtn"></button></div><div id="titleSettingsPane"><button id="titleMuteBtn"></button><input type="range" id="titleVolumeSlider"><input type="range" id="titleMusicSlider"><button id="titleHapticsBtn"></button><button id="titleSettingsClose"></button><button id="titleResetBtn"></button><div id="titleResetConfirm"><p id="titleResetNote"></p><button id="titleResetYes"></button><button id="titleResetNo"></button></div><p id="titleResetDone"></p></div></div>
 
   <div id="hubScreen"><span id="hubShards"></span><div id="hubTabs"></div>
-    <div class="shop" id="shop"></div><div id="treePanel"></div><button id="startBtn"></button></div>
+    <div class="shop" id="shop"></div><div id="treePanel"></div><button id="startBtn"></button><button id="hubTitleBtn"></button></div>
 
   <div id="victoryScreen"><span id="victoryShards"></span><div id="victorySummary"></div>
     <button id="victoryContinue"></button><button id="victoryHub"></button></div>
@@ -88,6 +88,7 @@
     <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.55">
     <input type="range" id="musicSlider" min="0" max="1" step="0.05" value="0.30">
     <button id="hapticsBtn" class="pause-toggle">ON</button>
+    <button id="pauseSaveBtn"></button>
     <button id="pauseRetreatBtn"></button>
     <button id="pauseCloseBtn"></button>
   </div></div>
@@ -152,6 +153,7 @@ var FILES = [
   "js/content/con-bosssprites.js",
   "js/state.js",
   "js/levels.js",
+  "js/ground.js",
   "js/traits.js",
   "js/combat.js",
   "js/movement.js",
@@ -370,7 +372,8 @@ var REQUIRED_FN = [
   "injectHubAbilities","persist","isShopFloor","healCost","getWard","getMonsterBand",
   "findPath","stepPath","uiBlocked","rowFor","onHitEffectFor","markVisited","isTorchTile",
   "hasSavedRun","savedRunFloor","resumeRun","restoreRunFromCheckpoint",
-  "setFloorCheckpoint","clearRunCheckpoint","captureRunSnapshot","addDeath"
+  "setFloorCheckpoint","clearRunCheckpoint","captureRunSnapshot","addDeath","saveAndExit",
+  "placeGroundCover","drawGroundCover"
 ];
 // Non-function globals. `save` lives here, NOT in REQUIRED_FN — Delve.save is
 // the DATA object, so a typeof==="function" check could never pass.
@@ -475,6 +478,8 @@ try {
       if (typeof am.alpha !== "number" || am.alpha <= 0 || am.alpha > 1) badBiomes.push(nm + " — ambient alpha must be between 0 and 1");
       if (!am.col || !am.col2) badBiomes.push(nm + " — ambient needs both colours");
     }
+    if (bm.groundCover && !(d.SPR && d.SPR.world && d.SPR.world[bm.groundCover]))
+      badBiomes.push(nm + " — groundCover names '" + bm.groundCover + "', which has no sprite in SPR.world");
   });
 
   // ── Arena dressing integrity ───────────────────────────────────
