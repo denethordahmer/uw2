@@ -527,8 +527,15 @@ window.Delve = window.Delve || {};
   // Biome ground cover (Batch 16) — placed after the arena so it avoids the
   // boss and the spawn; read-only decoration, like the props above.
   Delve.placeGroundCover(G);
-  // Ward growth (js/growth.js) — rolled per room after everything else is placed.
-  Delve.placeGrowth(G);
+  // Ward growth (js/growth.js) — rolled per room after everything else is
+  // placed. Guarded + try/caught so a growth failure (missing file, runtime
+  // error) can NEVER abort floor generation: the boss, its arena, monsters
+  // and everything else this floor lays down must always survive.
+  try {
+    if (typeof Delve.placeGrowth === "function") Delve.placeGrowth(G);
+  } catch (e) {
+    if (Delve.logSystem) Delve.logSystem("Growth skipped: " + e.message);
+  }
  };
 
  Delve.genFloor = function(){
@@ -860,8 +867,15 @@ window.Delve = window.Delve || {};
   // Biome ground cover (Batch 16) — placed last so it avoids the stairs, shop,
   // chests and monsters this floor has just laid down.
   Delve.placeGroundCover(G);
-  // Ward growth (js/growth.js) — rolled per room after everything else is placed.
-  Delve.placeGrowth(G);
+  // Ward growth (js/growth.js) — rolled per room after everything else is
+  // placed. Guarded + try/caught so a growth failure (missing file, runtime
+  // error) can NEVER abort floor generation: the monster spawning loop, the
+  // chests and the rest of this floor must always be laid down.
+  try {
+    if (typeof Delve.placeGrowth === "function") Delve.placeGrowth(G);
+  } catch (e) {
+    if (Delve.logSystem) Delve.logSystem("Growth skipped: " + e.message);
+  }
  };
 
  // monster spawn helper: respects safety radius and tile state
