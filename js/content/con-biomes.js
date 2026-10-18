@@ -154,11 +154,12 @@ window.Delve = window.Delve || {};
     wall:"#64707c", wallEdge:"#8d99a6", wallBrick:"#3a4248", mortar:"#0b0f14",
     floor:"#2e3842", floor2:"#283039", moss:"#4f8f63",
     water:"#1e3a4a", torch:"#ffb347", light:"rgba(70,140,255,0.06)",
-    // Seamless floor (owner batch): "cobble" switches this biome onto the baked
-    // 3x3-tile torus cobblestone texture in render.js — the pattern repeats,
-    // but its edges continue into the neighbouring copy, so no tile grid is
-    // visible anywhere; the room floor reads as one sheet of stonework.
-    floorStyle:"cobble",
+    // Seamless floor (owner batch): "runningbond" switches this biome onto the
+    // baked 3x3-tile torus masonry pattern in render.js — interlocking block
+    // courses that repeat, but whose edges continue into the neighbouring
+    // copy, so no tile grid is visible anywhere; every floor of the ward reads
+    // as one continuous paved surface.
+    floorStyle:"runningbond",
     // Linked wall growth: this biome's walls grow moss only where a floor patch
     // touches them (js/growth.js drawGrowthWalls), instead of the old flat trim.
     growthLinked:true,

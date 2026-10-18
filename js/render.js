@@ -99,8 +99,8 @@ const DEATH_LIFE = 460;
    // and water overlays as pure data — snow instead of moss, ice instead of water
    patchGrass: b.patchGrass || b.moss || "#3f6d55",
    patchWater: b.patchWater || b.water || "#1e3a4a",
-   // Seamless floor + linked growth (js/growth.js). floorStyle "cobble" = the baked
-   // 3x3 torus cobblestone pattern instead of per-tile slabs; growthLinked = the
+   // Seamless floor + linked growth (js/growth.js). floorStyle "runningbond" = the
+   // baked 3x3 torus masonry pattern instead of per-tile slabs; growthLinked = the
    // walls grow growth only where a floor patch touches them; growthPal = the
    // biome's locked green gradient (dark root → bright tip).
    floorStyle: b.floorStyle || null,
@@ -206,92 +206,86 @@ const DEATH_LIFE = 460;
   return top + (bot - top) * fy;
  }
 
-  // ── SEAMLESS COBBLE FLOOR ─────────────────────────────────────
-  // The baked 3x3-tile cobblestone pattern (owner batch). Stone centres are
-  // hashed on a TORUS, so every stone, joint and grain that crosses a tile
-  // edge continues on the opposite edge — a copy placed beside itself meshes
-  // with no seam, and the room floor reads as one continuous sheet of
-  // stonework with no visible tile grid. Per tile, blitTile just paints the
-  // 16x16 fine-pixel cell chosen by (gx mod 3, gy mod 3). The continuous tone
-  // overlay on top drifts over several tiles, so even the 3x3 repeat is hard
-  // to spot. Low-contrast on purpose: the moss is the interesting green.
-  const COBBLE_PX = 16, COBBLE_N = 3;
-  let cobbleKey = null, cobbleTex = null;
+  // ── SEAMLESS RUNNING-BOND FLOOR ───────────────────────────────
+  // The ward's stone floor (owner batch B1, modelled on the reference room):
+  // interlocking masonry in 8-fine-pixel columns — each column carries an 11px
+  // tall block over a 3px short block, and every second column is shifted 8px
+  // down so the courses stagger into one another the way the reference does.
+  // The lattice is baked on a TORUS (48x48 fine pixels = 3x3 tiles), so every
+  // seam and block that crosses a tile edge continues on the opposite edge: a
+  // copy placed beside itself meshes with no seam, the room floor reads as one
+  // continuous paved surface, and no tile grid is ever visible. Per tile,
+  // blitTile paints the 16x16 cell chosen by (gx mod 3, gy mod 3). The
+  // continuous tone overlay on top drifts over several tiles, so even the 3x3
+  // repeat is hard to spot.
+  const BOND_PX = 16, BOND_N = 3;
+  let bondKey = null, bondTex = null;
   function rgbOf(hex){ return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)]; }
   function mixRGB(a, b, t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
-  function cobbleTexture(b){
+  function bondTexture(b){
    const key = b.floor + "|" + b.floor2;
-   if(cobbleKey === key && cobbleTex) return cobbleTex;
-   const S = COBBLE_PX * COBBLE_N;             // 48x48 fine pixels = 3x3 tiles
+   if(bondKey === key && bondTex) return bondTex;
+   const S = BOND_PX * BOND_N;             // 48x48 fine pixels = 3x3 tiles
    const c = document.createElement("canvas");
    c.width = S; c.height = S;
    const cc = c.getContext("2d");
    const img = cc.createImageData(S, S);
    const d = img.data;
    const floorA = rgbOf(b.floor), floorB = rgbOf(b.floor2);
-   const joint = mixRGB(mixRGB(floorB, [13,18,24], 0.55), [0,0,0], 0.10);
-   // the stone field: centres, sizes, wobble and per-stone tone are hashed, so
-   // the same palette always bakes the same pattern
-   const stones = [];
-   for(let i = 0; i < 10; i++){
-    stones.push({
-     x: hash3(i, 7, 901) * S,
-     y: hash3(i, 13, 903) * S,
-     rx: 6.6 + hash3(i, 17, 905) * 4.6,
-     ry: 6.0 + hash3(i, 19, 907) * 4.2,
-     f: 2 + Math.floor(hash3(i, 23, 909) * 3),        // wobble frequency
-     p1: hash3(i, 29, 911) * 6.2832,
-     p2: hash3(i, 31, 913) * 6.2832,
-     a1: 0.10 + hash3(i, 37, 915) * 0.12,
-     a2: 0.05 + hash3(i, 41, 917) * 0.08,
-     tone: 0.18 + hash3(i, 43, 919) * 0.64
-    });
-   }
+   const mortar = mixRGB(mixRGB(floorB, [8, 11, 15], 0.72), [0, 0, 0], 0.12);
+   const lit = [214, 226, 236], shade = [5, 7, 10];
+   // The masonry lattice: 8px columns, a 16px course period inside each, and
+   // every second column shifted down 8px so neighbouring courses interlock.
+   // 8 divides 48 and 16 divides 48, so the lattice wraps the torus exactly.
+   const COL_W = 8, ROW_H = 16;
    for(let py = 0; py < S; py++){
     for(let px = 0; px < S; px++){
-     let best = 1e9, bs = null, blx = 0, bly = 0;
-     for(let i = 0; i < stones.length; i++){
-      const st = stones[i];
-      let dx = (px + 0.5) - st.x, dy = (py + 0.5) - st.y;
-      if(dx > S/2) dx -= S; else if(dx < -S/2) dx += S;   // torus wrap
-      if(dy > S/2) dy -= S; else if(dy < -S/2) dy += S;
-      const ang = Math.atan2(dy, dx);
-      const wob = 1 + st.a1*Math.sin(st.f*ang + st.p1) + st.a2*Math.sin((st.f+3)*ang + st.p2);
-      const dS = Math.hypot(dx/(st.rx*wob), dy/(st.ry*wob));
-      if(dS < best){ best = dS; bs = st; blx = dx; bly = dy; }
-     }
-     let col;
-     if(bs && best <= 0.97){
-      // inside a stone: its own family shade, top-left lit / bottom-right shaded
-      const base = mixRGB(floorA, floorB, bs.tone);
-      const relief = -((blx/bs.rx + bly/bs.ry) * 0.09);
-      col = mixRGB(base, relief > 0 ? [200,214,224] : [8,12,16], Math.min(0.75, Math.abs(relief)));
-      if(best > 0.80) col = mixRGB(col, [10,14,18], 0.38);  // darkened rim
-     } else if(bs && best <= 1.0){
-      col = mixRGB(mixRGB(floorA, floorB, bs.tone), [10,14,18], 0.5);  // joint lip
+     const col = (px / COL_W) | 0;              // 0..5 across the torus
+     const lx = px % COL_W;
+     const shift = (col & 1) ? 8 : 0;           // stagger every other column
+     const yy = (py + shift) % ROW_H;           // position in this column's course
+     const period = ((py + shift) / ROW_H) | 0;
+     let col3;
+     // the mortar grid: a seam every 8px across, and two seams per course, so
+     // no seam ever runs unbroken from column to column
+     if(lx === 0 || yy === 0 || yy === 12){
+      col3 = mortar;
      } else {
-      col = joint;
+      // which block owns this pixel: the tall one (course rows 1-11) or the
+      // short one (course rows 13-15). Tone is hashed per block, so every
+      // block in the 3x3 repeat carries its own subtle shade — no two match.
+      const tall = yy <= 11;
+      const slot = tall ? 0 : 1;
+      const tone = hash3(col * 16 + slot, period * 4 + 1, 1201);
+      const base = mixRGB(floorA, floorB, 0.12 + tone * 0.72);
+      if((tall ? yy === 1 : yy === 13) || lx === 1){
+       col3 = mixRGB(base, lit, 0.24);          // lit top / left edge
+      } else if((tall ? yy === 11 : yy === 15) || lx === COL_W - 1){
+       col3 = mixRGB(base, shade, 0.30);        // shadowed bottom / right edge
+      } else {
+       col3 = mixRGB(base, shade, 0.05);        // block body
+      }
      }
-     // fine grain — one hash per pixel, a few units of brightness either way
-     const g = (hash3(px, py, 921) - 0.5) * 9;
+     // fine weathered grain over everything, a few units of brightness either way
+     const g = (hash3(px, py, 1223) - 0.5) * 8;
      const o = (py * S + px) * 4;
-     d[o]   = Math.max(0, Math.min(255, col[0] + g));
-     d[o+1] = Math.max(0, Math.min(255, col[1] + g));
-     d[o+2] = Math.max(0, Math.min(255, col[2] + g));
+     d[o]   = Math.max(0, Math.min(255, col3[0] + g));
+     d[o+1] = Math.max(0, Math.min(255, col3[1] + g));
+     d[o+2] = Math.max(0, Math.min(255, col3[2] + g));
      d[o+3] = 255;
     }
    }
    cc.putImageData(img, 0, 0);
-   cobbleKey = key; cobbleTex = c;
+   bondKey = key; bondTex = c;
    return c;
   }
-  function drawCobbleFloor(ctx, sx, sy, ts, gx, gy, b){
-   const tex = cobbleTexture(b);
-   const cx = (((gx % COBBLE_N) + COBBLE_N) % COBBLE_N) * COBBLE_PX;
-   const cy = (((gy % COBBLE_N) + COBBLE_N) % COBBLE_N) * COBBLE_PX;
+  function drawBondFloor(ctx, sx, sy, ts, gx, gy, b){
+   const tex = bondTexture(b);
+   const cx = (((gx % BOND_N) + BOND_N) % BOND_N) * BOND_PX;
+   const cy = (((gy % BOND_N) + BOND_N) % BOND_N) * BOND_PX;
    ctx.save();
    ctx.imageSmoothingEnabled = false;
-   ctx.drawImage(tex, cx, cy, COBBLE_PX, COBBLE_PX, sx, sy, ts, ts);
+   ctx.drawImage(tex, cx, cy, BOND_PX, BOND_PX, sx, sy, ts, ts);
    ctx.restore();
    // continuous large-scale tone — bilinear per position, so it drifts across
    // tiles without a step; this is what hides the 3x3 repeat from casual view
@@ -304,12 +298,12 @@ const DEATH_LIFE = 460;
   }
  function drawFloorTile(ctx, sx, sy, ts, gx, gy, b){
   const n = hash2(gx,gy), n3 = hash3(gx,gy,31), n4 = hash3(gx,gy,53);
-  if(b.floorStyle === "cobble"){
-   // B2) Seamless cobblestone — the baked 3x3-tile torus pattern above. No
+  if(b.floorStyle === "runningbond"){
+   // B2) Seamless running bond — the baked 3x3-tile torus masonry above. No
    //     slab, no joint frame, no per-tile outline: the pattern's edges
    //     continue into the neighbouring copies, so the floor reads as one
-   //     continuous sheet of stonework and the tile grid is invisible.
-   drawCobbleFloor(ctx, sx, sy, ts, gx, gy, b);
+   //     continuous paved surface and the tile grid is invisible.
+   drawBondFloor(ctx, sx, sy, ts, gx, gy, b);
   } else {
   // A) Continuous-tone shading — floorTone replaces the old (gx+gy)%2 two-tone
   //    flip, so the floor has soft light/dark patches instead of square steps.

@@ -257,9 +257,9 @@ stairs or furniture. Wall growth is LINKED: the `C.WALL_MOSS` climbs are recolou
 (never over braziers). Floors roll fresh growth every generation — within one floor the baked
 blobs are stable — and nothing enters the grid or the run snapshot; a resume re-rolls it
 with the floor, like ground cover. render.js draws the floor blobs after `drawGroundCover`
-and the climbs after the wall pass; a `floorStyle:"cobble"` biome (ward 1) additionally
-paints the seamless baked 3x3-tile torus cobblestone texture instead of per-tile slabs,
-which is what removed the tile grid from the Upper Ruins' floors.
+and the climbs after the wall pass; a `floorStyle:"runningbond"` biome (ward 1)
+additionally paints the seamless baked 3x3-tile torus masonry pattern instead of
+per-tile slabs, which is what removed the tile grid from the Upper Ruins' floors.
 
 ### 3.4 Engine — progression, combat, movement, economy
 
