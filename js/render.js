@@ -365,25 +365,13 @@ const DEATH_LIFE = 460;
 
  function drawWeed(ctx, sx, sy, ts, gx, gy, b, type){
   // Growth follows the biome too: frost ferns and ice crystals in the vault,
-  // thorn tendrils and spore stalks in the blackvein, meadow weeds in the
-  // ruins. Non-ruins families are registered content (con-worldart.js); the
-  // ruins' meadow weeds below stay inline as the fallback family. The ruins'
-  // old flat moss disc and pale-yellow flower are GONE from this set: real
-  // moss is grown as proper organic patches by js/moss.js, so what remains
-  // here reads as grass tufts and mushrooms, never a green square.
+  // thorn tendrils and spore stalks in the blackvein, dry stalks in the
+  // ossuary. Those are registered content (con-worldart.js); a biome that
+  // registers no family gets no weed cover at all. The ruins' inline meadow
+  // blades — the thin single green strokes — are gone: on the paved floor they
+  // read as a stray line of green rather than anything growing.
   const fam = Delve._clutterFamilies && Delve._clutterFamilies[b.clutter];
-  if(fam && fam.weed) return fam.weed(ctx, sx, sy, ts, gx, gy, b, type);
-  ctx.save(); ctx.globalAlpha=0.72;
-  const cx=sx+ts*(0.3+hash3(gx,gy,61)*0.4), cy=sy+ts*(0.35+hash3(gx,gy,67)*0.4), sc=ts/40;
-  switch(type){
-   case 0: ctx.strokeStyle="#4a7c42"; ctx.lineWidth=Math.max(1,sc*1.4); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(cx,cy+sc*7); ctx.quadraticCurveTo(cx+sc*4,cy,cx+sc*6,cy-sc*8); ctx.stroke(); break;
-   case 1: ctx.strokeStyle="#3d6e36"; ctx.lineWidth=Math.max(1,sc*1.2); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(cx-sc*2,cy+sc*6); ctx.quadraticCurveTo(cx-sc*4,cy,cx-sc*7,cy-sc*7); ctx.moveTo(cx+sc*2,cy+sc*6); ctx.quadraticCurveTo(cx+sc*5,cy,cx+sc*8,cy-sc*6); ctx.stroke(); break;
-   case 2: ctx.strokeStyle="#4a7c42"; ctx.lineWidth=Math.max(1,sc*1.2); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(cx,cy+sc*6); ctx.quadraticCurveTo(cx+sc*5,cy+sc*2,cx+sc*3,cy-sc*5); ctx.stroke(); ctx.fillStyle="#5d8a4e"; ctx.beginPath(); ctx.arc(cx+sc*3,cy-sc*5,sc*1.7,0,Math.PI*2); ctx.fill(); break;
-   case 3: ctx.strokeStyle="#3f6d3a"; ctx.lineWidth=Math.max(1,sc*1.0); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(sx+ts*0.1,cy+sc*2); ctx.bezierCurveTo(cx-sc*4,cy-sc*3,cx+sc*4,cy+sc*5,cx+sc*10,cy); ctx.stroke(); ctx.fillStyle="#3f6d3a"; ctx.beginPath(); ctx.ellipse(cx+sc*2,cy-sc*2,sc*3,sc*1.5,-0.5,0,Math.PI*2); ctx.fill(); break;
-   case 4: ctx.fillStyle="#7a5c3a"; ctx.fillRect(cx-sc,cy,sc*2,sc*5); ctx.fillStyle="#c47a3a"; ctx.beginPath(); ctx.ellipse(cx,cy,sc*5,sc*3.5,0,Math.PI,0); ctx.fill(); ctx.fillStyle="rgba(255,240,200,0.6)"; ctx.beginPath(); ctx.arc(cx-sc*1.5,cy-sc*1.5,sc*0.8,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(cx+sc*1.8,cy-sc*1.0,sc*0.7,0,Math.PI*2); ctx.fill(); break;
-   case 5: ctx.lineCap="round"; ctx.lineWidth=Math.max(1,sc*1.3); ctx.strokeStyle="#3f6d4a"; ctx.beginPath(); ctx.moveTo(cx-sc*3,cy+sc*6); ctx.lineTo(cx-sc*4,cy-sc*2); ctx.moveTo(cx+sc*1,cy+sc*6); ctx.lineTo(cx+sc*2,cy-sc*4); ctx.moveTo(cx+sc*4,cy+sc*6); ctx.lineTo(cx+sc*5,cy-sc*1); ctx.stroke(); ctx.strokeStyle="#6ea25c"; ctx.beginPath(); ctx.moveTo(cx-sc*1,cy+sc*6); ctx.lineTo(cx-sc*1,cy-sc*3); ctx.moveTo(cx+sc*3,cy+sc*6); ctx.lineTo(cx+sc*4,cy-sc*3); ctx.stroke(); break;
-  }
-  ctx.restore();
+  if(fam && fam.weed) fam.weed(ctx, sx, sy, ts, gx, gy, b, type);
  }
 
  // Per-tile decoration. The family comes from the biome (`clutter`), so the
@@ -479,17 +467,24 @@ const DEATH_LIFE = 460;
    // sagging course line + jittered verticals: masonry, not a grid
    ctx.strokeStyle=b.wallBrick; ctx.lineWidth=1; ctx.globalAlpha=mood===1?0.55:0.38;
    ctx.beginPath();
-   const sag=(hash3(gx,gy,347)-0.5)*ts*0.10;
+   // One continuous running bond across the whole wall: the course sag and the
+   // head-joint positions are smooth functions of position (not per-tile random
+   // dice), and the joint halves alternate by row. Neighbouring tiles therefore
+   // finish the courses their neighbours start — no wall piece looks turned,
+   // flipped or randomly rotated against the rest of the structure.
+   const sag = Math.sin(gx * 0.9 + gy * 1.7) * ts * 0.03;
    ctx.moveTo(x0+2, midY); ctx.quadraticCurveTo(midX, midY+sag, x1-2, midY);
-   const v1 = x0+(x1-x0)*(0.30+(hash3(gx,gy,349)-0.5)*0.16);
-   const v2 = x0+(x1-x0)*(0.72+(hash3(gx,gy,353)-0.5)*0.16);
-   if(hash3(gx,gy,359)<0.5){ ctx.moveTo(v1,y0+2); ctx.lineTo(v1,midY); ctx.moveTo(v2,y0+2); ctx.lineTo(v2,midY); }
+   const v1 = x0+(x1-x0)*(0.32 + Math.sin(gx * 2.1 + gy * 1.3) * 0.05);
+   const v2 = x0+(x1-x0)*(0.70 + Math.cos(gx * 1.7 + gy * 2.3) * 0.05);
+   const upper = ((gy & 1) === 0);    // running bond: joint halves alternate by row
+   if(upper){ ctx.moveTo(v1,y0+2); ctx.lineTo(v1,midY); ctx.moveTo(v2,y0+2); ctx.lineTo(v2,midY); }
    else { ctx.moveTo(v1,midY); ctx.lineTo(v1,y1-2); ctx.moveTo(v2,midY); ctx.lineTo(v2,y1-2); }
    ctx.stroke(); ctx.globalAlpha=1;
    if(mood===1){
-    const left = hash3(gx,gy,89)<0.5, top = hash3(gx,gy,363)<0.5;
+    // a single shadowed brick, sitting on the same course line as its row
+    const left = ((gx & 1) === 0);
     const bx0 = left? x0+2 : v1+1, bx1 = left? v1-1 : x1-2;
-    const by0 = top? y0+2 : midY+2, by1 = top? midY-1 : y1-2;
+    const by0 = upper? y0+2 : midY+2, by1 = upper? midY-1 : y1-2;
     ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(bx0,by0,bx1-bx0,by1-by0);
     ctx.fillStyle=b.wallBrick; ctx.fillRect(bx0+(bx1-bx0)*0.3, by0-1, (bx1-bx0)*0.25, 2);
    }
@@ -1009,10 +1004,22 @@ const DEATH_LIFE = 460;
   for(let y=0;y<vh+1;y++) for(let x=0;x<vw+1;x++){
    const gx=camX+x, gy=camY+y, t=tileAt(gx,gy);
    if(t!==T.WALL) continue;
-    // layer1 autotiling: a wall with no floor-facing neighbour is deep wall —
-    // never drawn, so buried stone disappears into the void black.
+    // layer1 autotiling: a wall with no open neighbour is deep wall — never
+    // drawn, so buried stone disappears into the void black. The test looks at
+    // all EIGHT neighbours, because a corner tile only touches the room
+    // diagonally, and the map's outer ring is always drawn — so a room that
+    // reaches the map edge is closed off in stone instead of showing a black
+    // gap where its corner or top-side wall should be.
     const open = function(x2,y2){ const t2 = tileAt(x2,y2); return t2 !== null && t2 !== T.WALL && t2 !== T.VOID; };
-    if(!open(gx,gy+1) && !open(gx,gy-1) && !open(gx-1,gy) && !open(gx+1,gy)) continue;
+    const edge = (gx === 0 || gy === 0 || gx === G.grid[0].length - 1 || gy === G.grid.length - 1);
+    let nearOpen = false;
+    for(let ny = -1; ny <= 1 && !nearOpen; ny++){
+     for(let nx = -1; nx <= 1; nx++){
+      if(!nx && !ny) continue;
+      if(open(gx + nx, gy + ny)){ nearOpen = true; break; }
+     }
+    }
+    if(!nearOpen && !edge) continue;
    const sx=x*ts, sy=y*ts;
    if(isTorchTile(gx,gy)){ drawWallTile(ctx,sx,sy,ts,gx,gy,b); drawWallTorch(ctx,sx,sy,ts,b); }
    else blitTile(ctx,gx,gy,sx,sy,ts,b,t);

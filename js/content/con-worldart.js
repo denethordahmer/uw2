@@ -205,71 +205,6 @@ window.Delve = window.Delve || {};
  // ── BIOME GROUND COVER (Batch 16) ───────────────────────────
  // One self-contained drawing per tile; tiles in a cluster never need to line
  // up. Named by BIOMES[n].groundCover, placed by js/ground.js.
- // Upper Ruins — mushroom rings sprouting through a crack in the stone.
- function buildGroundMushroom(){
-  const c=mk(24,24),x=gx(c);
-  // ── the crack in the stone ──
-  // a dark fissure the mushrooms sprout from, with a faint lip of light on
-  // its upper edge so it reads as recessed rather than painted on
-  x.strokeStyle="#12161c"; x.lineWidth=2; x.lineCap="round";
-  x.beginPath(); x.moveTo(3,19); x.quadraticCurveTo(8,17,12,19); x.quadraticCurveTo(16,21,21,19); x.stroke();
-  x.strokeStyle="rgba(232,228,216,0.16)"; x.lineWidth=1;
-  x.beginPath(); x.moveTo(4,17.5); x.quadraticCurveTo(8,15.8,12,17.5); x.quadraticCurveTo(16,19.2,20,17.5); x.stroke();
-  // hairline forks off the main fissure
-  x.globalAlpha=0.65; x.strokeStyle="#181c22"; x.lineWidth=1;
-  x.beginPath(); x.moveTo(10,18.4); x.lineTo(9,15.5); x.moveTo(16,19.4); x.lineTo(17.5,16.8); x.stroke();
-  x.globalAlpha=1;
-  // ── faint green-blue glow pooling at the base ──
-  const glow=x.createRadialGradient(12,19,1,12,19,10);
-  glow.addColorStop(0,"rgba(126,200,176,0.28)");
-  glow.addColorStop(0.6,"rgba(126,200,176,0.10)");
-  glow.addColorStop(1,"rgba(126,200,176,0)");
-  x.fillStyle=glow; x.fillRect(2,9,20,14);
-  // ── mushroom helper: curved cap over a tapering stem ──
-  // (cx, capY) is where the cap sits; scale 1 = the tall one
-  function shroom(cx,capY,s){
-   const w=3.4*s;                       // cap half-width
-   // stem, tapering slightly into the crack
-   x.fillStyle="#7a7058";
-   x.beginPath();
-   x.moveTo(cx-1.7*s,capY+0.5*s);
-   x.lineTo(cx-1.1*s,capY+6.5*s);
-   x.lineTo(cx+1.1*s,capY+6.5*s);
-   x.lineTo(cx+1.7*s,capY+0.5*s);
-   x.closePath(); x.fill();
-   // stem shading: darker at its foot
-   x.fillStyle="rgba(18,22,28,0.35)";
-   x.fillRect(cx-1.1*s,capY+5.2*s,2.2*s,1.3*s);
-   // cap: an ellipse arc, domed with a flat underside
-   x.fillStyle="#e8e4d8";
-   x.beginPath();
-   x.ellipse(cx,capY,w,2.6*s,0,Math.PI,0);
-   x.closePath(); x.fill();
-   // cap rim shadow (underside), then gill hint
-   x.fillStyle="#b8b2a2";
-   x.fillRect(cx-w,capY-0.4*s,2*w,0.7*s);
-   x.fillStyle="rgba(122,112,88,0.5)";
-   x.fillRect(cx-w*0.6,capY+0.1*s,1.2*s,0.5*s);
-   // pale sheen across the top of the cap
-   x.fillStyle="rgba(250,248,240,0.75)";
-   x.beginPath(); x.ellipse(cx-w*0.3,capY-1.1*s,w*0.55,0.7*s,-0.25,0,Math.PI*2); x.fill();
-   // faint freckles
-   x.fillStyle="rgba(122,112,88,0.35)";
-   x.beginPath(); x.arc(cx+w*0.25,capY-1.3*s,0.45*s,0,Math.PI*2); x.fill();
-   x.beginPath(); x.arc(cx-w*0.55,capY-0.6*s,0.35*s,0,Math.PI*2); x.fill();
-  }
-  // ── three mushrooms of different heights, sprouting from the crack ──
-  shroom(8.5,12.6,1.0);    // the tall one, left of centre
-  shroom(14.5,14.6,0.78);  // medium, right
-  shroom(19,17.4,0.5);     // small, far right
-  shroom(4.5,16.2,0.42);   // small, far left
-  // ── tiny sprouts + specks so a cluster reads as spreading ──
-  x.fillStyle="rgba(232,228,216,0.8)";
-  x.fillRect(6,20.5,1,1); x.fillRect(11.5,21,1,1); x.fillRect(17,20,1,1);
-  x.fillStyle="rgba(126,200,176,0.5)";
-  x.fillRect(12.5,20,1,1); x.fillRect(5.5,21,1,1);
-  return c;
- }
  // The Blackvein — blood moss: corruption creeping across the floor.
  function buildGroundMoss(){
   const c=mk(24,24),x=gx(c);
@@ -420,7 +355,6 @@ window.Delve = window.Delve || {};
  reg("prop_bonesFrost", buildBonesIce);
  reg("prop_clusterFrost", buildPropCrystals);
  // Biome ground cover (named by BIOMES[n].groundCover in con-biomes.js).
- reg("ground_mushroom", buildGroundMushroom);
  reg("ground_moss", buildGroundMoss);
  reg("ground_ice", buildGroundIce);
 

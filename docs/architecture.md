@@ -330,7 +330,8 @@ slab whose base colour comes from a smooth value-noise field (`floorTone`, knots
 tiles) instead of a two-tone `(gx+gy)%2` flip — so shade drifts gently across several tiles
 and never steps at a square's edge. The faint joint left between slabs is rounded and only a
 little darker than the slab itself (never the old near-black grout), so the floor reads as
-worn flags rather than a grid. Cracks, puddles, rubble and weeds still break it up. Walls are
+worn flags rather than a grid. Cracks, puddles and rubble still break it up; the thin green
+weed strokes were removed — the ruins registers no weed family. Walls are
 textured stone (§6.15). The **four adjacency highlights** that used to ring the
 player (blue for a walkable neighbour, orange for a monster) were removed by owner request,
 16 Oct — nothing replaces them. The only movement aid left is the single
@@ -958,8 +959,9 @@ save.
   A crit should be felt, not only read.
 
 ### 6.14 Biome ground cover (Batch 16)
-Each biome sprinkles small decorative clusters on the floor — mushrooms in the Upper Ruins,
-blood moss in the Blackvein, frozen puddles in the Frosted Vault. Two or three clusters per
+Each biome sprinkles small decorative clusters on the floor — blood moss in the Blackvein,
+frozen puddles in the Frosted Vault (the Upper Ruins has none; its old mushrooms read as
+growing out of the paving and were removed). Two or three clusters per
 floor, on every floor (boss arenas included). Pure decoration: painted flat, never written
 into the grid, so they cannot block movement, be tapped, or show on the minimap, and they
 stay out of the run snapshot.
@@ -979,10 +981,17 @@ Owner's choice from a four-option menu (soft top-down light, rounded caps, textu
 drop shadows — stone + shadows taken, 16 Oct). All of it lives in `render.js`:
 - **`drawWallTile`** — each tile is its own shade of the biome's stone (`blendHex` against
   near-black by a hash, a few tiles lighter), a soft top-down light gradient tinted by
-  `wallEdge` at the crest, low-contrast sagging course lines + jittered verticals so the
-  masonry textures rather than grids, the biome's `moss` colour creeping over the top edge
-  (moss / lichen / frost, ~45% of tiles, plus the occasional drip), chips and dents, and a
-  warm `torch`-tinted sheen on or beside a brazier tile.
+  `wallEdge` at the crest, low-contrast **running-bond** course lines (the sag and head-joint
+  offsets are smooth functions of position, and the joint halves alternate by row, so
+  neighbouring tiles continue the same courses instead of looking turned or flipped), the
+  biome's `moss` colour creeping over the top edge (moss / lichen / frost, ~45% of tiles,
+  plus the occasional drip), chips and dents, and a warm `torch`-tinted sheen on or beside a
+  brazier tile.
+- **Visibility rule.** A wall is drawn when **any of its eight neighbours** is open (a corner
+  tile only touches the room diagonally), and walls on the map's outer ring are always drawn.
+  This keeps deep buried stone invisible while guaranteeing that a room touching the map edge
+  is closed in stone — no black gaps at corners or along the top side. `genFloor` backs this
+  up by sealing every painted room's one-tile border and the map's outermost ring to `WALL`.
 - **Batch 20 — organic silhouette.** The tile is no longer a full square: it checks its
   four neighbours, and an edge facing open floor is **exposed** — inset a couple of pixels
   over the dark `mortar` base, bowed slightly off straight by a hash, with corners rounded

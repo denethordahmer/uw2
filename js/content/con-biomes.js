@@ -171,8 +171,8 @@ window.Delve = window.Delve || {};
     // "ruins" | "blackvein" | "frost". A ward must name one, or its floors
     // would fall back to the ruins look.
     clutter:"ruins",
-    // Ground-cover sprite (js/ground.js): mushrooms in the ruins.
-    groundCover:"ground_mushroom",
+    // Ground cover: none in the ruins (the old mushroom clusters are gone —
+    // they read as sprouting from the paved stone).
     // Drifting ambience (render.js drawAmbience). vy is tiles per second —
     // negative rises, positive falls. drift is the sideways sway in tiles.
     // type picks the particle look: "dust" | "ember" | "snow".

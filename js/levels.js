@@ -864,6 +864,33 @@ window.Delve = window.Delve || {};
     G.floorData.secretRoom = { falseWallX:w.x, falseWallY:w.y };
    }
   }
+  // Seal the rooms and the map edge. Every painted room's one-tile border is
+  // forced back to stone wherever a later pass chipped it into VOID, and the
+  // map's outermost ring can never be walkable — so a room that reaches the
+  // top (or any) edge of the map is always closed off by wall instead of
+  // running into blank space.
+  all.forEach(function(r){
+   if(!r.painted) return;
+   for(let x = r.left; x <= r.right; x++){
+    if(G.grid[r.top] && G.grid[r.top][x] === T().VOID) G.grid[r.top][x] = T().WALL;
+    if(G.grid[r.bottom] && G.grid[r.bottom][x] === T().VOID) G.grid[r.bottom][x] = T().WALL;
+   }
+   for(let y = r.top; y <= r.bottom; y++){
+    if(G.grid[y] && G.grid[y][r.left] === T().VOID) G.grid[y][r.left] = T().WALL;
+    if(G.grid[y] && G.grid[y][r.right] === T().VOID) G.grid[y][r.right] = T().WALL;
+   }
+  });
+  for(let x = 0; x !== G.gridW; x++){
+   const top = G.grid[0][x], bottom = G.grid[G.gridH-1][x];
+   if(top !== T().VOID && top !== T().WALL) G.grid[0][x] = T().WALL;
+   if(bottom !== T().VOID && bottom !== T().WALL) G.grid[G.gridH-1][x] = T().WALL;
+  }
+  for(let y = 0; y !== G.gridH; y++){
+   const left = G.grid[y][0], right = G.grid[y][G.gridW-1];
+   if(left !== T().VOID && left !== T().WALL) G.grid[y][0] = T().WALL;
+   if(right !== T().VOID && right !== T().WALL) G.grid[y][G.gridW-1] = T().WALL;
+  }
+
   // Biome ground cover (Batch 16) — placed last so it avoids the stairs, shop,
   // chests and monsters this floor has just laid down.
   Delve.placeGroundCover(G);
