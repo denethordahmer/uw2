@@ -243,6 +243,24 @@ called from the end of both `genFloor` and `genBossFloor`. Everything is read at
 so the file has no load-order position of its own — it sits after `levels.js` only to group
 generation code.
 
+**`js/growth.js`**
+`Delve.placeGrowth`, `Delve.drawGrowthFloor`, `Delve.drawGrowthWalls`. The wards' organic growth:
+per-room sporadic spots rolled at the end of `genFloor`/`genBossFloor`, biased to corners and
+wall bases and growing outward, each a random radius between the ward's low/high caps
+(`growth` block on the ward in con-biomes.js — only ward 1 has one so far, so the other wards
+grow none). Each spot bakes once per floor into a wobbled, multi-lobed fine-pixel blob
+(16 px/tile) dressed in the biome's `growthPal` gradient — more shades the bigger the patch —
+with a dithered dark→bright gradient root-to-fringe, a pixel-eroded rim (no straight edges,
+even against walls) and a per-pixel FLOOR-tile clip, so growth never grows over water, doors,
+stairs or furniture. Wall growth is LINKED: the `C.WALL_MOSS` climbs are recoloured from
+`growthPal` and drawn, rotated to face the floor, only on the wall tiles a patch touches
+(never over braziers). Floors roll fresh growth every generation — within one floor the baked
+blobs are stable — and nothing enters the grid or the run snapshot; a resume re-rolls it
+with the floor, like ground cover. render.js draws the floor blobs after `drawGroundCover`
+and the climbs after the wall pass; a `floorStyle:"cobble"` biome (ward 1) additionally
+paints the seamless baked 3x3-tile torus cobblestone texture instead of per-tile slabs,
+which is what removed the tile grid from the Upper Ruins' floors.
+
 ### 3.4 Engine — progression, combat, movement, economy
 
 **`js/traits.js`**
@@ -386,7 +404,6 @@ shadows, spacing) that only overrides the selectors it names — the map canvas 
 tap geometry are untouched by it. Script tags must match §5 exactly.
 **`test.html`** — the test suite, 12 sections (§10). Must be served over http, not opened
 from disk — it uses synchronous XHR.
-**`manifest.webmanifest`** — PWA manifest.
 **`ARCHITECTURE.md`** — this file.
 
 ---

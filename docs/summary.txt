@@ -39,7 +39,7 @@ Hosted on GitHub Pages. Save key: underward_save_v3.
 Everything is authored and managed from Termux on Android.
 
 FOLDERS
-- index.html, test.html, manifest
+- index.html, test.html
 - docs/   (architecture.md, checklist.txt, summary.txt, cp.txt, ground.md,
            ward4.md, ward5.md — project reference, specs and to-do live here)
 - icons/  (icon-192.png, icon-512.png)

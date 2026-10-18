@@ -9,10 +9,20 @@ window.Delve = window.Delve || {};
     // Organic patches (layer1 port): cellular-automaton blobs painted over the
     // floor after the doors are cut. type "grass"|"water"; seed = starting
     // density, nGen = smoothing passes, amount = max fraction of floor claimed.
+    // Grass-tile patches are gone from this ward: moss is now fine-grain decoration
+    // (`moss` below). Water stays as it was until its own polish batch.
     patches:[
-      { type:"grass", seed:0.50, nGen:3, amount:0.30 },
       { type:"water", seed:0.45, nGen:3, amount:0.10 }
     ],
+    // Floor growth (js/growth.js placeGrowth): sporadic organic patches, rolled per
+    // room. roomChance = odds a room grows any; largeArea/largeChance/bigChance
+    // = a large room may instead grow one big patch or two normal ones;
+    // cornerBias + wallBias = where the anchor lands (the remainder is open
+    // floor); sizeMin..sizeMax / bigSizeMin..bigSizeMax = the low and high caps
+    // each patch's radius rolls between. Shades scale with size (owner rule).
+    growth:{ roomChance:0.80, largeArea:40, largeChance:0.55, bigChance:0.25,
+           cornerBias:0.65, wallBias:0.32,
+           sizeMin:0.45, sizeMax:0.95, bigSizeMin:1.15, bigSizeMax:1.9 },
     roomMin:6, roomMax:9,
     roomWMin:4, roomWMax:9, roomHMin:4, roomHMax:9,
     roomMaxDuplicateSize:2, roomSplitArea:80, dungeonSize:26,
@@ -107,11 +117,55 @@ window.Delve = window.Delve || {};
   4: { pillar:"prop_pillarBone",   banner:"prop_shroudOssuary", wallBit:"prop_nicheOssuary", rubble:"prop_rubbleOssuary", bone:"prop_pileOssuary", cluster:"prop_tombOssuary" }
  };
 
+ // ── Pixel-grain art data (Batch 22 heritage; moss now lives in js/growth.js) ───────────
+ // The old MOSS_DESIGNS chunk library was dead data — nothing read it — and
+ // the moss it described was the flat green the owner hated. Deleted: moss
+ // is now grown as real organic patches by js/growth.js, shaped at 16 fine
+ // pixels per tile and dressed in the biome's growthPal gradient (BIOMES[0]).
+ // (the MOSS_DESIGNS array that used to sit here is gone — see above)
+
+ // Wall moss growth: 4 hand-designed climbs, 16x16 fine pixels, drawn with the
+ // BASE (thick, dark) on the row nearest the floor and a stem that meanders up
+ // and branches 2-3 ways toward the top. D = dark, M = mid, L = light tip.
+ // js/growth.js drawGrowthWalls recolours these from the biome's growthPal and turns
+ // each to face the floor tile its patch grows from — walls only ever grow
+ // moss where a floor patch sits against them (the owner's linked rule).
+ C.WALL_MOSS = [
+  [ "..L......L..L...", "..M.....LM.M....", "...M....M..M....", "...M...M..M.....",
+    "....M.MM.M......", "....MMM.M.......", ".....MM.M.......", ".....MMM........",
+    "......MM........", "......MD........", ".....MMD........", ".....MDD........",
+    "....MMDD.M......", "...MMDDDMM......", "..MMDDDDDMM.....", ".MMDDDDDDDDMM..." ],
+  [ ".......L....L...", "......LM...LM...", "......M....M....", ".....M....MM....",
+    ".....MM..MM.....", "......MMMM......", "......MM........", ".....MM.........",
+    ".....M..........", "....MM.....M....", "....MD....MM....", "....MDD..MMD....",
+    "...MMDDDMMD.....", "..MMDDDDDD......", ".MMDDDDDDDMM....", "MMDDDDDDDDDMM..." ],
+  [ "L...L...L...L...", "M...M...M...M...", ".M..M..M...M....", ".M..M..M..M.....",
+    "..M.M.M..M......", "..MMMMM.M.......", "...MMM.M........", "....MMM.........",
+    "....MM..........", ".....MM.........", ".....MD.........", "....MMD.........",
+    "...MMDD.M.......", "..MMDDDMM.......", ".MMDDDDDMMM.....", "MMDDDDDDDDMMM..." ],
+  [ "........L..L....", ".......LM..M....", ".......M..M.....", "......MM.MM.....",
+    "......M.MM......", ".....MMMM.......", ".M...MM.........", ".MM..M..........",
+    "..MMMM..........", "...MM...........", "....MD..........", "....MDD.........",
+    "...MMDDD........", "..MMDDDDM.......", ".MMDDDDDDMMM....", "MMDDDDDDDDDMM..." ]
+ ];
+
  C.BIOMES = [
   { name:"Upper Ruins",
     wall:"#64707c", wallEdge:"#8d99a6", wallBrick:"#3a4248", mortar:"#0b0f14",
-    floor:"#2e3842", floor2:"#283039", moss:"#3f6d55",
+    floor:"#2e3842", floor2:"#283039", moss:"#4f8f63",
     water:"#1e3a4a", torch:"#ffb347", light:"rgba(70,140,255,0.06)",
+    // Seamless floor (owner batch): "cobble" switches this biome onto the baked
+    // 3x3-tile torus cobblestone texture in render.js — the pattern repeats,
+    // but its edges continue into the neighbouring copy, so no tile grid is
+    // visible anywhere; the room floor reads as one sheet of stonework.
+    floorStyle:"cobble",
+    // Linked wall growth: this biome's walls grow moss only where a floor patch
+    // touches them (js/growth.js drawGrowthWalls), instead of the old flat trim.
+    growthLinked:true,
+    // The moss gradient, dark root → bright growing tip (the owner's
+    // brighter-green pick). js/growth.js spreads a patch's shades across it:
+    // small patches take a couple, big ones nearly all.
+    growthPal:["#2b5340","#356d4a","#4f8f63","#74b584","#97d3a3"],
     // Decoration family for floor tiles (render.js drawClutter/drawWeed):
     // "ruins" | "blackvein" | "frost". A ward must name one, or its floors
     // would fall back to the ruins look.

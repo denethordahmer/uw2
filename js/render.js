@@ -98,7 +98,14 @@ const DEATH_LIFE = 460;
    // organic-patch colours (levels.js patches): a ward can restyle its grass
    // and water overlays as pure data — snow instead of moss, ice instead of water
    patchGrass: b.patchGrass || b.moss || "#3f6d55",
-   patchWater: b.patchWater || b.water || "#1e3a4a"
+   patchWater: b.patchWater || b.water || "#1e3a4a",
+   // Seamless floor + linked growth (js/growth.js). floorStyle "cobble" = the baked
+   // 3x3 torus cobblestone pattern instead of per-tile slabs; growthLinked = the
+   // walls grow growth only where a floor patch touches them; growthPal = the
+   // biome's locked green gradient (dark root → bright tip).
+   floorStyle: b.floorStyle || null,
+   growthLinked: !!b.growthLinked,
+   growthPal: b.growthPal || null
   };
  }
 
@@ -198,8 +205,112 @@ const DEATH_LIFE = 460;
   const top = a + (b - a) * fx, bot = c + (d - c) * fx;
   return top + (bot - top) * fy;
  }
+
+  // ── SEAMLESS COBBLE FLOOR ─────────────────────────────────────
+  // The baked 3x3-tile cobblestone pattern (owner batch). Stone centres are
+  // hashed on a TORUS, so every stone, joint and grain that crosses a tile
+  // edge continues on the opposite edge — a copy placed beside itself meshes
+  // with no seam, and the room floor reads as one continuous sheet of
+  // stonework with no visible tile grid. Per tile, blitTile just paints the
+  // 16x16 fine-pixel cell chosen by (gx mod 3, gy mod 3). The continuous tone
+  // overlay on top drifts over several tiles, so even the 3x3 repeat is hard
+  // to spot. Low-contrast on purpose: the moss is the interesting green.
+  const COBBLE_PX = 16, COBBLE_N = 3;
+  let cobbleKey = null, cobbleTex = null;
+  function rgbOf(hex){ return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)]; }
+  function mixRGB(a, b, t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+  function cobbleTexture(b){
+   const key = b.floor + "|" + b.floor2;
+   if(cobbleKey === key && cobbleTex) return cobbleTex;
+   const S = COBBLE_PX * COBBLE_N;             // 48x48 fine pixels = 3x3 tiles
+   const c = document.createElement("canvas");
+   c.width = S; c.height = S;
+   const cc = c.getContext("2d");
+   const img = cc.createImageData(S, S);
+   const d = img.data;
+   const floorA = rgbOf(b.floor), floorB = rgbOf(b.floor2);
+   const joint = mixRGB(mixRGB(floorB, [13,18,24], 0.55), [0,0,0], 0.10);
+   // the stone field: centres, sizes, wobble and per-stone tone are hashed, so
+   // the same palette always bakes the same pattern
+   const stones = [];
+   for(let i = 0; i < 10; i++){
+    stones.push({
+     x: hash3(i, 7, 901) * S,
+     y: hash3(i, 13, 903) * S,
+     rx: 6.6 + hash3(i, 17, 905) * 4.6,
+     ry: 6.0 + hash3(i, 19, 907) * 4.2,
+     f: 2 + Math.floor(hash3(i, 23, 909) * 3),        // wobble frequency
+     p1: hash3(i, 29, 911) * 6.2832,
+     p2: hash3(i, 31, 913) * 6.2832,
+     a1: 0.10 + hash3(i, 37, 915) * 0.12,
+     a2: 0.05 + hash3(i, 41, 917) * 0.08,
+     tone: 0.18 + hash3(i, 43, 919) * 0.64
+    });
+   }
+   for(let py = 0; py < S; py++){
+    for(let px = 0; px < S; px++){
+     let best = 1e9, bs = null, blx = 0, bly = 0;
+     for(let i = 0; i < stones.length; i++){
+      const st = stones[i];
+      let dx = (px + 0.5) - st.x, dy = (py + 0.5) - st.y;
+      if(dx > S/2) dx -= S; else if(dx < -S/2) dx += S;   // torus wrap
+      if(dy > S/2) dy -= S; else if(dy < -S/2) dy += S;
+      const ang = Math.atan2(dy, dx);
+      const wob = 1 + st.a1*Math.sin(st.f*ang + st.p1) + st.a2*Math.sin((st.f+3)*ang + st.p2);
+      const dS = Math.hypot(dx/(st.rx*wob), dy/(st.ry*wob));
+      if(dS < best){ best = dS; bs = st; blx = dx; bly = dy; }
+     }
+     let col;
+     if(bs && best <= 0.97){
+      // inside a stone: its own family shade, top-left lit / bottom-right shaded
+      const base = mixRGB(floorA, floorB, bs.tone);
+      const relief = -((blx/bs.rx + bly/bs.ry) * 0.09);
+      col = mixRGB(base, relief > 0 ? [200,214,224] : [8,12,16], Math.min(0.75, Math.abs(relief)));
+      if(best > 0.80) col = mixRGB(col, [10,14,18], 0.38);  // darkened rim
+     } else if(bs && best <= 1.0){
+      col = mixRGB(mixRGB(floorA, floorB, bs.tone), [10,14,18], 0.5);  // joint lip
+     } else {
+      col = joint;
+     }
+     // fine grain — one hash per pixel, a few units of brightness either way
+     const g = (hash3(px, py, 921) - 0.5) * 9;
+     const o = (py * S + px) * 4;
+     d[o]   = Math.max(0, Math.min(255, col[0] + g));
+     d[o+1] = Math.max(0, Math.min(255, col[1] + g));
+     d[o+2] = Math.max(0, Math.min(255, col[2] + g));
+     d[o+3] = 255;
+    }
+   }
+   cc.putImageData(img, 0, 0);
+   cobbleKey = key; cobbleTex = c;
+   return c;
+  }
+  function drawCobbleFloor(ctx, sx, sy, ts, gx, gy, b){
+   const tex = cobbleTexture(b);
+   const cx = (((gx % COBBLE_N) + COBBLE_N) % COBBLE_N) * COBBLE_PX;
+   const cy = (((gy % COBBLE_N) + COBBLE_N) % COBBLE_N) * COBBLE_PX;
+   ctx.save();
+   ctx.imageSmoothingEnabled = false;
+   ctx.drawImage(tex, cx, cy, COBBLE_PX, COBBLE_PX, sx, sy, ts, ts);
+   ctx.restore();
+   // continuous large-scale tone — bilinear per position, so it drifts across
+   // tiles without a step; this is what hides the 3x3 repeat from casual view
+   const t = floorTone(gx, gy);
+   ctx.save();
+   ctx.globalAlpha = 0.05 + Math.abs(t - 0.5) * 0.22;
+   ctx.fillStyle = t < 0.5 ? "#060a0e" : "#9fb2c4";
+   ctx.fillRect(sx, sy, ts, ts);
+   ctx.restore();
+  }
  function drawFloorTile(ctx, sx, sy, ts, gx, gy, b){
   const n = hash2(gx,gy), n3 = hash3(gx,gy,31), n4 = hash3(gx,gy,53);
+  if(b.floorStyle === "cobble"){
+   // B2) Seamless cobblestone — the baked 3x3-tile torus pattern above. No
+   //     slab, no joint frame, no per-tile outline: the pattern's edges
+   //     continue into the neighbouring copies, so the floor reads as one
+   //     continuous sheet of stonework and the tile grid is invisible.
+   drawCobbleFloor(ctx, sx, sy, ts, gx, gy, b);
+  } else {
   // A) Continuous-tone shading — floorTone replaces the old (gx+gy)%2 two-tone
   //    flip, so the floor has soft light/dark patches instead of square steps.
   let slabCol = blendHex(b.floor, b.floor2, floorTone(gx, gy));
@@ -242,6 +353,7 @@ const DEATH_LIFE = 460;
    }
    ctx.stroke(); ctx.restore();
   }
+  } // end of the flagstone branch — cobble floors return early above
   if(n4 < 0.03){
    ctx.save(); ctx.globalAlpha=0.55;
    const px=sx+ts*(0.25+hash3(gx,gy,99)*0.4), py=sy+ts*(0.35+hash3(gx,gy,101)*0.3), pr=ts*(0.10+hash3(gx,gy,103)*0.08);
@@ -261,7 +373,10 @@ const DEATH_LIFE = 460;
   // Growth follows the biome too: frost ferns and ice crystals in the vault,
   // thorn tendrils and spore stalks in the blackvein, meadow weeds in the
   // ruins. Non-ruins families are registered content (con-worldart.js); the
-  // ruins' meadow weeds below stay inline as the fallback family.
+  // ruins' meadow weeds below stay inline as the fallback family. The ruins'
+  // old flat moss disc and pale-yellow flower are GONE from this set: real
+  // moss is grown as proper organic patches by js/moss.js, so what remains
+  // here reads as grass tufts and mushrooms, never a green square.
   const fam = Delve._clutterFamilies && Delve._clutterFamilies[b.clutter];
   if(fam && fam.weed) return fam.weed(ctx, sx, sy, ts, gx, gy, b, type);
   ctx.save(); ctx.globalAlpha=0.72;
@@ -269,10 +384,10 @@ const DEATH_LIFE = 460;
   switch(type){
    case 0: ctx.strokeStyle="#4a7c42"; ctx.lineWidth=Math.max(1,sc*1.4); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(cx,cy+sc*7); ctx.quadraticCurveTo(cx+sc*4,cy,cx+sc*6,cy-sc*8); ctx.stroke(); break;
    case 1: ctx.strokeStyle="#3d6e36"; ctx.lineWidth=Math.max(1,sc*1.2); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(cx-sc*2,cy+sc*6); ctx.quadraticCurveTo(cx-sc*4,cy,cx-sc*7,cy-sc*7); ctx.moveTo(cx+sc*2,cy+sc*6); ctx.quadraticCurveTo(cx+sc*5,cy,cx+sc*8,cy-sc*6); ctx.stroke(); break;
-   case 2: ctx.strokeStyle="#4a7c42"; ctx.lineWidth=Math.max(1,sc*1.2); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(cx,cy+sc*6); ctx.lineTo(cx,cy-sc*4); ctx.stroke(); ctx.fillStyle="#c8b88a"; for(let i=0;i<4;i++){const a=(i/4)*Math.PI*2; ctx.beginPath(); ctx.ellipse(cx+Math.cos(a)*sc*3,cy-sc*4+Math.sin(a)*sc*3,sc*2.5,sc*1.2,a,0,Math.PI*2); ctx.fill();} break;
+   case 2: ctx.strokeStyle="#4a7c42"; ctx.lineWidth=Math.max(1,sc*1.2); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(cx,cy+sc*6); ctx.quadraticCurveTo(cx+sc*5,cy+sc*2,cx+sc*3,cy-sc*5); ctx.stroke(); ctx.fillStyle="#5d8a4e"; ctx.beginPath(); ctx.arc(cx+sc*3,cy-sc*5,sc*1.7,0,Math.PI*2); ctx.fill(); break;
    case 3: ctx.strokeStyle="#3f6d3a"; ctx.lineWidth=Math.max(1,sc*1.0); ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(sx+ts*0.1,cy+sc*2); ctx.bezierCurveTo(cx-sc*4,cy-sc*3,cx+sc*4,cy+sc*5,cx+sc*10,cy); ctx.stroke(); ctx.fillStyle="#3f6d3a"; ctx.beginPath(); ctx.ellipse(cx+sc*2,cy-sc*2,sc*3,sc*1.5,-0.5,0,Math.PI*2); ctx.fill(); break;
    case 4: ctx.fillStyle="#7a5c3a"; ctx.fillRect(cx-sc,cy,sc*2,sc*5); ctx.fillStyle="#c47a3a"; ctx.beginPath(); ctx.ellipse(cx,cy,sc*5,sc*3.5,0,Math.PI,0); ctx.fill(); ctx.fillStyle="rgba(255,240,200,0.6)"; ctx.beginPath(); ctx.arc(cx-sc*1.5,cy-sc*1.5,sc*0.8,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(cx+sc*1.8,cy-sc*1.0,sc*0.7,0,Math.PI*2); ctx.fill(); break;
-   case 5: ctx.fillStyle=b.moss; ctx.globalAlpha=0.45; ctx.beginPath(); ctx.arc(cx,cy,sc*5,0,Math.PI*2); ctx.fill(); ctx.fillStyle="#2e5c2a"; ctx.globalAlpha=0.35; ctx.beginPath(); ctx.arc(cx+sc*2,cy-sc*1,sc*3,0,Math.PI*2); ctx.fill(); break;
+   case 5: ctx.lineCap="round"; ctx.lineWidth=Math.max(1,sc*1.3); ctx.strokeStyle="#3f6d4a"; ctx.beginPath(); ctx.moveTo(cx-sc*3,cy+sc*6); ctx.lineTo(cx-sc*4,cy-sc*2); ctx.moveTo(cx+sc*1,cy+sc*6); ctx.lineTo(cx+sc*2,cy-sc*4); ctx.moveTo(cx+sc*4,cy+sc*6); ctx.lineTo(cx+sc*5,cy-sc*1); ctx.stroke(); ctx.strokeStyle="#6ea25c"; ctx.beginPath(); ctx.moveTo(cx-sc*1,cy+sc*6); ctx.lineTo(cx-sc*1,cy-sc*3); ctx.moveTo(cx+sc*3,cy+sc*6); ctx.lineTo(cx+sc*4,cy-sc*3); ctx.stroke(); break;
   }
   ctx.restore();
  }
@@ -385,9 +500,11 @@ const DEATH_LIFE = 460;
     ctx.fillStyle=b.wallBrick; ctx.fillRect(bx0+(bx1-bx0)*0.3, by0-1, (bx1-bx0)*0.25, 2);
    }
   }
-  // the biome's own growth creeping over the top edge: moss in the ruins,
-  // lichen in the Blackvein, frost in the Vault — colour comes from b.moss
-  if(hash3(gx,gy,171) < 0.45){
+  // the biome's own growth creeping over the top edge: lichen in the
+  // Blackvein, frost in the Vault — colour comes from b.moss. A growthLinked
+  // biome (the Upper Ruins) skips this: its walls only grow moss where a
+  // floor patch touches them, painted by js/growth.js drawGrowthWalls instead.
+  if(!b.growthLinked && hash3(gx,gy,171) < 0.45){
    ctx.save(); ctx.globalAlpha = mood===2 ? 0.40 : 0.28;
    ctx.fillStyle = b.moss;
    const blobN = 2 + Math.floor(hash3(gx,gy,173)*3);
@@ -888,6 +1005,8 @@ const DEATH_LIFE = 460;
   }
   // biome ground cover, flat on the floor before any prop sits over it
   Delve.drawGroundCover(ctx,camX,camY,vw,vh,ts);
+  // ward growth patches (js/growth.js) — organic spots on top of the floor pattern
+  Delve.drawGrowthFloor(ctx,camX,camY,vw,vh,ts);
   // floor props first, so wall edges and their shadows fall over the bases
   drawDecor(ctx,camX,camY,vw,vh,ts,"floor");
   // wall drop shadows, onto the floor below/right before the walls themselves
@@ -909,6 +1028,8 @@ const DEATH_LIFE = 460;
     ctx.save(); ctx.globalAlpha=pulse*0.55; ctx.fillStyle="#7ee0ff"; ctx.beginPath(); ctx.arc(sx+ts*0.5,sy+ts*0.5,ts*0.15,0,Math.PI*2); ctx.fill(); ctx.restore();
    }
   }
+  // wall growth climbs (js/growth.js) — only on walls a floor patch grows against
+  Delve.drawGrowthWalls(ctx,camX,camY,vw,vh,ts);
   // hanging props, over the wall art. Drawn before the entities below, so a boss
   // or monster standing in front of a banner still covers it.
   drawDecor(ctx,camX,camY,vw,vh,ts,"wall");

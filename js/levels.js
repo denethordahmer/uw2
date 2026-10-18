@@ -527,6 +527,8 @@ window.Delve = window.Delve || {};
   // Biome ground cover (Batch 16) — placed after the arena so it avoids the
   // boss and the spawn; read-only decoration, like the props above.
   Delve.placeGroundCover(G);
+  // Ward growth (js/growth.js) — rolled per room after everything else is placed.
+  Delve.placeGrowth(G);
  };
 
  Delve.genFloor = function(){
@@ -858,6 +860,8 @@ window.Delve = window.Delve || {};
   // Biome ground cover (Batch 16) — placed last so it avoids the stairs, shop,
   // chests and monsters this floor has just laid down.
   Delve.placeGroundCover(G);
+  // Ward growth (js/growth.js) — rolled per room after everything else is placed.
+  Delve.placeGrowth(G);
  };
 
  // monster spawn helper: respects safety radius and tile state
