@@ -46,7 +46,7 @@ window.Delve = window.Delve || {};
  if(m) Delve.startCombat(m);
  } else if(cell === T().BOSS){
  if(G.boss && G.boss.x===tx && G.boss.y===ty) Delve.startCombat(G.boss);
- } else if(cell === T().WALL){
+ } else if(cell === T().WALL || cell === T().VOID){
  const fd = G.floorData;
  if(fd && fd.secretRoom && fd.secretRoom.falseWallX===tx && fd.secretRoom.falseWallY===ty){
  g[ty][tx] = T().FLOOR;
@@ -111,7 +111,7 @@ window.Delve = window.Delve || {};
  if(m){ G._path = null; Delve.startCombat(m); }
  } else if(cell === T().BOSS){
  if(G.boss && G.boss.x===tx && G.boss.y===ty){ G._path = null; Delve.startCombat(G.boss); }
- } else if(cell === T().WALL){
+ } else if(cell === T().WALL || cell === T().VOID){
  G._path = null;
  } else if(cell === T().CHEST){
  G._path = null; Delve.openChest(tx, ty);

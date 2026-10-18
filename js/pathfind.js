@@ -31,7 +31,9 @@ window.Delve = window.Delve || {};
       const t = grid[y][x];
       // destination may be a monster — allow it so we can walk up to attack
       if(x === gx && y === gy) return true;
-      return t !== T.WALL;
+      // VOID (the unpainted black beyond the rooms) is solid like WALL.
+      // DOOR and the WATER/GRASS patch tiles are walkable floor.
+      return t !== T.WALL && t !== T.VOID;
     }
 
     const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
@@ -82,9 +84,9 @@ window.Delve = window.Delve || {};
     const next = G._path[0];
     const T = Delve.T, g = G.grid;
 
-    // If next cell is now a monster or wall, abort
+    // If next cell is now a monster, wall or void, abort
     const cell = g[next.y] && g[next.y][next.x];
-    if(cell === T.WALL){
+    if(cell === T.WALL || cell === T.VOID){
       G._path = null;
       return false;
     }

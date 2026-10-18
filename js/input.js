@@ -149,7 +149,7 @@ window.Delve = window.Delve || {};
   }
 
   const cell = g[ty] && g[ty][tx];
-  if(cell === T.WALL){
+  if(cell === T.WALL || cell === T.VOID){
    const fd = G.floorData;
    if(fd && fd.secretRoom &&
       fd.secretRoom.falseWallX === tx && fd.secretRoom.falseWallY === ty){
