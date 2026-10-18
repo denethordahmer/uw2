@@ -6,6 +6,13 @@ window.Delve = window.Delve || {};
 
  C.WARDS = [
   { id:1, name:"Upper Ruins", floors:[1,10], biome:0,
+    // Organic patches (layer1 port): cellular-automaton blobs painted over the
+    // floor after the doors are cut. type "grass"|"water"; seed = starting
+    // density, nGen = smoothing passes, amount = max fraction of floor claimed.
+    patches:[
+      { type:"grass", seed:0.50, nGen:3, amount:0.30 },
+      { type:"water", seed:0.45, nGen:3, amount:0.10 }
+    ],
     roomMin:6, roomMax:9,
     roomWMin:4, roomWMax:9, roomHMin:4, roomHMax:9,
     roomMaxDuplicateSize:2, roomSplitArea:80, dungeonSize:26,
@@ -15,6 +22,11 @@ window.Delve = window.Delve || {};
     lootRarityMult:1 },
 
   { id:2, name:"The Blackvein", floors:[11,20], biome:1,
+    // Organic patches (layer1 port) — dark pools dominate, scraggly tufts rare.
+    patches:[
+      { type:"water", seed:0.50, nGen:3, amount:0.26 },
+      { type:"grass", seed:0.45, nGen:3, amount:0.06 }
+    ],
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
@@ -34,6 +46,11 @@ window.Delve = window.Delve || {};
     } },
 
   { id:3, name:"The Frosted Vault", floors:[21,30], biome:2,
+    // Organic patches (layer1 port) — pale ice sheets with the odd snow drift.
+    patches:[
+      { type:"water", seed:0.50, nGen:3, amount:0.24 },
+      { type:"grass", seed:0.45, nGen:3, amount:0.08 }
+    ],
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
@@ -50,6 +67,11 @@ window.Delve = window.Delve || {};
     } },
 
   { id:4, name:"The Bone Ossuary", floors:[31,40], biome:3,
+    // Organic patches (layer1 port) — bone-dust drifts with murky pools.
+    patches:[
+      { type:"grass", seed:0.50, nGen:3, amount:0.22 },
+      { type:"water", seed:0.42, nGen:3, amount:0.06 }
+    ],
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
@@ -116,6 +138,9 @@ window.Delve = window.Delve || {};
     clutter:"frost",
     // Ground-cover sprite (js/ground.js): frozen puddles in the vault.
     groundCover:"ground_ice",
+    // Organic-patch colours (levels.js patches → render.js): pale ice sheets
+    // and snow drifts instead of generic water/moss.
+    patchWater:"#8fd0e8", patchGrass:"#dceefc",
     // Fine snow falls through the vault and slants sideways as it drops.
     ambient:{ type:"snow", count:22, col:"#eaffff", col2:"#a8e8ff", size:0.05, vy:0.22, drift:0.13, alpha:0.5 } },
   { name:"The Bone Ossuary",
@@ -126,6 +151,8 @@ window.Delve = window.Delve || {};
     clutter:"ossuary",
     // Ground-cover sprite (js/ground.js): scattered bone fragments.
     groundCover:"ground_bone",
+    // Organic-patch colours: bone-dust drifts and murky crimson pools.
+    patchGrass:"#b0a080", patchWater:"#4a1a18",
     // Dust hangs nearly still in the closed halls.
     ambient:{ type:"dust", count:12, col:"#d8cbb0", col2:"#8a7658", size:0.05, vy:-0.03, drift:0.05, alpha:0.30 } }
  ];
