@@ -1,0 +1,39 @@
+name: Unzip and Deploy
+
+on:
+  push:
+    paths:
+      - 'underward.zip'
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip archive
+        run: |
+          # Extract the zip
+          unzip -o underward.zip
+          
+          # Move everything out of the 'underward' folder to the root
+          if [ -d "underward" ]; then
+            cp -r underward/* .
+            cp -r underward/.[!.]* . 2>/dev/null || true
+          fi
+          
+          # Clean up
+          rm -rf underward
+          rm underward.zip
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Auto-deploy from zip upload" || echo "No changes to commit"
+          git push
