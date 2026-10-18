@@ -94,7 +94,11 @@ const DEATH_LIFE = 460;
    moss: b.moss || "#3f6d55", water: b.water || "#1e3a4a", torch: b.torch || "#ffb347",
    light: b.light || "rgba(70,140,255,0.06)",
    clutter: b.clutter || "ruins",     // decoration family for floor tiles
-   ambient: b.ambient || null         // drifting weather, null = none
+   ambient: b.ambient || null,        // drifting weather, null = none
+   // organic-patch colours (levels.js patches): a ward can restyle its grass
+   // and water overlays as pure data — snow instead of moss, ice instead of water
+   patchGrass: b.patchGrass || b.moss || "#3f6d55",
+   patchWater: b.patchWater || b.water || "#1e3a4a"
   };
  }
 
@@ -152,7 +156,7 @@ const DEATH_LIFE = 460;
   const arena = arenaTorches();
   if(arena && arena[gx + "," + gy]) return true;
   const below = tileAt(gx, gy+1);
-  if(below === null || below === Delve.T.WALL) return false;
+  if(below === null || below === Delve.T.WALL || below === Delve.T.VOID) return false;
   return hash3(gx, gy, 137) < 0.04;
  }
  function blitTile(ctx, gx, gy, sx, sy, ts, b, t){
@@ -166,6 +170,9 @@ const DEATH_LIFE = 460;
   if(t !== Delve.T.WALL){
    drawFloorTile(cx, 0, 0, ts, gx, gy, b);
    if(t === Delve.T.STAIR) drawStairs(cx, 0, 0, ts, b);
+   if(t === Delve.T.DOOR) drawDoorTile(cx, 0, 0, ts, b);
+   if(t === Delve.T.WATER) drawWaterPatch(cx, 0, 0, ts, gx, gy, b);
+   if(t === Delve.T.GRASS) drawGrassPatch(cx, 0, 0, ts, gx, gy, b);
   } else {
    drawWallTile(cx, 0, 0, ts, gx, gy, b);
   }
@@ -314,7 +321,7 @@ const DEATH_LIFE = 460;
   const n=hash2(gx,gy), n2=hash3(gx,gy,11), n3=hash3(gx,gy,23);
   const mood = n2<0.18?1:n2<0.38?2:n2<0.52?3:0;
   // exposure: the neighbour exists and is not a wall (out of grid = never seen)
-  const exposed = function(x,y){ const t = tileAt(x,y); return t !== null && t !== Delve.T.WALL; };
+  const exposed = function(x,y){ const t = tileAt(x,y); return t !== null && t !== Delve.T.WALL && t !== Delve.T.VOID; };
   const eT = exposed(gx,gy-1), eB = exposed(gx,gy+1), eL = exposed(gx-1,gy), eR = exposed(gx+1,gy);
   const ins = Math.max(1.5, ts*0.045);
   const x0 = sx+(eL?ins:0), y0 = sy+(eT?ins:0);
@@ -432,14 +439,14 @@ const DEATH_LIFE = 460;
    const gx=camX+x, gy=camY+y;
    if(tileAt(gx,gy) !== T.WALL) continue;
    const below = tileAt(gx, gy+1);
-   if(below !== null && below !== T.WALL){
+   if(below !== null && below !== T.WALL && below !== T.VOID){
     const sy=(y+1)*ts;
     const g=ctx.createLinearGradient(0,sy,0,sy+ts*0.5);
     g.addColorStop(0,"rgba(4,6,10,0.34)"); g.addColorStop(1,"rgba(4,6,10,0)");
     ctx.fillStyle=g; ctx.fillRect(x*ts, sy, ts, ts*0.5);
    }
    const right = tileAt(gx+1, gy);
-   if(right !== null && right !== T.WALL){
+   if(right !== null && right !== T.WALL && right !== T.VOID){
     const sx=(x+1)*ts;
     const g2=ctx.createLinearGradient(sx,0,sx+ts*0.35,0);
     g2.addColorStop(0,"rgba(4,6,10,0.26)"); g2.addColorStop(1,"rgba(4,6,10,0)");
@@ -449,6 +456,76 @@ const DEATH_LIFE = 460;
  }
 
  // ── TORCH ────────────────────────────────────────────────────
+ // ── DOOR + PATCH TILES (layer1 port) ─────────────────────────
+ // A door is a single tile in the shared wall between two rooms: a recessed
+ // timber set into the stone. WATER and GRASS are organic cellular-automaton
+ // blobs (levels.js), so each tile just draws its own deterministic slice;
+ // colours come from the biome's patch palette.
+ function drawDoorTile(ctx, sx, sy, ts, b){
+  ctx.save();
+  ctx.fillStyle = b.wallBrick || "#3a4248";
+  ctx.fillRect(sx, sy, ts, ts);
+  const m = Math.max(2, ts * 0.14);
+  ctx.fillStyle = "#5a4630";
+  ctx.beginPath(); ctx.roundRect(sx + m, sy + m, ts - m*2, ts - m*2, ts*0.12); ctx.fill();
+  ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = Math.max(1, ts*0.03);
+  for(let i = 1; i <= 2; i++){
+   const px = sx + m + (ts - m*2) * i / 3;
+   ctx.beginPath(); ctx.moveTo(px, sy + m + ts*0.05); ctx.lineTo(px, sy + ts - m - ts*0.05); ctx.stroke();
+  }
+  ctx.fillStyle = "#c8a84a";
+  ctx.beginPath(); ctx.arc(sx + ts*0.68, sy + ts*0.52, Math.max(1, ts*0.05), 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+ }
+
+ function drawWaterPatch(ctx, sx, sy, ts, gx, gy, b){
+  ctx.save();
+  ctx.fillStyle = b.patchWater;
+  ctx.fillRect(sx, sy, ts, ts);
+  // darker rim where this water tile borders plain floor
+  const isWater = function(x, y){ return tileAt(x, y) === Delve.T.WATER; };
+  const rim = Math.max(1, ts * 0.06);
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  if(!isWater(gx, gy - 1)) ctx.fillRect(sx, sy, ts, rim);
+  if(!isWater(gx, gy + 1)) ctx.fillRect(sx, sy + ts - rim, ts, rim);
+  if(!isWater(gx - 1, gy)) ctx.fillRect(sx, sy, rim, ts);
+  if(!isWater(gx + 1, gy)) ctx.fillRect(sx + ts - rim, sy, rim, ts);
+  // a couple of gentle glints
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  const g1x = sx + ts * (0.2 + hash2(gx, gy) * 0.5), g1y = sy + ts * (0.25 + hash3(gx, gy, 401) * 0.4);
+  ctx.beginPath(); ctx.ellipse(g1x, g1y, ts * 0.10, ts * 0.05, 0, 0, Math.PI*2); ctx.fill();
+  if(hash3(gx, gy, 409) < 0.5){
+   ctx.beginPath();
+   ctx.ellipse(sx + ts * (0.55 + hash3(gx, gy, 419) * 0.3), sy + ts * (0.6 + hash3(gx, gy, 421) * 0.25), ts * 0.07, ts * 0.035, 0, 0, Math.PI*2);
+   ctx.fill();
+  }
+  ctx.restore();
+ }
+
+ function drawGrassPatch(ctx, sx, sy, ts, gx, gy, b){
+  ctx.save();
+  // turf tint over the floor slab
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = b.patchGrass;
+  ctx.beginPath(); ctx.roundRect(sx + ts*0.04, sy + ts*0.04, ts*0.92, ts*0.92, ts*0.18); ctx.fill();
+  ctx.globalAlpha = 1;
+  // blades
+  const blades = 3 + Math.floor(hash3(gx, gy, 431) * 4);
+  ctx.strokeStyle = b.patchGrass; ctx.lineCap = "round";
+  for(let i = 0; i < blades; i++){
+   const bx = sx + ts * (0.15 + hash3(gx, gy, 433 + i) * 0.7);
+   const by = sy + ts * (0.30 + hash3(gx, gy, 443 + i) * 0.5);
+   const hgt = ts * (0.10 + hash3(gx, gy, 453 + i) * 0.14);
+   ctx.lineWidth = Math.max(1, ts * 0.035);
+   ctx.beginPath();
+   ctx.moveTo(bx, by);
+   ctx.quadraticCurveTo(bx + ts*0.03, by - hgt*0.6, bx + ts*(hash3(gx, gy, 463 + i) - 0.5)*0.12, by - hgt);
+   ctx.stroke();
+  }
+  ctx.restore();
+ }
+
  let torchFrame=0;
  function drawWallTorch(ctx, sx, sy, ts, b){
   const flicker=[{h:0.22,w:0.10,a:0.90},{h:0.26,w:0.12,a:1.00},{h:0.20,w:0.09,a:0.80}][torchFrame];
@@ -754,9 +831,12 @@ const DEATH_LIFE = 460;
   const seen = function(x,y){ return vis[y] && vis[y][x]; };
   for(let y=0;y<gh;y++) for(let x=0;x<gw;x++){
    const t = G.grid[y][x];
-   if(t === T.WALL || !seen(x,y)) continue;
+   if(t === T.WALL || t === T.VOID || !seen(x,y)) continue;
    let col = "#2a333d";
    if(t === T.STAIR) col = "#2ad0b0";
+    else if(t === T.DOOR) col = "#4a5568";
+    else if(t === T.WATER) col = "#2a4a6a";
+    else if(t === T.GRASS) col = "#2e5238";
    else if(t === T.GOLD) col = "#d9a11f";
    else if(t === T.CHEST) col = "#c9971f";
    else if(t === T.BARREL) col = "#7a5c3a";
@@ -800,7 +880,8 @@ const DEATH_LIFE = 460;
   // floors
   for(let y=0;y<vh+1;y++) for(let x=0;x<vw+1;x++){
    const gx=camX+x, gy=camY+y, t=tileAt(gx,gy);
-   if(t===null||t===T.WALL) continue;
+   if(t===T.VOID){ ctx.fillStyle="#000000"; ctx.fillRect(x*ts,y*ts,ts,ts); continue; }   // layer1: no room = pure black
+    if(t===null||t===T.WALL) continue;
    const sx=x*ts, sy=y*ts;
    blitTile(ctx,gx,gy,sx,sy,ts,b,t);
    if(t===T.FLOOR) drawClutter(ctx,sx,sy,ts,gx,gy,b);
@@ -815,6 +896,10 @@ const DEATH_LIFE = 460;
   for(let y=0;y<vh+1;y++) for(let x=0;x<vw+1;x++){
    const gx=camX+x, gy=camY+y, t=tileAt(gx,gy);
    if(t!==T.WALL) continue;
+    // layer1 autotiling: a wall with no floor-facing neighbour is deep wall —
+    // never drawn, so buried stone disappears into the void black.
+    const open = function(x2,y2){ const t2 = tileAt(x2,y2); return t2 !== null && t2 !== T.WALL && t2 !== T.VOID; };
+    if(!open(gx,gy+1) && !open(gx,gy-1) && !open(gx-1,gy) && !open(gx+1,gy)) continue;
    const sx=x*ts, sy=y*ts;
    if(isTorchTile(gx,gy)){ drawWallTile(ctx,sx,sy,ts,gx,gy,b); drawWallTorch(ctx,sx,sy,ts,b); }
    else blitTile(ctx,gx,gy,sx,sy,ts,b,t);

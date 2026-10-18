@@ -7,29 +7,203 @@ window.Delve = window.Delve || {};
  function leq(a,b){ return Math.min(a,b) === a; } // a <= b
  function prob(p){ var r = Math.random(); return Math.min(r,p) === r; } // r <= p
 
- // room placement: returns true on success, sets room.x/y to top-left
- function placeRoom(G, room){
-  let attempts = 200;
-  while(attempts !== 0){
-   attempts = attempts - 1;
-   const w = room.w, h = room.h;
-   const x = Delve.rng(1, G.gridW - w - 2);
-   const y = Delve.rng(1, G.gridH - h - 2);
-   let ok = true;
-   for(let yy = y-1; yy !== y+h+1; yy++){
-    for(let xx = x-1; xx !== x+w+1; xx++){
-     if(G.grid[yy] && G.grid[yy][xx] === T().FLOOR){ ok = false; break; }
-    }
-    if(!ok) break;
-   }
-   if(!ok) continue;
-   room.x = x; room.y = y;
-   for(let yy = y; yy !== y+h; yy++){
-    for(let xx = x; xx !== x+w; xx++) G.grid[yy][xx] = T().FLOOR;
-   }
-   return true;
+ // ── BSP + room graph machinery (layer1 port) ────────────────
+ // A faithful port of the source's generator: rooms come from recursively
+ // partitioning the map block (RegularLevel.split), neighbours are rooms that
+ // share a wall line of 3+ tiles, and connections are routed over that graph.
+ //
+ // CONVENTION (the off-by-one the port notes warn about): room rects are
+ // {left, top, right, bottom} with right/bottom INCLUSIVE when painting, while
+ // the width/height used by every split rule is the exclusive measure
+ // right-left / bottom-top — exactly how the Java source's width() behaves.
+ // Painted span is [left..right]; interior is [left+1..right-1].
+
+ const BSP_MIN = 7, BSP_MAX = 9;
+
+ function splitRect(r, out){
+  const w = r.right - r.left, h = r.bottom - r.top;
+  if(w > BSP_MAX && h < BSP_MIN){ splitAt(r, "v", out); return; }
+  if(h > BSP_MAX && w < BSP_MIN){ splitAt(r, "h", out); return; }
+  if(w <= BSP_MAX && h <= BSP_MAX && Math.random() <= 49 / (w * h)){ out.push(r); return; }
+  if(w < BSP_MIN || h < BSP_MIN){ out.push(r); return; }
+  // default: wider rects split vertically more often (aspect-weighted)
+  if(Math.random() < (w - 2) / (w + h - 4)) splitAt(r, "v", out);
+  else splitAt(r, "h", out);
+ }
+
+ function splitAt(r, dir, out){
+  if(dir === "v"){
+   if(r.right - 3 <= r.left + 3){ out.push(r); return; }   // too tight to split
+   const x = Delve.rng(r.left + 3, r.right - 3);
+   // children SHARE column x — both paint WALL there, which is the separation
+   splitRect({ left:r.left, top:r.top, right:x, bottom:r.bottom }, out);
+   splitRect({ left:x, top:r.top, right:r.right, bottom:r.bottom }, out);
+  } else {
+   if(r.bottom - 3 <= r.top + 3){ out.push(r); return; }
+   const y = Delve.rng(r.top + 3, r.bottom - 3);
+   splitRect({ left:r.left, top:r.top, right:r.right, bottom:y }, out);
+   splitRect({ left:r.left, top:y, right:r.right, bottom:r.bottom }, out);
   }
-  return false;
+ }
+
+ // Two rooms are neighbours when their bounding rects meet in a shared wall
+ // line of at least 3 tiles. Corner-touching rooms never get a door.
+ function intersectLine(a, b){
+  if(a.right === b.left || b.right === a.left){
+   const x = (a.right === b.left) ? a.right : b.right;
+   const top = Math.max(a.top, b.top), bottom = Math.min(a.bottom, b.bottom);
+   if(bottom - top >= 2) return { vertical:true, x:x, top:top, bottom:bottom };
+   return null;
+  }
+  if(a.bottom === b.top || b.bottom === a.top){
+   const y = (a.bottom === b.top) ? a.bottom : b.bottom;
+   const left = Math.max(a.left, b.left), right = Math.min(a.right, b.right);
+   if(right - left >= 2) return { vertical:false, y:y, left:left, right:right };
+   return null;
+  }
+  return null;
+ }
+
+ function edgeKey(a, b){ return Math.min(a.idx, b.idx) + "-" + Math.max(a.idx, b.idx); }
+
+ // BFS over the neighbour graph: the shortest hop-path from start to goal.
+ function graphPath(start, goal){
+  const prev = new Map();
+  prev.set(start, null);
+  const q = [start];
+  while(q.length){
+   const r = q.shift();
+   if(r === goal){
+    const path = [];
+    for(let c = goal; c; c = prev.get(c)) path.unshift(c);
+    return path;
+   }
+   r.neighbours.forEach(function(n){
+    if(!prev.has(n)){ prev.set(n, r); q.push(n); }
+   });
+  }
+  return null;
+ }
+
+ // Graph distances from src (used for entrance/exit picking).
+ function distFrom(src){
+  const dist = new Map();
+  dist.set(src, 0);
+  const q = [src];
+  while(q.length){
+   const r = q.shift();
+   r.neighbours.forEach(function(n){
+    if(!dist.has(n)){ dist.set(n, dist.get(r) + 1); q.push(n); }
+   });
+  }
+  return dist;
+ }
+
+ // Dijkstra over the neighbour graph with the first path's edges re-priced
+ // (cost 3 instead of 1), so the second path prefers fresh rooms — the loop
+ // that keeps the floor from being purely linear.
+ function dijkstraPath(start, goal, penalized){
+  const dist = new Map(), prev = new Map(), done = new Set();
+  dist.set(start, 0);
+  while(true){
+   let cur = null, best = Infinity;
+   dist.forEach(function(d, r){
+    if(!done.has(r) && d < best){ best = d; cur = r; }
+   });
+   if(cur === null || cur === goal) break;
+   done.add(cur);
+   cur.neighbours.forEach(function(n){
+    const w = penalized.has(edgeKey(cur, n)) ? 3 : 1;
+    const nd = best + w;
+    if(nd < (dist.get(n) ?? Infinity)){ dist.set(n, nd); prev.set(n, cur); }
+   });
+  }
+  if(goal !== start && !prev.has(goal)) return null;
+  const path = [];
+  for(let c = goal; c; c = prev.get(c)) path.unshift(c);
+  return path[0] === start ? path : null;
+ }
+
+ // Paint one room: full rect WALL, interior (margin 1) FLOOR.
+ function paintRoom(grid, r){
+  for(let y = r.top; y <= r.bottom; y++)
+   for(let x = r.left; x <= r.right; x++) grid[y][x] = T().WALL;
+  for(let y = r.top + 1; y <= r.bottom - 1; y++)
+   for(let x = r.left + 1; x <= r.right - 1; x++) grid[y][x] = T().FLOOR;
+ }
+
+ // joinRooms: two linked STANDARD rooms fuse their shared wall into open
+ // floor — where the big irregular U-shaped spaces come from. Conditions are
+ // the source's: wall >= 3 long, not a full side, combined size <= 9.
+ function tryMerge(a, b, grid){
+  const line = intersectLine(a, b);
+  if(!line) return false;
+  if(line.vertical){
+   const wallLen = line.bottom - line.top + 1;
+   const maxSide = Math.max(a.bottom - a.top, b.bottom - b.top);
+   const combined = (a.right - a.left) + (b.right - b.left);
+   if(wallLen < 3 || wallLen > maxSide || combined > 9) return false;
+   for(let y = line.top; y <= line.bottom; y++) grid[y][line.x] = T().FLOOR;
+  } else {
+   const wallLen = line.right - line.left + 1;
+   const maxSide = Math.max(a.right - a.left, b.right - b.left);
+   const combined = (a.bottom - a.top) + (b.bottom - b.top);
+   if(wallLen < 3 || wallLen > maxSide || combined > 9) return false;
+   for(let x = line.left; x <= line.right; x++) grid[line.y][x] = T().FLOOR;
+  }
+  a.merged.push(b); b.merged.push(a);
+  return true;
+ }
+
+ // ── Cellular-automaton patches (layer1 port, Patch.java) ────
+ // Every cell starts alive with probability `seed`, then nGen generations of
+ // the 5/4 Moore-neighbour rule run with double buffering. Border cells never
+ // update, exactly like the source. This is what grows the organic blobs.
+ function generatePatch(w, h, seed, nGen){
+  let off = [], cur = [];
+  for(let y = 0; y !== h; y++){
+   off[y] = []; cur[y] = [];
+   for(let x = 0; x !== w; x++){
+    off[y][x] = Math.random() < seed;
+    cur[y][x] = false;
+   }
+  }
+  for(let g = 0; g !== nGen; g++){
+   for(let y = 1; y !== h - 1; y++){
+    for(let x = 1; x !== w - 1; x++){
+     const count =
+      (off[y-1][x-1]?1:0) + (off[y-1][x]?1:0) + (off[y-1][x+1]?1:0) +
+      (off[y][x-1]?1:0) +                     (off[y][x+1]?1:0) +
+      (off[y+1][x-1]?1:0) + (off[y+1][x]?1:0) + (off[y+1][x+1]?1:0);
+     cur[y][x] = (!off[y][x] && count >= 5) || (off[y][x] && count >= 4);
+    }
+   }
+   const tmp = off; off = cur; cur = tmp;
+  }
+  return off;
+ }
+
+ // Paint one patch pass over the floor. `amount` caps how much of the floor
+ // the pass may claim, so a ward tunes coverage as pure data. Runs after
+ // spawn/stairs/shop so those tiles stay plain, and claims plain FLOOR only —
+ // spawners never sit on a patch.
+ function applyPatch(G, def){
+  if(!def || !def.type) return;
+  const patch = generatePatch(G.gridW, G.gridH, def.seed || 0.5, def.nGen || 3);
+  const tile = (def.type === "water") ? T().WATER : T().GRASS;
+  let floorCount = 0;
+  for(let y = 1; y !== G.gridH - 1; y++)
+   for(let x = 1; x !== G.gridW - 1; x++)
+    if(G.grid[y][x] === T().FLOOR) floorCount++;
+  let cap = Math.floor(floorCount * (def.amount || 0.25));
+  for(let y = 1; y !== G.gridH - 1 && cap > 0; y++){
+   for(let x = 1; x !== G.gridW - 1 && cap > 0; x++){
+    if(!patch[y][x] || G.grid[y][x] !== T().FLOOR) continue;
+    if(Delve.mdist(x, y, G.px, G.py) <= 1) continue;   // keep the spawn tile plain
+    G.grid[y][x] = tile;
+    cap--;
+   }
+  }
  }
 
  // ── Ward floor plan: rolled once per ward per run ──
@@ -381,72 +555,194 @@ window.Delve = window.Delve || {};
   G.gridW = size;
   G.gridH = size;
   G.grid = [];
-  for(let y = 0; y !== G.gridH; y++){
-   const row = [];
-   for(let x = 0; x !== G.gridW; x++) row.push(T().WALL);
-   G.grid.push(row);
-  }
 
   // ── Boss floors: bespoke arena, then bail out ──
   // Handled before room generation so the arena is the whole floor, with no
-  // stray rooms, corridors, monsters, barrels or chests left over.
+  // stray rooms, corridors, monsters, barrels or chests left over. Boss
+  // arenas keep the old all-WALL underlay: their dressing reads WALL tiles.
   if(G.floor % 10 === 0){
+   for(let y = 0; y !== G.gridH; y++){
+    const row = [];
+    for(let x = 0; x !== G.gridW; x++) row.push(T().WALL);
+    G.grid.push(row);
+   }
    Delve.genBossFloor(G, ward);
    if(Delve.showBossIntro) Delve.showBossIntro(G.floor);
    return;
   }
 
-  // rooms: store both top-left and center for later use
-  const roomCount = Delve.rng(ward.roomMin || 8, ward.roomMax || 11);
-  const rooms = [];
-  for(let i = 0; i !== roomCount; i++){
-   const rw = Delve.rng(ward.roomWMin || 4, ward.roomWMax || 12);
-   const rh = Delve.rng(ward.roomHMin || 4, ward.roomHMax || 12);
-   const room = { w:rw, h:rh, x:0, y:0 };
-   if(placeRoom(G, room)){
-    rooms.push({
-     x: room.x, y: room.y,
-     cx: room.x + Math.floor(rw/2),
-     cy: room.y + Math.floor(rh/2),
-     w: rw, h: rh
+  // Everywhere else the underlay is VOID: unpainted space renders as pure
+  // black (layer1 Phase 7) and blocks movement (movement.js / pathfind.js).
+  for(let y = 0; y !== G.gridH; y++){
+   const row = [];
+   for(let x = 0; x !== G.gridW; x++) row.push(T().VOID);
+   G.grid.push(row);
+  }
+
+  // ── BSP partition of the map block (layer1 Phase 2) ──
+  // Retried until the ward's minimum room count is met.
+  const minRooms = ward.roomMin || 8;
+  let all = null;
+  for(let attempt = 0; attempt !== 40 && !all; attempt++){
+   const leaves = [];
+   splitRect({ left:0, top:0, right:G.gridW - 1, bottom:G.gridH - 1 }, leaves);
+   if(leaves.length >= minRooms){
+    all = leaves.map(function(r, i){
+     return { idx:i, left:r.left, top:r.top, right:r.right, bottom:r.bottom,
+              neighbours:[], links:[], merged:[], connected:false, painted:false };
     });
    }
   }
-  if(rooms.length === 0){
-   for(let y = 3; y !== 8; y++) for(let x = 3; x !== 10; x++) G.grid[y][x] = T().FLOOR;
-   rooms.push({ x:3, y:3, cx:6, cy:5, w:7, h:5 });
+  if(!all){
+   // last-resort fallback: one guaranteed chamber, so a floor always exists
+   all = [{ idx:0, left:2, top:2, right:10, bottom:8,
+            neighbours:[], links:[], merged:[], connected:false, painted:false }];
   }
 
-  // corridors: join each room center to the next
-  for(let i = 0; i !== rooms.length-1; i++){
-   const a = rooms[i], b = rooms[i+1];
-   if(!a || !b) continue;
-   let x = a.cx, y = a.cy;
-   while(x !== b.cx){
-    if(G.grid[y][x] === T().WALL) G.grid[y][x] = T().FLOOR;
-    x = x + (geq(b.cx, x) ? 1 : -1);
-   }
-   while(y !== b.cy){
-    if(G.grid[y][x] === T().WALL) G.grid[y][x] = T().FLOOR;
-    y = y + (geq(b.cy, y) ? 1 : -1);
+  // ── Neighbour graph (layer1 Phase 3) ──
+  for(let i = 0; i !== all.length; i++){
+   for(let j = i + 1; j !== all.length; j++){
+    if(intersectLine(all[i], all[j])){
+     all[i].neighbours.push(all[j]);
+     all[j].neighbours.push(all[i]);
+    }
    }
   }
 
-  // player spawn: center of first room
+  // entrance & exit: rooms with inner size >= 4; the exit must sit at least
+  // sqrt(roomCount) graph-hops away (10 tries, then the farthest reachable).
+  const sqrtN = Math.sqrt(all.length);
+  const big = all.filter(function(r){ return r.right - r.left - 1 >= 4 && r.bottom - r.top - 1 >= 4; });
+  const pool = big.length ? big : all;
+  const entrance = pool[Delve.rng(0, pool.length - 1)];
+  entrance.connected = true;
+  const dist0 = distFrom(entrance);
+  let exit = null;
+  for(let t = 0; t !== 10 && !exit; t++){
+   const cands = pool.filter(function(r){ return r !== entrance && (dist0.get(r) || 0) >= sqrtN; });
+   if(cands.length) exit = cands[Delve.rng(0, cands.length - 1)];
+  }
+  if(!exit){
+   let bestD = -1;
+   dist0.forEach(function(d, r){ if(r !== entrance && d > bestD){ bestD = d; exit = r; } });
+   if(!exit) exit = all.find(function(r){ return r !== entrance; }) || entrance;
+  }
+  exit.connected = true;
+
+  // ── Connection routing (layer1 Phase 4) ──
+  const link = function(a, b){
+   if(a.links.indexOf(b) < 0){ a.links.push(b); b.links.push(a); }
+   a.connected = true; b.connected = true;
+  };
+  const path1 = graphPath(entrance, exit);
+  if(path1 && path1.length > 1){
+   for(let i = 0; i !== path1.length - 1; i++) link(path1[i], path1[i + 1]);
+   // re-price the first path's edges, then walk a second shortest path so the
+   // floor isn't purely linear (the redundant loop)
+   const used = new Set();
+   for(let i = 0; i !== path1.length - 1; i++) used.add(edgeKey(path1[i], path1[i + 1]));
+   const path2 = dijkstraPath(entrance, exit, used);
+   if(path2) for(let i = 0; i !== path2.length - 1; i++) link(path2[i], path2[i + 1]);
+  } else if(entrance !== exit){
+   link(entrance, exit);
+  }
+
+  // random expansion until 50-70% of rooms are connected
+  const target = Math.floor(all.length * (0.5 + Math.random() * 0.2));
+  let guard = 300;
+  while(guard-- > 0){
+   const conn = all.filter(function(r){ return r.connected; });
+   if(conn.length >= target) break;
+   const seeds = conn.filter(function(r){
+    return r.neighbours.some(function(n){ return !n.connected; });
+   });
+   if(!seeds.length) break;
+   const from = seeds[Delve.rng(0, seeds.length - 1)];
+   const opts = from.neighbours.filter(function(n){ return !n.connected; });
+   link(from, opts[Delve.rng(0, opts.length - 1)]);
+  }
+
+  // ── Room types (layer1 Phase 5) ──
+  // Single-connection rooms (and the endpoints) stay standard; multi-
+  // connection rooms are mostly tunnel; at least 4 standard rooms guaranteed.
+  let standardCount = 0;
+  all.forEach(function(r){
+   if(!r.connected){ r.type = null; return; }
+   const multi = r.links.length >= 2 && r !== entrance && r !== exit;
+   r.type = (multi && Math.random() < 0.6) ? "tunnel" : "standard";
+   if(r.type === "standard") standardCount++;
+  });
+  for(let i = 0; standardCount < 4 && i !== all.length; i++){
+   if(all[i].type === "tunnel"){ all[i].type = "standard"; standardCount++; }
+  }
+
+  // ── Painting (layer1 Phase 6) ──
+  // Unconnected rooms are never painted — they stay VOID, the black.
+  all.forEach(function(r){
+   if(!r.connected) return;
+   r.painted = true;
+   paintRoom(G.grid, r);
+  });
+
+  // joinable STANDARD rooms fuse their shared wall into open floor, which is
+  // where the big irregular U-shaped spaces come from (layer1 joinRooms)
+  const mergeChance = ward.mergeChance !== undefined ? ward.mergeChance : 0.5;
+  if(mergeChance > 0){
+   for(let i = 0; i !== all.length; i++){
+    for(let j = i + 1; j !== all.length; j++){
+     const a = all[i], b = all[j];
+     if(!a.painted || !b.painted) continue;
+     if(a.links.indexOf(b) < 0) continue;
+     if(a.type !== "standard" || b.type !== "standard") continue;
+     if(Math.random() >= mergeChance) continue;
+     tryMerge(a, b, G.grid);
+    }
+   }
+  }
+
+  // doors: one per linked pair, at a random point along the shared wall, with
+  // both interiors either side of it. Merged pairs need no door.
+  all.forEach(function(a){
+   a.links.forEach(function(b){
+    if(a.idx >= b.idx) return;
+    if(a.merged.indexOf(b) >= 0) return;
+    const line = intersectLine(a, b);
+    if(!line) return;
+    if(line.vertical){
+     const y = Delve.rng(line.top + 1, line.bottom - 1);
+     if(G.grid[y] && G.grid[y][line.x] === T().WALL) G.grid[y][line.x] = T().DOOR;
+    } else {
+     const x = Delve.rng(line.left + 1, line.right - 1);
+     if(G.grid[line.y] && G.grid[line.y][x] === T().WALL) G.grid[line.y][x] = T().DOOR;
+    }
+   });
+  });
+
+  // downstream room list: painted rooms only, entrance first (the old
+  // "skip rooms[0]" spawn convention), interior coordinates for the spawners
+  const rooms = [];
+  const pushRoom = function(r){
+   const out = {
+    x:r.left + 1, y:r.top + 1,
+    w:r.right - r.left - 1, h:r.bottom - r.top - 1,
+    cx:Math.floor((r.left + r.right) / 2),
+    cy:Math.floor((r.top + r.bottom) / 2),
+    type:r.type
+   };
+   r._out = out;
+   rooms.push(out);
+  };
+  pushRoom(entrance);
+  all.forEach(function(r){ if(r.painted && r !== entrance) pushRoom(r); });
+
+  // player spawn: centre of the entrance room
   G.px = rooms[0].cx; G.py = rooms[0].cy;
   G.lastDir = "right";
 
-  // stairs: farthest room from the player
-  let stairRoom = rooms[1] || rooms[0];
-  let bestD = -1;
-  for(let i = 1; i !== rooms.length; i++){
-   const d = Delve.mdist(rooms[i].cx, rooms[i].cy, G.px, G.py);
-   if(geq(d, bestD)){ bestD = d; stairRoom = rooms[i]; }
-  }
-  if(stairRoom){
-   G.stairs = { x:stairRoom.cx, y:stairRoom.cy };
-   G.grid[stairRoom.cy][stairRoom.cx] = T().STAIR;
-  }
+  // stairs: centre of the exit room — the room the routing walked TO
+  const exitOut = exit._out || rooms[0];
+  G.stairs = { x:exitOut.cx, y:exitOut.cy };
+  G.grid[exitOut.cy][exitOut.cx] = T().STAIR;
 
   // shop floors (5, 15, 25...): place the shopkeeper off spawn and off stairs
   if(Delve.isShopFloor && Delve.isShopFloor(G.floor)){
@@ -461,6 +757,11 @@ window.Delve = window.Delve || {};
     }
    }
   }
+
+  // ── Organic patches (layer1 Phase 8) ──
+  // Placed after spawn/stairs/shop so those tiles stay plain, and before
+  // barrels/chests/monsters so those only ever sit on open stone.
+  (ward.patches || []).forEach(function(def){ applyPatch(G, def); });
 
   // barrels: random scattered floor tiles away from spawn
   const barrelCount = Delve.rng(3, 7);

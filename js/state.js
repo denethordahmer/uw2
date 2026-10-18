@@ -1,5 +1,11 @@
 window.Delve = window.Delve || {};
-Delve.T = { FLOOR:0, WALL:1, STAIR:2, MONSTER:3, BOSS:4, CHEST:5, GOLD:6, ITEM:7, POTION:8, BARREL:9 };
+// VOID (10) and DOOR (11) join in the layer1 overhaul: VOID is the unpainted
+// black beyond the rooms (solid, never drawn as stone), DOOR is the single
+// walkable tile in a shared wall between two rooms. WATER/GRASS (12/13) are
+// the organic cellular-automaton patch tiles — walkable floor variants.
+// Existing tile numbers are deliberately unchanged: every file compares
+// against them by value.
+Delve.T = { FLOOR:0, WALL:1, STAIR:2, MONSTER:3, BOSS:4, CHEST:5, GOLD:6, ITEM:7, POTION:8, BARREL:9, VOID:10, DOOR:11, WATER:12, GRASS:13 };
 Delve.G = null;
 
 Delve.rng = function(min, max){ return Math.floor(Math.random()*(max-min+1))+min; };
