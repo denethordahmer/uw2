@@ -103,6 +103,7 @@ const DEATH_LIFE = 460;
    // walls grow growth only where a floor patch touches them; growthPal = the
    // biome's locked green gradient (dark root → bright tip).
    floorStyle: b.floorStyle || null,
+   wallStyle: b.wallStyle || null,
    growthLinked: !!b.growthLinked,
    growthPal: b.growthPal || null
   };
@@ -299,6 +300,76 @@ const DEATH_LIFE = 460;
    ctx.fillRect(sx, sy, ts, ts);
    ctx.restore();
   }
+ function soilTone(x, y){
+  const k = 0.72;
+  const px = x / k, py = y / k;
+  const xi = Math.floor(px), yi = Math.floor(py);
+  let fx = px - xi, fy = py - yi;
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+  const a = hash3(xi, yi, 9011), b = hash3(xi + 1, yi, 9011);
+  const c = hash3(xi, yi + 1, 9011), d = hash3(xi + 1, yi + 1, 9011);
+  const top = a + (b - a) * fx, bot = c + (d - c) * fx;
+  return top + (bot - top) * fy;
+ }
+ function drawSoilFloor(ctx, sx, sy, ts, gx, gy, b){
+  // Continuous mottled loam: two octaves of smooth, world-space noise blended
+  // across each tile's cells. No slab, no gap, no outline — neighbouring tiles
+  // carry the same field, so the room is one surface, never a grid of squares.
+  const N = 6, cw = ts / N;
+  for(let cy = 0; cy < N; cy++){
+   for(let cx = 0; cx < N; cx++){
+    const wx = gx + (cx + 0.5) / N, wy = gy + (cy + 0.5) / N;
+    const t = floorTone(wx, wy) * 0.55 + soilTone(wx, wy) * 0.45;
+    ctx.fillStyle = blendHex(b.floor, b.floor2, t);
+    const px0 = Math.round(cx * cw), py0 = Math.round(cy * cw);
+    const px1 = Math.round((cx + 1) * cw), py1 = Math.round((cy + 1) * cw);
+    ctx.fillRect(sx + px0, sy + py0, Math.max(1, px1 - px0), Math.max(1, py1 - py0));
+   }
+  }
+  // sparse dark peat mottles so it never reads as one flat loam
+  ctx.globalAlpha = 0.22;
+  for(let i = 0; i < 3; i++){
+   const mx = sx + ts * (0.15 + hash3(gx, gy, 301 + i) * 0.7);
+   const my = sy + ts * (0.15 + hash3(gx, gy, 311 + i) * 0.7);
+   const mr = ts * (0.07 + hash3(gx, gy, 321 + i) * 0.10);
+   ctx.fillStyle = blendHex(b.floor2, "#0a0e12", 0.4);
+   ctx.beginPath(); ctx.ellipse(mx, my, mr, mr * 0.7, hash3(gx, gy, 331 + i) * 3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+ }
+ function drawVeins(ctx, camX, camY, vw, vh, ts){
+  // Thin silver mycelium threads on about 20% of plain floor tiles, drawn over
+  // the loam and under every prop. Per-tile and deterministic; alpha stays low
+  // so the web reads as a hint, not a highlight.
+  const G = Delve.G, T = Delve.T;
+  if(!G || !G.grid) return;
+  for(let y = 0; y < vh + 1; y++) for(let x = 0; x < vw + 1; x++){
+   const gx = camX + x, gy = camY + y;
+   if(tileAt(gx, gy) !== T.FLOOR) continue;
+   if(hash3(gx, gy, 691) >= 0.20) continue;
+   const sx = x * ts, sy = y * ts;
+   const segs = 3 + Math.floor(hash3(gx, gy, 701) * 4);
+   ctx.save();
+   ctx.strokeStyle = "#e8f2f5"; ctx.lineCap = "round";
+   for(let i = 0; i < segs; i++){
+    ctx.globalAlpha = 0.26 + hash3(gx, gy, 771 + i) * 0.26;
+    ctx.lineWidth = Math.max(0.7, ts * 0.012);
+    let px = sx + ts * (0.15 + hash3(gx, gy, 711 + i) * 0.7);
+    let py = sy + ts * (0.15 + hash3(gx, gy, 731 + i) * 0.7);
+    ctx.beginPath(); ctx.moveTo(px, py);
+    const n = 2 + Math.floor(hash3(gx, gy, 791 + i) * 2);
+    for(let s = 0; s < n; s++){
+     px += (hash3(gx, gy, 801 + i * 8 + s) - 0.5) * ts * 0.45;
+     py += (hash3(gx, gy, 811 + i * 8 + s) - 0.5) * ts * 0.45;
+     px = Math.min(sx + ts - 1, Math.max(sx + 1, px));
+     py = Math.min(sy + ts - 1, Math.max(sy + 1, py));
+     ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+   }
+   ctx.restore();
+  }
+ }
  function drawFloorTile(ctx, sx, sy, ts, gx, gy, b){
   const n = hash2(gx,gy), n3 = hash3(gx,gy,31), n4 = hash3(gx,gy,53);
   if(b.floorStyle === "runningbond"){
@@ -307,6 +378,10 @@ const DEATH_LIFE = 460;
    //     continue into the neighbouring copies, so the floor reads as one
    //     continuous paved surface and the tile grid is invisible.
    drawBondFloor(ctx, sx, sy, ts, gx, gy, b);
+  } else if(b.floorStyle === "soil"){
+   // Forest floor — continuous mottled loam, no slabs and no tile grid. The
+   // silver mycelium veins land in their own pass; items and water sit above.
+   drawSoilFloor(ctx, sx, sy, ts, gx, gy, b);
   } else {
   // A) Continuous-tone shading — floorTone replaces the old (gx+gy)%2 two-tone
   //    flip, so the floor has soft light/dark patches instead of square steps.
@@ -467,29 +542,56 @@ const DEATH_LIFE = 460;
   if(mood===2){ ctx.fillStyle="rgba(60,90,60,0.22)"; ctx.fillRect(sx,sy,ts,ts); }
   if(mood===3){ const grad=ctx.createLinearGradient(sx+ts*0.5,sy,sx+ts*0.5,sy+ts); grad.addColorStop(0,"rgba(70,40,20,0.40)"); grad.addColorStop(0.6,"rgba(50,30,15,0.14)"); grad.addColorStop(1,"rgba(0,0,0,0)"); ctx.fillStyle=grad; ctx.fillRect(sx+ts*0.25,sy,ts*0.5,ts); }
   if(ts>=20){
-   // sagging course line + jittered verticals: masonry, not a grid
-   ctx.strokeStyle=b.wallBrick; ctx.lineWidth=1; ctx.globalAlpha=mood===1?0.55:0.38;
-   ctx.beginPath();
-   // One continuous running bond across the whole wall: the course sag and the
-   // head-joint positions are smooth functions of position (not per-tile random
-   // dice), and the joint halves alternate by row. Neighbouring tiles therefore
-   // finish the courses their neighbours start — no wall piece looks turned,
-   // flipped or randomly rotated against the rest of the structure.
-   const sag = Math.sin(gx * 0.9 + gy * 1.7) * ts * 0.03;
-   ctx.moveTo(x0+2, midY); ctx.quadraticCurveTo(midX, midY+sag, x1-2, midY);
-   const v1 = x0+(x1-x0)*(0.32 + Math.sin(gx * 2.1 + gy * 1.3) * 0.05);
-   const v2 = x0+(x1-x0)*(0.70 + Math.cos(gx * 1.7 + gy * 2.3) * 0.05);
-   const upper = ((gy & 1) === 0);    // running bond: joint halves alternate by row
-   if(upper){ ctx.moveTo(v1,y0+2); ctx.lineTo(v1,midY); ctx.moveTo(v2,y0+2); ctx.lineTo(v2,midY); }
-   else { ctx.moveTo(v1,midY); ctx.lineTo(v1,y1-2); ctx.moveTo(v2,midY); ctx.lineTo(v2,y1-2); }
-   ctx.stroke(); ctx.globalAlpha=1;
-   if(mood===1){
-    // a single shadowed brick, sitting on the same course line as its row
-    const left = ((gx & 1) === 0);
-    const bx0 = left? x0+2 : v1+1, bx1 = left? v1-1 : x1-2;
-    const by0 = upper? y0+2 : midY+2, by1 = upper? midY-1 : y1-2;
-    ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(bx0,by0,bx1-bx0,by1-by0);
-    ctx.fillStyle=b.wallBrick; ctx.fillRect(bx0+(bx1-bx0)*0.3, by0-1, (bx1-bx0)*0.25, 2);
+   if(b.wallStyle === "roots"){
+    // Root-bound earth: wandering root strands and rootlets instead of masonry
+    // courses — no straight seams, nothing reads as a square. Positions are
+    // smooth functions of (gx,gy), so a root continues into the neighbour tile.
+    ctx.strokeStyle = b.wallBrick; ctx.lineCap = "round";
+    ctx.globalAlpha = mood===1 ? 0.62 : 0.45;
+    for(let i=0;i<3;i++){
+     const bx = x0+(x1-x0)*(0.22 + i*0.28 + Math.sin(gx*1.3 + gy*2.1 + i*1.9)*0.06);
+     const wob = Math.sin(gx*0.8 + gy*1.6 + i*2.3) * ts * 0.05;
+     ctx.lineWidth = Math.max(1, ts*(i===1 ? 0.035 : 0.022));
+     ctx.beginPath();
+     ctx.moveTo(bx, y0+2);
+     ctx.quadraticCurveTo(bx + wob, midY, bx + Math.sin(gx*1.1 + gy*2.5 + i)*ts*0.04, y1-2);
+     ctx.stroke();
+     for(let k=0;k<2;k++){
+      const ry = y0+2 + (y1-y0-4)*(0.25 + 0.5*k + hash3(gx,gy,911+i*3+k)*0.2);
+      const rx = bx + Math.sin(gy*2.0 + gx*1.4 + i*1.7 + k)*ts*0.08;
+      ctx.lineWidth = Math.max(1, ts*0.014);
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx + (hash3(gx,gy,931+i*3+k)-0.5)*ts*0.22, ry + hash3(gx,gy,951+i*3+k)*ts*0.18);
+      ctx.stroke();
+     }
+    }
+    ctx.globalAlpha = 1;
+   } else {
+    // sagging course line + jittered verticals: masonry, not a grid
+    ctx.strokeStyle=b.wallBrick; ctx.lineWidth=1; ctx.globalAlpha=mood===1?0.55:0.38;
+    ctx.beginPath();
+    // One continuous running bond across the whole wall: the course sag and the
+    // head-joint positions are smooth functions of position (not per-tile random
+    // dice), and the joint halves alternate by row. Neighbouring tiles therefore
+    // finish the courses their neighbours start — no wall piece looks turned,
+    // flipped or randomly rotated against the rest of the structure.
+    const sag = Math.sin(gx * 0.9 + gy * 1.7) * ts * 0.03;
+    ctx.moveTo(x0+2, midY); ctx.quadraticCurveTo(midX, midY+sag, x1-2, midY);
+    const v1 = x0+(x1-x0)*(0.32 + Math.sin(gx * 2.1 + gy * 1.3) * 0.05);
+    const v2 = x0+(x1-x0)*(0.70 + Math.cos(gx * 1.7 + gy * 2.3) * 0.05);
+    const upper = ((gy & 1) === 0);    // running bond: joint halves alternate by row
+    if(upper){ ctx.moveTo(v1,y0+2); ctx.lineTo(v1,midY); ctx.moveTo(v2,y0+2); ctx.lineTo(v2,midY); }
+    else { ctx.moveTo(v1,midY); ctx.lineTo(v1,y1-2); ctx.moveTo(v2,midY); ctx.lineTo(v2,y1-2); }
+    ctx.stroke(); ctx.globalAlpha=1;
+    if(mood===1){
+     // a single shadowed brick, sitting on the same course line as its row
+     const left = ((gx & 1) === 0);
+     const bx0 = left? x0+2 : v1+1, bx1 = left? v1-1 : x1-2;
+     const by0 = upper? y0+2 : midY+2, by1 = upper? midY-1 : y1-2;
+     ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(bx0,by0,bx1-bx0,by1-by0);
+     ctx.fillStyle=b.wallBrick; ctx.fillRect(bx0+(bx1-bx0)*0.3, by0-1, (bx1-bx0)*0.25, 2);
+    }
    }
   }
   // the biome's own growth creeping over the top edge: lichen in the
@@ -971,7 +1073,9 @@ const DEATH_LIFE = 460;
    if(t===T.FLOOR) drawClutter(ctx,sx,sy,ts,gx,gy,b);
   }
   // biome ground cover, flat on the floor before any prop sits over it
-  Delve.drawGroundCover(ctx,camX,camY,vw,vh,ts);
+  // Blackvein mycelium: thin silver veins over the soil floor, under the props
+   if(b.floorStyle === "soil") drawVeins(ctx,camX,camY,vw,vh,ts);
+   Delve.drawGroundCover(ctx,camX,camY,vw,vh,ts);
   // ward growth patches (js/growth.js) — organic spots on top of the floor pattern
   Delve.drawGrowthFloor(ctx,camX,camY,vw,vh,ts);
   // floor props first, so wall edges and their shadows fall over the bases
