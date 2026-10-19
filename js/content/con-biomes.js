@@ -9,8 +9,7 @@ window.Delve = window.Delve || {};
     // Organic patches (layer1 port): cellular-automaton GRASS blobs painted over
     // the floor after the doors are cut. type "grass"; seed = starting density,
     // nGen = smoothing passes, amount = max fraction of floor claimed.
-    // Water is no longer a CA patch: it is wall-fed puddles (js/puddles.js), so
-    // every pool has a crack and a reason to be there.
+    // Water is no longer a CA patch: it is wall-anchored puddles (js/puddles.js).
     patches:[],
     // Floor growth (js/growth.js placeGrowth): sporadic organic patches, rolled per
     // room. roomChance = odds a room grows any; largeArea/largeChance/bigChance
@@ -168,22 +167,16 @@ window.Delve = window.Delve || {};
     // Decoration family for floor tiles (render.js drawClutter/drawWeed):
     // "ruins" | "blackvein" | "frost". A ward must name one, or its floors
     // would fall back to the ruins look.
-    clutter:"ruins",
     // Ground cover: none in the ruins (the old mushroom clusters are gone —
     // they read as sprouting from the paved stone).
-    // Drifting ambience (render.js drawAmbience). vy is tiles per second —
-    // negative rises, positive falls. drift is the sideways sway in tiles.
-    // type picks the particle look: "dust" | "ember" | "snow".
-    ambient:{ type:"dust", count:14, col:"#c9c2b0", col2:"#8d99a6", size:0.055, vy:-0.04, drift:0.06, alpha:0.34 } },
+    clutter:"ruins" },
   { name:"The Blackvein",
     wall:"#2a3524", wallEdge:"#4d5c3e", wallBrick:"#141c10", mortar:"#080c06",
     floor:"#2c3524", floor2:"#242c1e", moss:"#7a9a3a",
     water:"#3a2048", torch:"#c8d84a", light:"rgba(120,180,60,0.06)",
     clutter:"blackvein",
     // Ground-cover sprite (js/ground.js): blood moss creeping over the floor.
-    groundCover:"ground_moss",
-    // Embers drift upward out of the seam, with spore flecks among them.
-    ambient:{ type:"ember", count:16, col:"#c8d84a", col2:"#ff9a3a", size:0.05, vy:-0.17, drift:0.10, alpha:0.5 } },
+    groundCover:"ground_moss" },
   { name:"The Frosted Vault",
     wall:"#3a4a5e", wallEdge:"#7a9ac0", wallBrick:"#1a2436", mortar:"#0a1018",
     floor:"#2a3644", floor2:"#232e3c", moss:"#7ec8e0",
@@ -193,9 +186,7 @@ window.Delve = window.Delve || {};
     groundCover:"ground_ice",
     // Organic-patch colours (levels.js patches → render.js): pale ice sheets
     // and snow drifts instead of generic water/moss.
-    patchWater:"#8fd0e8", patchGrass:"#dceefc",
-    // Fine snow falls through the vault and slants sideways as it drops.
-    ambient:{ type:"snow", count:22, col:"#eaffff", col2:"#a8e8ff", size:0.05, vy:0.22, drift:0.13, alpha:0.5 } },
+    patchWater:"#8fd0e8", patchGrass:"#dceefc" },
   { name:"The Bone Ossuary",
     wall:"#cfc0a0", wallEdge:"#e8dcc0", wallBrick:"#8a7658", mortar:"#1a140c",
     floor:"#8a7455", floor2:"#786447", moss:"#7a2a24",
@@ -205,8 +196,6 @@ window.Delve = window.Delve || {};
     // Ground-cover sprite (js/ground.js): scattered bone fragments.
     groundCover:"ground_bone",
     // Organic-patch colours: bone-dust drifts and murky crimson pools.
-    patchGrass:"#b0a080", patchWater:"#4a1a18",
-    // Dust hangs nearly still in the closed halls.
-    ambient:{ type:"dust", count:12, col:"#d8cbb0", col2:"#8a7658", size:0.05, vy:-0.03, drift:0.05, alpha:0.30 } }
+    patchGrass:"#b0a080", patchWater:"#4a1a18" }
  ];
 })();

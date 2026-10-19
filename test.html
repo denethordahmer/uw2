@@ -378,7 +378,7 @@ var REQUIRED_FN = [
   "hasSavedRun","savedRunFloor","resumeRun","restoreRunFromCheckpoint",
   "setFloorCheckpoint","clearRunCheckpoint","captureRunSnapshot","addDeath","saveAndExit",
   "placeGroundCover","drawGroundCover","placeGrowth","drawGrowthFloor","drawGrowthWalls",
-  "placePuddles","drawPuddleTile","drawPuddleCracks",
+  "placePuddles","drawPuddleTile",
   "registerWorldSprite","registerClutter",
   "registerMonsterSprite","absorbBossShield"
 ];
@@ -464,27 +464,15 @@ try {
   });
 
   // ── Biome identity ─────────────────────────────────────────────
-  // Every area must declare its decoration family and its drifting ambience.
-  // Without this a new ward silently renders with the ruins' weeds and no
-  // weather at all — the same class of silent gap the shard-tree check catches.
+  // Every area must declare its decoration family. Without this a new ward
+  // silently renders with the ruins' weeds — the same class of silent gap the
+  // shard-tree check catches.
   var CLUTTER_SETS = ["ruins", "blackvein", "frost", "ossuary"];
-  var AMBIENT_TYPES = ["dust", "ember", "snow"];
   var badBiomes = [];
   (cfg.BIOMES || []).forEach(function(bm, bi){
     var nm = bm.name || ("biome " + bi);
     if (CLUTTER_SETS.indexOf(bm.clutter) < 0)
       badBiomes.push(nm + " — clutter '" + bm.clutter + "' (expected one of " + CLUTTER_SETS.join("/") + ")");
-    var am = bm.ambient;
-    if (!am){
-      badBiomes.push(nm + " — no ambient block (the area would have no weather)");
-    } else {
-      if (AMBIENT_TYPES.indexOf(am.type) < 0)
-        badBiomes.push(nm + " — ambient type '" + am.type + "' (expected one of " + AMBIENT_TYPES.join("/") + ")");
-      if (!(am.count > 0)) badBiomes.push(nm + " — ambient count must be greater than 0");
-      if (typeof am.vy !== "number" || am.vy === 0) badBiomes.push(nm + " — ambient vy must be a non-zero number");
-      if (typeof am.alpha !== "number" || am.alpha <= 0 || am.alpha > 1) badBiomes.push(nm + " — ambient alpha must be between 0 and 1");
-      if (!am.col || !am.col2) badBiomes.push(nm + " — ambient needs both colours");
-    }
     if (bm.groundCover && !(d.SPR && d.SPR.world && d.SPR.world[bm.groundCover]))
       badBiomes.push(nm + " — groundCover names '" + bm.groundCover + "', which has no sprite in SPR.world");
   });

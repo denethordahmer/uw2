@@ -2,13 +2,11 @@ window.Delve = window.Delve || {};
 (function(){
 
  // ── puddles.js ───────────────────────────────────────────────
- // Wall-fed puddles. Water is no longer a cellular-automaton patch: every
- // WATER tile belongs to a puddle that seeped out of a crack in a wall, and
- // every puddle has its own crack drawn on that wall. Three public seams:
+ // Wall-anchored puddles. Water is no longer a cellular-automaton patch: every
+ // WATER tile belongs to a lobed blob that sits against a wall. Two public seams:
  //
  //   Delve.placePuddles(G)                              — end of genFloor
  //   Delve.drawPuddleTile(ctx, sx, sy, ts, gx, gy, b)   — the tile pass
- //   Delve.drawPuddleCracks(ctx, camX, camY, vw, vh, ts, b)
  //
  // A puddle is one lobed blob anchored at the wall. Placement marks every tile
  // whose 16x16 sample cells the blob touches, so the painted water can never
@@ -132,7 +130,7 @@ window.Delve = window.Delve || {};
    }
   }
   if(blocked) return null;
-  // Trim to the room the crack opens into: a blob that pokes through a thin
+  // Trim to the room the puddle opens into: a blob that pokes through a thin
   // wall into the next room keeps only the half on the anchor's side.
   const comp = component(raw, p.mx, p.my);
   if(!comp || comp.length < 2) return null;
@@ -154,10 +152,10 @@ window.Delve = window.Delve || {};
   for(let y = 1; y < G.gridH - 1; y++){
    for(let x = 1; x < G.gridW - 1; x++){
     if(grid[y][x] !== T().WALL) continue;
-    // never crack the secret room's false wall — the shimmer pulse is its only marker
+    // never anchor a puddle at the secret room's false wall — the shimmer pulse is its only marker
     const secret = G.floorData && G.floorData.secretRoom;
     if(secret && x === secret.falseWallX && y === secret.falseWallY) continue;
-    // a brazier is a wall over open floor with this hash roll; never split one
+    // a brazier is a wall over open floor with this hash roll; never anchor a puddle there
     const below = grid[y + 1] && grid[y + 1][x];
     const openBelow = below !== undefined && below !== null &&
                       below !== T().WALL && below !== T().VOID;
@@ -192,7 +190,6 @@ window.Delve = window.Delve || {};
      cy: a.fy + 0.5,
      r: r,
      seed: Delve.rng(1, 999999),
-     wx: a.x, wy: a.y, dx: a.dx, dy: a.dy,
      mx: a.fx, my: a.fy
     };
     p.minR = p.r * 0.75 - 0.09;
@@ -314,137 +311,6 @@ window.Delve = window.Delve || {};
    ctx.beginPath();
    ctx.roundRect(sx + m, sy + m, ts - m * 2, ts - m * 2, ts * 0.30);
    ctx.fill();
-   ctx.restore();
-  }
- };
-
- // ── the crack on the wall ────────────────────────────────────
- // Drawn in the wall tile's own space, rotated so "down" is the side the water
- // is on. Three shapes: a split with a branch, a Y-fork, and a stepped crack
- // with a short spur. Sharp segments only — a crack does not curve gently.
- function drawCrack(ctx, sx, sy, ts, p, b){
-  const rnd = function(i){ return Delve.hash3(p.seed, i, 811); };
-  const style = Math.floor(rnd(1) * 3);
-  const baseY = ts * 0.44;
-  const jx = (rnd(2) - 0.5) * ts * 0.44;
-  const topY = -ts * (0.06 + rnd(3) * 0.30);
-
-  // damp mouth where the water enters
-  const stain = ctx.createRadialGradient(jx, baseY + ts * 0.02, 1, jx, baseY, ts * 0.24);
-  stain.addColorStop(0, b.patchWater || b.water);
-  stain.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.save();
-  ctx.globalAlpha = 0.34;
-  ctx.fillStyle = stain;
-  ctx.beginPath();
-  ctx.ellipse(jx, baseY, ts * 0.20, ts * 0.085, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  const pts = [];
-  let px = jx, py = baseY;
-  pts.push([px, py]);
-  const segs = 4 + Math.floor(rnd(4) * 3);
-  for(let i = 1; i <= segs; i++){
-   const jitter = (rnd(10 + i) - 0.5) * ts * (style === 2 ? 0.26 : 0.17);
-   px += jitter;
-   py = baseY + (topY - baseY) * (i / segs);
-   pts.push([px, py]);
-  }
-
-  const branches = [];
-  if(style === 0){
-   // one branch splitting off the upper third
-   branches.push({ from:pts[Math.max(1, segs - 2)], dir:rnd(30) < 0.5 ? -1 : 1, len:0.30, kink:0.16 });
-  } else if(style === 1){
-   // a Y: two branches from the middle
-   branches.push({ from:pts[Math.floor(segs / 2)], dir:-1, len:0.34, kink:0.20 });
-   branches.push({ from:pts[Math.floor(segs / 2)], dir: 1, len:0.26, kink:0.14 });
-  } else {
-   // a short spur off the lower step
-   branches.push({ from:pts[Math.max(1, Math.floor(segs / 3))], dir:rnd(31) < 0.5 ? -1 : 1, len:0.22, kink:0.10 });
-  }
-
-  const path = function(list, ox, oy){
-   ctx.beginPath();
-   ctx.moveTo(list[0][0] + ox, list[0][1] + oy);
-   for(let i = 1; i < list.length; i++) ctx.lineTo(list[i][0] + ox, list[i][1] + oy);
-  };
-
-  ctx.save();
-  ctx.lineJoin = "miter";
-  ctx.lineCap = "butt";
-
-  // the split itself
-  ctx.strokeStyle = "rgba(3,5,8,0.86)";
-  ctx.lineWidth = Math.max(1, ts * 0.055);
-  path(pts, 0, 0); ctx.stroke();
-
-  // branches, a touch thinner
-  ctx.lineWidth = Math.max(1, ts * 0.042);
-  for(let i = 0; i < branches.length; i++){
-   const br = branches[i];
-   const len = ts * br.len * (0.75 + rnd(40 + i) * 0.5);
-   const ang = -Math.PI / 2 + br.dir * (0.70 + rnd(50 + i) * 0.55);
-   const mx = br.from[0] + Math.cos(ang) * len * 0.55 + br.dir * ts * br.kink;
-   const my = br.from[1] + Math.sin(ang) * len * 0.55;
-   const ex = br.from[0] + Math.cos(ang) * len;
-   const ey = br.from[1] + Math.sin(ang) * len;
-   ctx.beginPath();
-   ctx.moveTo(br.from[0], br.from[1]);
-   ctx.lineTo(mx, my);
-   ctx.lineTo(ex, ey);
-   ctx.stroke();
-  }
-
-  // the lit edge of the broken stone, a pixel up-left of the split
-  ctx.globalAlpha = 0.30;
-  ctx.strokeStyle = b.wallEdge || "#8d99a6";
-  ctx.lineWidth = Math.max(1, ts * 0.016);
-  path(pts, -1, -1); ctx.stroke();
-  ctx.restore();
-
-  // a couple of chipped flakes at the mouth
-  ctx.save();
-  for(let c = 0; c < 2; c++){
-   const cx = jx + (rnd(60 + c) - 0.5) * ts * 0.34;
-   const cy = baseY - rnd(62 + c) * ts * 0.24;
-   const w = ts * (0.022 + rnd(64 + c) * 0.030);
-   ctx.globalAlpha = 0.38;
-   ctx.fillStyle = "#04070a";
-   ctx.beginPath();
-   ctx.moveTo(cx, cy);
-   ctx.lineTo(cx + w, cy + w * 0.65);
-   ctx.lineTo(cx + w * 0.25, cy + w * 1.5);
-   ctx.closePath(); ctx.fill();
-  }
-  // the wet thread running from the crack to the water
-  ctx.globalAlpha = 0.55;
-  ctx.strokeStyle = b.patchWater || b.water;
-  ctx.lineWidth = Math.max(1, ts * 0.045);
-  ctx.beginPath();
-  ctx.moveTo(jx, baseY);
-  ctx.lineTo(jx + (rnd(70) - 0.5) * ts * 0.05, ts * 0.452);
-  ctx.stroke();
-  ctx.restore();
- }
-
- Delve.drawPuddleCracks = function(ctx, camX, camY, vw, vh, ts, b){
-  const G = Delve.G;
-  if(!G || !G.puddles || !G.puddles.length) return;
-  for(let i = 0; i < G.puddles.length; i++){
-   const p = G.puddles[i];
-   if(p.wx < camX || p.wy < camY || p.wx >= camX + vw + 1 || p.wy >= camY + vh + 1) continue;
-   if(!G.grid[p.wy] || G.grid[p.wy][p.wx] !== T().WALL) continue;
-   const sx = (p.wx - camX) * ts, sy = (p.wy - camY) * ts;
-   ctx.save();
-   ctx.translate(sx + ts * 0.5, sy + ts * 0.5);
-   // local +y points from the wall into the room (down the wall face)
-   ctx.rotate(Math.atan2(-p.dx, p.dy));
-   ctx.beginPath();
-   ctx.rect(-ts * 0.5 + 1, -ts * 0.5 + 1, ts - 2, ts - 2);
-   ctx.clip();
-   drawCrack(ctx, 0, 0, ts, p, b);
    ctx.restore();
   }
  };

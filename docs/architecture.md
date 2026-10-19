@@ -116,12 +116,9 @@ A ward may carry an optional **`bossArena`** block to shape its boss arena (§6.
 A ward may also set **`lootRarityMult`** (default 1): a per-biome multiplier on the rare
 + legendary tier weights, so a new biome tunes its own loot as pure data (§7).
 Each **`BIOMES`** entry must additionally declare **`clutter`**
-(`"ruins" | "blackvein" | "frost"`) — which decoration family its floor tiles use — and
-**`ambient`**, its drifting weather:
-`{type:"dust"|"ember"|"snow", count, col, col2, size, vy, drift, alpha}`, where `vy` is
-in tiles per second (negative = rising). `test.html` §4 fails if either is missing or
-unrecognised, so a new area can't silently render with the ruins' weeds and no weather
-(§7).
+(`"ruins" | "blackvein" | "frost"`) — which decoration family its floor tiles use.
+`test.html` §4 fails if it is missing or unrecognised, so a new area can't silently render
+with the ruins' weeds (§7).
 
 **`js/content/con-traits.js`**
 `CONFIG.TRAITS` — passives, uniques, and abilities with their `data` numbers.
@@ -262,14 +259,12 @@ additionally paints the seamless baked 3x3-tile torus masonry pattern instead of
 per-tile slabs, which is what removed the tile grid from the Upper Ruins' floors.
 
 **`js/puddles.js`**
-`Delve.placePuddles`, `Delve.drawPuddleTile`, `Delve.drawPuddleCracks`. Wall-fed puddles — water
-with a reason (§6.18). Every WATER tile belongs to one lobed blob that seeped out of a wall,
-and every puddle has its own jagged crack drawn on that wall. `placePuddles` runs at the end of
-`genFloor` (normal floors only — the boss branch returns earlier), guarded + try/caught like
-growth so it can never abort generation; `render.js` paints the water in the tile pass (where
-the old square `drawWaterPatch` used to be) and the cracks after the wall pass. Everything is
-read at call time, so the file has no load-order position of its own — it sits after
-`growth.js` only to group generation code.
+`Delve.placePuddles`, `Delve.drawPuddleTile`. Wall-anchored puddles (§6.18). Every WATER tile
+belongs to one lobed blob that sits against a wall. `placePuddles` runs at the end of `genFloor`
+(normal floors only — the boss branch returns earlier), guarded + try/caught like growth so it
+can never abort generation; `render.js` paints the water in the tile pass (where the old square
+`drawWaterPatch` used to be). Everything is read at call time, so the file has no load-order
+position of its own — it sits after `growth.js` only to group generation code.
 
 ### 3.4 Engine — progression, combat, movement, economy
 
@@ -325,16 +320,16 @@ Two destinations: a rolling strip (`#combatLog`) and a modal (`#logWindowContent
 **`js/render.js`**
 `Delve.draw`, `addFloater`, `addShake`, `addDeath`, `isTorchTile`, tile/floor/wall/torch/stairs
 drawing, sprite drawing (idle / hurt / elite / **attack** frames, plus the hurt-recoil
-and the attack-lunge offsets), the offscreen tile cache, the drifting ambience layer, the
+and the attack-lunge offsets), the offscreen tile cache, the
 biome ground-cover layer and the wall texture/shadow pass (§6.15). Per-biome clutter/growth
 painters are registered content (con-worldart.js) — only the ruins fallback stays here.
 `Delve.drawPaperDoll`, `Delve.markVisited`,
 `Delve.renderMinimap`.
 Draw order is: floored tiles (+ their biome clutter) → **biome ground cover** → **ward growth**
 (floor blobs) → **floor props** → **wall drop shadows** → walls (+ torches and the secret-wall
-shimmer) → **growth climbs** → **puddle cracks** (§6.18) → **hanging props** → path highlight →
+shimmer) → **growth climbs** → **hanging props** → path highlight →
 chests/items/gold/barrels/shop → monsters and boss (a boss gets a pool of torchlight
-underneath it) → player → ambience → floaters → per-biome colour wash → vignette.
+underneath it) → player → floaters → per-biome colour wash → vignette.
 **The floor is one continuous surface.** Each tile is drawn as a rounded-corner, feathered
 slab whose base colour comes from a smooth value-noise field (`floorTone`, knots every 4
 tiles) instead of a two-tone `(gx+gy)%2` flip — so shade drifts gently across several tiles
@@ -1051,26 +1046,24 @@ sealed tombs on clear floor tiles — clear of spawn, stairs, shop.
 - Provenance stamps `kind:"sarcophagus"`, so a legendary from a tomb is traceable in the
   run stats like any other source.
 
-### 6.18 Wall-fed puddles (Batch 21)
+### 6.18 Wall-anchored puddles (Batch 21)
 Water is no longer a cellular-automaton patch — `applyPatch` ignores any water def, and the
 `patches` water entries are gone from con-biomes.js. Every WATER tile now belongs to a puddle
-that seeped out of a wall, and every puddle has its own crack on that wall: **no crack, no
-water.** All of it lives in `js/puddles.js`.
-- **2–4 leaks per floor** (owner's pick), each a compact lobed blob anchored at its crack —
-  the outline is harmonics plus value-noise wobble and never runs straight, so no plus-shapes
-  and no squares. The water is painted from the same shape field at 16 px/tile, so
-  neighbouring tiles continue one shoreline with no seam.
+that sits against a wall. All of it lives in `js/puddles.js`.
+- **2–4 puddles per floor**, each a compact lobed blob anchored at a wall — the outline is
+  harmonics plus value-noise wobble and never runs straight, so no plus-shapes and no squares.
+  The water is painted from the same shape field at 16 px/tile, so neighbouring tiles continue
+  one shoreline with no seam.
 - **Placement keeps the spawn dry** (mdist ≤ 2), stays off the shop and the tile around it,
-  never covers a chest/barrel/stair/door/gold pile/monster (a blocked leak shrinks twice,
-  then that crack gives up), and leaves one dry tile between puddles so two leaks can never
-  merge. A blob that pokes through a thin wall is trimmed to the room its crack opens into —
-  and always touches that wall. Braziers are never cracked.
+  never covers a chest/barrel/stair/door/gold pile/monster (a blocked placement shrinks twice,
+  then that anchor gives up), and leaves one dry tile between puddles so two pools can never
+  merge. A blob that pokes through a thin wall is trimmed to the room it opens into — and
+  always touches that wall. Nothing is ever anchored at a brazier or at the secret room's
+  false wall.
 - **Colour is unchanged** — `patchWater`, falling back to `water` — painted translucent so
   the masonry ghosts through, with a shallow lighter lip at the edge, a sunken contact rim,
-  and glints that stay off the shore. The crack is drawn in the wall's own space, rotated to
-  face its water, in three jagged styles (branch / Y / spur). A WATER tile with no puddle
-  behind it (legacy fixture, manual grid edit) paints a plain rounded pool rather than
-  invisible water.
+  and glints that stay off the shore. A WATER tile with no puddle behind it (legacy fixture,
+  manual grid edit) paints a plain rounded pool rather than invisible water.
 - **Nothing enters the grid but the WATER tiles**, and nothing enters the run snapshot —
   movement, taps, the minimap and the checkpoint are untouched. A resume re-rolls puddles
   with the floor, exactly like growth and ground cover. A ward can set `puddles:false` to
@@ -1096,7 +1089,7 @@ water.** All of it lives in `js/puddles.js`.
 
 **Add a ward (10-floor band)**
 1. `con-biomes.js`: a `WARDS` entry (floor band + generation tuning), a `BIOMES`
-   palette, which must also declare `clutter`, `ambient` (§3 — `test.html` §4 enforces it)
+   palette, which must also declare `clutter` (§3 — `test.html` §4 enforces it)
    and `groundCover` (§6.14 — the `SPR.world["ground_*"]` sprite, built in `sprites.js`),
    and a `DRESSING[wardId]` entry naming that ward's arena props (§6.6 — omit it and
    the arena is simply bare). Optionally a `bossArena: {...}` block, and a `special: {...}`

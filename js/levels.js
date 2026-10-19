@@ -554,7 +554,7 @@ window.Delve = window.Delve || {};
   G.bossArena = null;
   G.decor = [];   // arena props (Batch 8): decoration only, never tiles
   G.groundCover = [];   // biome floor clusters (Batch 16): decoration only, never tiles
-  G.puddles = [];       // wall-fed water (js/puddles.js): shape + crack data, never saved
+  G.puddles = [];       // wall-anchored water (js/puddles.js): shape data, never saved
   G.shop = { x:-1, y:-1 };
   G.stairs = null;
   // FIX: floorData used to persist across floors, so a secret room found on

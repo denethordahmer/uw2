@@ -94,7 +94,6 @@ const DEATH_LIFE = 460;
    moss: b.moss || "#3f6d55", water: b.water || "#1e3a4a", torch: b.torch || "#ffb347",
    light: b.light || "rgba(70,140,255,0.06)",
    clutter: b.clutter || "ruins",     // decoration family for floor tiles
-   ambient: b.ambient || null,        // drifting weather, null = none
    // organic-patch colours (levels.js patches): a ward can restyle its grass
    // and water overlays as pure data — snow instead of moss, ice instead of water
    patchGrass: b.patchGrass || b.moss || "#3f6d55",
@@ -570,7 +569,7 @@ const DEATH_LIFE = 460;
  // A door is a single tile in the shared wall between two rooms: a recessed
  // timber set into the stone. GRASS is still a cellular-automaton blob
  // (levels.js), so each tile draws its own deterministic slice. WATER is a
- // wall-fed puddle: js/puddles.js owns both the pool shape and its wall crack.
+ // wall-anchored puddle: js/puddles.js owns the pool shape.
  function drawDoorTile(ctx, sx, sy, ts, b){
   ctx.save();
   ctx.fillStyle = b.wallBrick || "#3a4248";
@@ -1010,9 +1009,6 @@ const DEATH_LIFE = 460;
   }
   // wall growth climbs (js/growth.js) — only on walls a floor patch grows against
   Delve.drawGrowthWalls(ctx,camX,camY,vw,vh,ts);
-  // cracks feeding the puddles (js/puddles.js) — a crack belongs to the wall, so
-  // it goes over the wall art, before the hanging props and the entities
-  if(Delve.drawPuddleCracks) Delve.drawPuddleCracks(ctx,camX,camY,vw,vh,ts,b);
   // hanging props, over the wall art. Drawn before the entities below, so a boss
   // or monster standing in front of a banner still covers it.
   drawDecor(ctx,camX,camY,vw,vh,ts,"wall");
@@ -1094,7 +1090,6 @@ const DEATH_LIFE = 460;
 
   if(Delve.markVisited) Delve.markVisited(G.px,G.py);
 
-  drawAmbience(ctx,ts,b);
   drawFloaters(ctx,camX,camY,ts);
 
   // a faint per-biome colour wash, then the vignette
@@ -1109,49 +1104,6 @@ const DEATH_LIFE = 460;
    ctx.font="700 16px system-ui, sans-serif"; ctx.textAlign="center"; ctx.fillStyle="rgba(0,0,0,0.6)"; ctx.fillText(G.msg,W/2+1,H-45); ctx.fillStyle="#eafff5"; ctx.fillText(G.msg,W/2,H-46);
   }
  };
-
- // ── AMBIENCE ─────────────────────────────────────────────────
- // Drifting weather. Screen-space, and completely stateless: each particle's
- // position is derived from a hash of its index plus the clock, so nothing is
- // stored between frames and nothing has to be cleaned up. The wrap-around
- // comes free by taking the fractional part of the position.
- function drawAmbience(ctx, ts, b){
-  const a = b.ambient;
-  if(!a || !a.count) return;
-  const W = Delve.W, H = Delve.H, now = Date.now()/1000;
-  ctx.save();
-  for(let i=0;i<a.count;i++){
-   const ox=hash3(i,3,211), oy=hash3(i,7,419), sp=0.75+hash3(i,11,653)*0.5;
-   const fall=oy + now*a.vy*sp;
-   const y=fall-Math.floor(fall);
-   const sway=Math.sin(now*0.35*sp + i*1.7)*a.drift;
-   const moved=ox+sway, x=moved-Math.floor(moved);
-   const px=x*W, py=y*H;
-   // fade in off the top edge and out at the bottom, so nothing pops
-   const edge=Math.min(1,y*5)*Math.min(1,(1-y)*5);
-   if(edge<=0) continue;
-   const alpha=a.alpha*edge*(0.55+hash3(i,13,877)*0.45);
-   const r=a.size*ts*(0.7+hash3(i,17,941)*0.6);
-   ctx.globalAlpha=alpha;
-   if(a.type==="ember"){
-    ctx.fillStyle=a.col2;
-    ctx.fillRect(px-r*0.5, py-r*0.5, r, r);
-    ctx.globalAlpha=alpha*0.5; ctx.fillStyle=a.col;
-    ctx.beginPath(); ctx.arc(px,py,r*1.6,0,Math.PI*2); ctx.fill();
-   } else if(a.type==="snow"){
-    ctx.fillStyle=a.col;
-    ctx.fillRect(px-r*0.5, py-r*0.5, r*0.9, r*0.9);
-    if(hash3(i,19,911)<0.3){
-     ctx.globalAlpha=alpha*0.7; ctx.fillStyle=a.col2;
-     ctx.fillRect(px-r*0.4, py-r*0.4, r*0.6, r*0.6);
-    }
-   } else {
-    ctx.fillStyle=a.col;
-    ctx.beginPath(); ctx.arc(px,py,r*0.7,0,Math.PI*2); ctx.fill();
-   }
-  }
-  ctx.restore();
- }
 
  // Short corpse fade: shrink a little, sink a little, fade out. A death belonging to a
 // different floor is skipped outright, so a corpse from the previous floor can never ghost
@@ -1223,8 +1175,8 @@ const DEATH_LIFE = 460;
  Delve.isTorchTile = isTorchTile;
 
  // ── ANIMATION CLOCK ──────────────────────────────────────────
- // One timer for everything that moves: torches flicker, weather drifts, lunges
- // and floaters play out. It redraws only while something is genuinely animating,
+ // One timer for everything that moves: torches flicker, lunges and floaters play
+ // out. It redraws only while something is genuinely animating,
  // and it stops entirely while the tab is hidden — a phone in a pocket shouldn't
  // be redrawing a dungeon. Raise ANIM_MS if a device runs warm.
  const ANIM_MS = 150;
@@ -1232,8 +1184,6 @@ const DEATH_LIFE = 460;
  function animating(){
   const G = Delve.G;
   if(!G) return false;
-  const B = biome();
-  if(B.ambient && B.ambient.count) return true;          // drifting weather
   if(floaters.length || shakeT > 0) return true;
   if(deaths.length) return true;                                  // corpse fades (§Batch 15)
   if(G.hitStopUntil && Date.now() < G.hitStopUntil) return true;  // a frozen impact frame
