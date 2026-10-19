@@ -115,10 +115,14 @@ const DEATH_LIFE = 460;
  }
 
  // ── OFFSCREEN TILE CACHE ─────────────────────────────────────
- let tileCache = {}, cacheFloor = -1, cacheTs = 0;
+ let tileCache = {}, cacheFloor = -1, cacheTs = 0, cachePuddles = null;
  function ensureCache(G){
-  if(cacheFloor !== G.floor || cacheTs !== Delve.ts){
-   cacheFloor = G.floor; cacheTs = Delve.ts; tileCache = {};
+  // Also keyed on the puddles array identity (js/puddles.js): puddle art varies
+  // per generation, so regenerating the SAME floor (debug re-render, a fresh
+  // floor-1 run) must drop the cached water tiles too — a floor/ts change alone
+  // would leave the previous generation's pools painted on the new grid.
+  if(cacheFloor !== G.floor || cacheTs !== Delve.ts || cachePuddles !== G.puddles){
+   cacheFloor = G.floor; cacheTs = Delve.ts; cachePuddles = G.puddles; tileCache = {};
   }
  }
  // Braziers. Everywhere else a torch is a 4% roll; a boss arena instead gets a
@@ -178,7 +182,7 @@ const DEATH_LIFE = 460;
    drawFloorTile(cx, 0, 0, ts, gx, gy, b);
    if(t === Delve.T.STAIR) drawStairs(cx, 0, 0, ts, b);
    if(t === Delve.T.DOOR) drawDoorTile(cx, 0, 0, ts, b);
-   if(t === Delve.T.WATER) drawWaterPatch(cx, 0, 0, ts, gx, gy, b);
+   if(t === Delve.T.WATER && Delve.drawPuddleTile) Delve.drawPuddleTile(cx, 0, 0, ts, gx, gy, b);
    if(t === Delve.T.GRASS) drawGrassPatch(cx, 0, 0, ts, gx, gy, b);
   } else {
    drawWallTile(cx, 0, 0, ts, gx, gy, b);
@@ -564,9 +568,9 @@ const DEATH_LIFE = 460;
  // ── TORCH ────────────────────────────────────────────────────
  // ── DOOR + PATCH TILES (layer1 port) ─────────────────────────
  // A door is a single tile in the shared wall between two rooms: a recessed
- // timber set into the stone. WATER and GRASS are organic cellular-automaton
- // blobs (levels.js), so each tile just draws its own deterministic slice;
- // colours come from the biome's patch palette.
+ // timber set into the stone. GRASS is still a cellular-automaton blob
+ // (levels.js), so each tile draws its own deterministic slice. WATER is a
+ // wall-fed puddle: js/puddles.js owns both the pool shape and its wall crack.
  function drawDoorTile(ctx, sx, sy, ts, b){
   ctx.save();
   ctx.fillStyle = b.wallBrick || "#3a4248";
@@ -581,31 +585,6 @@ const DEATH_LIFE = 460;
   }
   ctx.fillStyle = "#c8a84a";
   ctx.beginPath(); ctx.arc(sx + ts*0.68, sy + ts*0.52, Math.max(1, ts*0.05), 0, Math.PI*2); ctx.fill();
-  ctx.restore();
- }
-
- function drawWaterPatch(ctx, sx, sy, ts, gx, gy, b){
-  ctx.save();
-  ctx.fillStyle = b.patchWater;
-  ctx.fillRect(sx, sy, ts, ts);
-  // darker rim where this water tile borders plain floor
-  const isWater = function(x, y){ return tileAt(x, y) === Delve.T.WATER; };
-  const rim = Math.max(1, ts * 0.06);
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
-  if(!isWater(gx, gy - 1)) ctx.fillRect(sx, sy, ts, rim);
-  if(!isWater(gx, gy + 1)) ctx.fillRect(sx, sy + ts - rim, ts, rim);
-  if(!isWater(gx - 1, gy)) ctx.fillRect(sx, sy, rim, ts);
-  if(!isWater(gx + 1, gy)) ctx.fillRect(sx + ts - rim, sy, rim, ts);
-  // a couple of gentle glints
-  ctx.globalAlpha = 0.5;
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  const g1x = sx + ts * (0.2 + hash2(gx, gy) * 0.5), g1y = sy + ts * (0.25 + hash3(gx, gy, 401) * 0.4);
-  ctx.beginPath(); ctx.ellipse(g1x, g1y, ts * 0.10, ts * 0.05, 0, 0, Math.PI*2); ctx.fill();
-  if(hash3(gx, gy, 409) < 0.5){
-   ctx.beginPath();
-   ctx.ellipse(sx + ts * (0.55 + hash3(gx, gy, 419) * 0.3), sy + ts * (0.6 + hash3(gx, gy, 421) * 0.25), ts * 0.07, ts * 0.035, 0, 0, Math.PI*2);
-   ctx.fill();
-  }
   ctx.restore();
  }
 
@@ -1031,6 +1010,9 @@ const DEATH_LIFE = 460;
   }
   // wall growth climbs (js/growth.js) — only on walls a floor patch grows against
   Delve.drawGrowthWalls(ctx,camX,camY,vw,vh,ts);
+  // cracks feeding the puddles (js/puddles.js) — a crack belongs to the wall, so
+  // it goes over the wall art, before the hanging props and the entities
+  if(Delve.drawPuddleCracks) Delve.drawPuddleCracks(ctx,camX,camY,vw,vh,ts,b);
   // hanging props, over the wall art. Drawn before the entities below, so a boss
   // or monster standing in front of a banner still covers it.
   drawDecor(ctx,camX,camY,vw,vh,ts,"wall");

@@ -188,7 +188,9 @@ window.Delve = window.Delve || {};
  // spawn/stairs/shop so those tiles stay plain, and claims plain FLOOR only —
  // spawners never sit on a patch.
  function applyPatch(G, def){
-  if(!def || !def.type) return;
+  // Water is no longer a cellular-automaton patch: it only appears as wall-fed
+  // puddles (js/puddles.js), so a leftover water entry is ignored.
+  if(!def || !def.type || def.type === "water") return;
   const patch = generatePatch(G.gridW, G.gridH, def.seed || 0.5, def.nGen || 3);
   const tile = (def.type === "water") ? T().WATER : T().GRASS;
   let floorCount = 0;
@@ -552,6 +554,7 @@ window.Delve = window.Delve || {};
   G.bossArena = null;
   G.decor = [];   // arena props (Batch 8): decoration only, never tiles
   G.groundCover = [];   // biome floor clusters (Batch 16): decoration only, never tiles
+  G.puddles = [];       // wall-fed water (js/puddles.js): shape + crack data, never saved
   G.shop = { x:-1, y:-1 };
   G.stairs = null;
   // FIX: floorData used to persist across floors, so a secret room found on
@@ -891,6 +894,15 @@ window.Delve = window.Delve || {};
    if(right !== T().VOID && right !== T().WALL) G.grid[y][G.gridW-1] = T().WALL;
   }
 
+  // Wall-fed puddles (js/puddles.js) — after every prop is placed, so a pool can
+  // never cover a chest, barrel, gold pile or monster, and before the ground
+  // cover/growth, which only dress plain FLOOR. A failure here must never abort
+  // floor generation, exactly like growth below.
+  try {
+    if (typeof Delve.placePuddles === "function") Delve.placePuddles(G);
+  } catch (e) {
+    if (Delve.logSystem) Delve.logSystem("Puddles skipped: " + e.message);
+  }
   // Biome ground cover (Batch 16) — placed last so it avoids the stairs, shop,
   // chests and monsters this floor has just laid down.
   Delve.placeGroundCover(G);

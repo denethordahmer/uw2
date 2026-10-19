@@ -6,14 +6,12 @@ window.Delve = window.Delve || {};
 
  C.WARDS = [
   { id:1, name:"Upper Ruins", floors:[1,10], biome:0,
-    // Organic patches (layer1 port): cellular-automaton blobs painted over the
-    // floor after the doors are cut. type "grass"|"water"; seed = starting
-    // density, nGen = smoothing passes, amount = max fraction of floor claimed.
-    // Grass-tile patches are gone from this ward: moss is now fine-grain decoration
-    // (`moss` below). Water stays as it was until its own polish batch.
-    patches:[
-      { type:"water", seed:0.45, nGen:3, amount:0.10 }
-    ],
+    // Organic patches (layer1 port): cellular-automaton GRASS blobs painted over
+    // the floor after the doors are cut. type "grass"; seed = starting density,
+    // nGen = smoothing passes, amount = max fraction of floor claimed.
+    // Water is no longer a CA patch: it is wall-fed puddles (js/puddles.js), so
+    // every pool has a crack and a reason to be there.
+    patches:[],
     // Floor growth (js/growth.js placeGrowth): sporadic organic patches, rolled per
     // room. roomChance = odds a room grows any; largeArea/largeChance/bigChance
     // = a large room may instead grow one big patch or two normal ones;
@@ -32,9 +30,9 @@ window.Delve = window.Delve || {};
     lootRarityMult:1 },
 
   { id:2, name:"The Blackvein", floors:[11,20], biome:1,
-    // Organic patches (layer1 port) — dark pools dominate, scraggly tufts rare.
+    // Organic patches (layer1 port) — scraggly tufts; water comes from
+    // wall-fed puddles now (js/puddles.js).
     patches:[
-      { type:"water", seed:0.50, nGen:3, amount:0.26 },
       { type:"grass", seed:0.45, nGen:3, amount:0.06 }
     ],
     roomMin:6, roomMax:10,
@@ -56,9 +54,9 @@ window.Delve = window.Delve || {};
     } },
 
   { id:3, name:"The Frosted Vault", floors:[21,30], biome:2,
-    // Organic patches (layer1 port) — pale ice sheets with the odd snow drift.
+    // Organic patches (layer1 port) — snow drifts; pale ice sheets come from
+    // wall-fed puddles (js/puddles.js), tinted by patchWater below.
     patches:[
-      { type:"water", seed:0.50, nGen:3, amount:0.24 },
       { type:"grass", seed:0.45, nGen:3, amount:0.08 }
     ],
     roomMin:6, roomMax:10,
@@ -77,10 +75,10 @@ window.Delve = window.Delve || {};
     } },
 
   { id:4, name:"The Bone Ossuary", floors:[31,40], biome:3,
-    // Organic patches (layer1 port) — bone-dust drifts with murky pools.
+    // Organic patches (layer1 port) — bone-dust drifts; murky pools come from
+    // wall-fed puddles (js/puddles.js), tinted by patchWater below.
     patches:[
-      { type:"grass", seed:0.50, nGen:3, amount:0.22 },
-      { type:"water", seed:0.42, nGen:3, amount:0.06 }
+      { type:"grass", seed:0.50, nGen:3, amount:0.22 }
     ],
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,

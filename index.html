@@ -8,6 +8,9 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="theme-color" content="#0b0f14">
+<link rel="preload" href="fonts/title.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="fonts/sub.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="fonts/buttons.ttf" as="font" type="font/ttf" crossorigin>
 <style>
 :root { color-scheme:dark; }
 *{ margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent; }
@@ -587,12 +590,15 @@ body{
    under neutral internal names (Uw*) so a font already installed on the phone can never
    shadow them. font-weight is declared as a range so the browser uses the font's real
    glyphs at any weight instead of synthesising a fake bold, which goes muddy behind a
-   text-stroke. font-display:swap shows the fallback immediately rather than invisible
-   text while a font loads. Swapping a font later means replacing the file and bumping
-   ?v= — these are cached as hard as anything else on a phone. */
-@font-face{ font-family:"UwTitle"; src:url("fonts/title.ttf") format("truetype"); font-weight:400 900; font-display:swap; }
-@font-face{ font-family:"UwSub";   src:url("fonts/sub.ttf") format("truetype"); font-weight:400 900; font-display:swap; }
-@font-face{ font-family:"UwBtn";   src:url("fonts/buttons.ttf") format("truetype"); font-weight:400 900; font-display:swap; }
+   text-stroke. font-display:block + the <head> preloads keep the title from flashing the
+   system-font fallback on every fresh load — that fallback look is exactly what the old
+   pre-Batch-12 title was, which is why it read as the "old version" flickering in first.
+   block holds text invisible while the font arrives (near-instant with the preloads) and
+   still falls back after ~3s if a load ever fails. Swapping a font later means replacing
+   the file and bumping ?v= — these are cached as hard as anything else on a phone. */
+@font-face{ font-family:"UwTitle"; src:url("fonts/title.ttf") format("truetype"); font-weight:400 900; font-display:block; }
+@font-face{ font-family:"UwSub";   src:url("fonts/sub.ttf") format("truetype"); font-weight:400 900; font-display:block; }
+@font-face{ font-family:"UwBtn";   src:url("fonts/buttons.ttf") format("truetype"); font-weight:400 900; font-display:block; }
 
 /* ── Title screen (owned by js/menu.js — see architecture.md §6.11) ────────
    Everything here is additive: it only names #titleScreen and its own
@@ -947,6 +953,7 @@ body{
 <script src="js/levels.js"></script>
 <script src="js/ground.js"></script>
 <script src="js/growth.js"></script>
+<script src="js/puddles.js"></script>
 <script src="js/traits.js"></script>
 <script src="js/combat.js"></script>
 <script src="js/movement.js"></script>

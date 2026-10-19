@@ -1,8 +1,9 @@
 window.Delve = window.Delve || {};
 // VOID (10) and DOOR (11) join in the layer1 overhaul: VOID is the unpainted
 // black beyond the rooms (solid, never drawn as stone), DOOR is the single
-// walkable tile in a shared wall between two rooms. WATER/GRASS (12/13) are
-// the organic cellular-automaton patch tiles — walkable floor variants.
+// walkable tile in a shared wall between two rooms. GRASS (13) is still an
+// organic cellular-automaton patch tile; WATER (12) is a wall-fed puddle
+// (js/puddles.js). Both are walkable floor variants.
 // Existing tile numbers are deliberately unchanged: every file compares
 // against them by value.
 Delve.T = { FLOOR:0, WALL:1, STAIR:2, MONSTER:3, BOSS:4, CHEST:5, GOLD:6, ITEM:7, POTION:8, BARREL:9, VOID:10, DOOR:11, WATER:12, GRASS:13 };
@@ -80,7 +81,7 @@ Delve.newRun = function(){
   pendingLevelUps:0, levelUpOpen:false,
   lastDir:"right", msg:"", msgUntil:0,
   visited:[], _visitedFloor:-1,
-  monsters:[], goldPiles:[], barrels:[], chests:[], items:[], decor:[],
+  monsters:[], goldPiles:[], barrels:[], chests:[], items:[], decor:[], puddles:[],
   shop:{ x:-1, y:-1, stock:null }, stairs:null, boss:null, floorData:{},
   px:0, py:0, gridW:0, gridH:0, grid:[]
  };

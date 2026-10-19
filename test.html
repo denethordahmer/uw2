@@ -138,7 +138,7 @@ function sec(title){
   return document.getElementById(id);
 }
 
-/* ── load order (mirrors index.html — 30 files) ──────────────── */
+/* ── load order (mirrors index.html — 32 files) ──────────────── */
 var FILES = [
   "js/config.js",
   "js/content/con-monsters.js",
@@ -157,6 +157,7 @@ var FILES = [
   "js/levels.js",
   "js/ground.js",
   "js/growth.js",
+  "js/puddles.js",
   "js/traits.js",
   "js/combat.js",
   "js/movement.js",
@@ -377,6 +378,7 @@ var REQUIRED_FN = [
   "hasSavedRun","savedRunFloor","resumeRun","restoreRunFromCheckpoint",
   "setFloorCheckpoint","clearRunCheckpoint","captureRunSnapshot","addDeath","saveAndExit",
   "placeGroundCover","drawGroundCover","placeGrowth","drawGrowthFloor","drawGrowthWalls",
+  "placePuddles","drawPuddleTile","drawPuddleCracks",
   "registerWorldSprite","registerClutter",
   "registerMonsterSprite","absorbBossShield"
 ];
