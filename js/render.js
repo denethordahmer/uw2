@@ -173,10 +173,19 @@ const DEATH_LIFE = 460;
   const key = gx + "," + gy;
   const entry = tileCache[key];
   if(entry && entry.v === t){ ctx.drawImage(entry.c, sx, sy, ts, ts); return; }
+  // Size the offscreen tile to whole device pixels, then scale by the ACTUAL
+  // ratio (canvasWidth / ts) rather than the raw devicePixelRatio. On screens
+  // with a fractional DPR — common on Android, e.g. 2.625 or 2.75 — rounding
+  // ts*dpr leaves the scaled drawing area a fraction wider/taller than the
+  // canvas, so the tile never quite fills its own bitmap. Blitting that back
+  // leaves a sub-pixel gap on every tile edge, which reads as a faint square
+  // grid across the whole floor. Scaling by the exact ratio fills the canvas
+  // edge to edge, so adjacent tiles meet with no seam at all.
   const dpr = window.devicePixelRatio || 1;
   const c = document.createElement("canvas");
-  c.width = Math.round(ts*dpr); c.height = Math.round(ts*dpr);
-  const cx = c.getContext("2d"); cx.scale(dpr, dpr);
+  const pw = Math.max(1, Math.round(ts*dpr)), ph = Math.max(1, Math.round(ts*dpr));
+  c.width = pw; c.height = ph;
+  const cx = c.getContext("2d"); cx.scale(pw / ts, ph / ts);
   if(t !== Delve.T.WALL){
    drawFloorTile(cx, 0, 0, ts, gx, gy, b);
    if(t === Delve.T.STAIR) drawStairs(cx, 0, 0, ts, b);
@@ -223,8 +232,10 @@ const DEATH_LIFE = 460;
   // repeat is hard to spot.
   const BOND_PX = 16, BOND_N = 3;
   let bondKey = null, bondTex = null;
-  function rgbOf(hex){ return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)]; }
-  function mixRGB(a, b, t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+  // Colour helpers are defined once in js/util.js; these aliases keep the many
+  // call sites in this file reading exactly as they did.
+  const rgbOf  = Delve.rgbOf;
+  const mixRGB = Delve.mixRGB;
 
   // ── SEAMLESS FLOOR STYLES ─────────────────────────────────────
   // Every style here bakes a 48x48-pixel torus (= 3x3 tiles at 16px) and blits
@@ -357,21 +368,25 @@ const DEATH_LIFE = 460;
    ctx.imageSmoothingEnabled = false;
    ctx.drawImage(tex, cx, cy, BOND_PX, BOND_PX, sx, sy, ts, ts);
    ctx.restore();
-   // continuous large-scale tone — bilinear per position, so it drifts across
-   // tiles without a step; this is what hides the 3x3 repeat from casual view
-   const t = floorTone(gx, gy);
-   ctx.save();
-   ctx.globalAlpha = 0.05 + Math.abs(t - 0.5) * 0.22;
-   if(b.floorStyle === "dirt"){
-    // Brown earth must not pick up the old slate-blue cast, so the drift is
-    // tinted from the biome's own floor colours instead.
-    ctx.fillStyle = t < 0.5 ? blendHex(b.floor2, "#04070a", 0.55) : blendHex(b.floor, "#ffffff", 0.62);
-   } else {
-    // runningbond keeps its locked-in look, byte for byte.
+   // Continuous large-scale tone — bilinear per position, so it drifts across
+   // tiles without a step; this is what hides the 3x3 repeat from casual view.
+   //
+   // Dirt SKIPS this overlay entirely. floorTone is sampled once per tile centre
+   // and then stamped as a flat fillRect across the whole tile, so each tile
+   // becomes a hard-edged rectangle of a single alpha — neighbouring tiles get
+   // different alphas and the boundary reads as a square grid. That rectangle is
+   // exactly what this style exists to avoid. The dirt field already carries its
+   // own multi-octave variation (broad patches, clumping, dry flecks, mycelium),
+   // so the texture does its own shading and there is no per-tile rectangle to
+   // see. Masonry keeps the overlay, byte for byte, so ward 1 is untouched.
+   if(b.floorStyle !== "dirt"){
+    const t = floorTone(gx, gy);
+    ctx.save();
+    ctx.globalAlpha = 0.05 + Math.abs(t - 0.5) * 0.22;
     ctx.fillStyle = t < 0.5 ? "#060a0e" : "#9fb2c4";
+    ctx.fillRect(sx, sy, ts, ts);
+    ctx.restore();
    }
-   ctx.fillRect(sx, sy, ts, ts);
-   ctx.restore();
   }
  function drawFloorTile(ctx, sx, sy, ts, gx, gy, b){
   const n = hash2(gx,gy), n3 = hash3(gx,gy,31), n4 = hash3(gx,gy,53);
@@ -1240,15 +1255,8 @@ const DEATH_LIFE = 460;
   floaters=alive;
  }
 
- function blendHex(hex,hex2,t){
-  const p=c=>parseInt(c,16);
-  const r1=p(hex.slice(1,3)),g1=p(hex.slice(3,5)),b1=p(hex.slice(5,7));
-  const r2=p(hex2.slice(1,3)),g2=p(hex2.slice(3,5)),b2=p(hex2.slice(5,7));
-  const r=Math.round(r1+(r2-r1)*t).toString(16).padStart(2,"0");
-  const g=Math.round(g1+(g2-g1)*t).toString(16).padStart(2,"0");
-  const b=Math.round(b1+(b2-b1)*t).toString(16).padStart(2,"0");
-  return "#"+r+g+b;
- }
+ // Defined once in js/util.js. Alias kept so existing call sites are untouched.
+ const blendHex = Delve.blendHex;
 
  // `sc` is an optional size multiplier — crits pass one so a crit reads as a bigger event.
  Delve.addFloater = function(txt,x,y,col,sc){

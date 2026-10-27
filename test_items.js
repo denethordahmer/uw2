@@ -1,11 +1,33 @@
 #!/usr/bin/env node
 // test_items.js - Node regression suite for the item overhaul.
-// Loads the real game scripts in index.html order (canvas/document stubbed),
-// then checks the numbers that docs/results/items_overhaul.md locks down.
+//
+// This is the ONE command to run before shipping a change. It does two things:
+//   1. Load-order guard — runs tools/check-order.js, which asserts that
+//      js/manifest.js, index.html and the files on disk all agree.
+//   2. Item checks — loads the real game scripts in manifest order (canvas and
+//      document stubbed) and verifies the numbers the item overhaul locks down.
+//
+// Both must pass. A load-order failure exits non-zero before a single game
+// script loads, so a broken manifest can never quietly "pass" the item suite.
+//
 // Run: node test_items.js
 "use strict";
 const vm = require("vm"), fs = require("fs"), path = require("path");
+const { execFileSync } = require("child_process");
 const root = __dirname;
+
+// ── 1. load-order guard ───────────────────────────────────────
+// Output is inherited, so check-order.js prints its own ✓/✗ lines inline.
+try {
+  execFileSync(process.execPath, [path.join(root, "tools", "check-order.js")], { stdio: "inherit" });
+} catch (e) {
+  console.log("");
+  console.log("LOAD ORDER FAILED — fix js/manifest.js and/or index.html.");
+  console.log("Item results below would be meaningless: the suite may be loading a");
+  console.log("different set of files than the game actually ships.");
+  process.exit(1);
+}
+console.log("");
 
 function ctx2d(){
   return new Proxy({ canvas:null }, {
@@ -35,7 +57,17 @@ ctx.getComputedStyle = () => ({ display:"none" });
 ctx.location = { href:"http://localhost/" };
 vm.createContext(ctx);
 
-const FILES = ["js/config.js","js/content/con-monsters.js","js/content/con-items.js","js/content/con-itemaffixes.js","js/content/con-biomes.js","js/content/con-traits.js","js/content/con-progression.js","js/save.js","js/attrs.js","js/items.js","js/sprites.js","js/content/con-bosssprites.js","js/content/con-itemsprites.js","js/content/con-worldart.js","js/content/con-monstersprites.js","js/state.js","js/levels.js","js/ground.js","js/growth.js","js/puddles.js","js/render.js","js/combat.js","js/movement.js","js/pathfind.js","js/input.js","js/ui.js","js/log.js","js/effects.js","js/rewards.js","js/progression.js","js/traits.js","js/menu.js","js/sfx.js","js/main.js"];
+// Load order comes from js/manifest.js — the single declared list. This file
+// used to carry its own copy, which silently drifted: after the pure helpers
+// moved into js/util.js this list still skipped it, and the suite only passed
+// because the item checks never happened to call them. Reading the manifest
+// means that class of breakage cannot hide again.
+vm.runInContext(fs.readFileSync(path.join(root, "js/manifest.js"), "utf8"), ctx, { filename: "js/manifest.js" });
+const FILES = (ctx.Delve && Array.isArray(ctx.Delve.MANIFEST)) ? ctx.Delve.MANIFEST.slice() : null;
+if(!FILES || !FILES.length){
+  console.log("LOAD FAIL js/manifest.js did not expose Delve.MANIFEST");
+  process.exit(1);
+}
 
 let fails = 0, checks = 0;
 const ok = (cond, msg) => { checks++; if(!cond){ fails++; console.log("  FAIL " + msg); } };

@@ -138,43 +138,28 @@ function sec(title){
   return document.getElementById(id);
 }
 
-/* ── load order (mirrors index.html — 34 files) ──────────────── */
-var FILES = [
-  "js/config.js",
-  "js/content/con-monsters.js",
-  "js/content/con-items.js",
-  "js/content/con-itemaffixes.js",
-  "js/content/con-biomes.js",
-  "js/content/con-traits.js",
-  "js/content/con-progression.js",
-  "js/save.js",
-  "js/attrs.js",
-  "js/items.js",
-  "js/sprites.js",
-  "js/content/con-bosssprites.js",
-  "js/content/con-itemsprites.js",
-  "js/content/con-worldart.js",
-  "js/content/con-monstersprites.js",
-  "js/state.js",
-  "js/levels.js",
-  "js/ground.js",
-  "js/growth.js",
-  "js/puddles.js",
-  "js/traits.js",
-  "js/combat.js",
-  "js/movement.js",
-  "js/rewards.js",
-  "js/effects.js",
-  "js/sfx.js",
-  "js/log.js",
-  "js/render.js",
-  "js/pathfind.js",
-  "js/input.js",
-  "js/ui.js",
-  "js/menu.js",
-  "js/progression.js",
-  "js/main.js"
-];
+/* ── load order ──────────────────────────────────────────────────
+   Read from js/manifest.js — the one place that declares the order. This page
+   used to keep its own hand-copied FILES[] array, which drifted from
+   index.html (that drift is what §1 was written to detect). Now §1 compares
+   index.html against the manifest itself, so there is only ever one list. */
+var FILES = (function(){
+  try {
+    var m = new XMLHttpRequest();
+    m.open("GET", "js/manifest.js?v=" + Date.now(), false);
+    m.send();
+    if (m.status === 200 || m.status === 0){
+      (new Function(m.responseText))();
+      if (window.Delve && Object.prototype.toString.call(window.Delve.MANIFEST) === "[object Array]"){
+        return window.Delve.MANIFEST.slice();
+      }
+    }
+  } catch(eMf){}
+  return [];
+})();
+if (!FILES.length){
+  out('<div class="fail">✗ Could not read js/manifest.js — this page must be served over http, not opened from disk.</div>');
+}
 
 // overlays that must be closed before the uiBlocked test, in case an earlier
 // section left one open (e.g. showBossIntro fires on floors 10 and 20)

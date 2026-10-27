@@ -426,23 +426,45 @@ window.Delve = window.Delve || {};
  });
  Delve.registerClutter("blackvein", {
   clutter: function(ctx, sx, sy, ts, roll){
+   // Organic scatter. Position, size and rotation all vary per tile, so nothing
+   // lands dead-centre or repeats the same shape twice. The old painter always
+   // drew at ts*0.50 — mechanically centred, which read as stamped decoration
+   // rather than something growing out of the soil.
+   const jx = hash3(sx|0, sy|0, 911), jy = hash3(sx|0, sy|0, 913);
+   const jr = hash3(sx|0, sy|0, 917), js = hash3(sx|0, sy|0, 919);
+   const ox = sx + ts*(0.18 + jx*0.64), oy = sy + ts*(0.18 + jy*0.64);
+   const sc = (ts/40) * (0.72 + js*0.72);
    ctx.save(); ctx.globalAlpha=0.62;
-   if(roll < 0.012){
+   if(roll < 0.010){
     // a thorn breaking the surface
     ctx.fillStyle="#4a3a1e";
-    ctx.beginPath(); ctx.moveTo(sx+ts*0.50,sy+ts*0.44); ctx.lineTo(sx+ts*0.42,sy+ts*0.66); ctx.lineTo(sx+ts*0.58,sy+ts*0.66); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(ox,oy-sc*2.2); ctx.lineTo(ox-sc*4,oy+sc*4.4); ctx.lineTo(ox+sc*4,oy+sc*4.4); ctx.closePath(); ctx.fill();
     ctx.fillStyle="#c8d84a";
-    ctx.beginPath(); ctx.arc(sx+ts*0.50,sy+ts*0.47,ts*0.04,0,Math.PI*2); ctx.fill();
-   } else if(roll < 0.02){
+    ctx.beginPath(); ctx.arc(ox,oy-sc*1.2,sc*1.5,0,Math.PI*2); ctx.fill();
+   } else if(roll < 0.018){
     // a spore pod, pulsing faintly
     ctx.fillStyle="#3d5a22";
-    ctx.beginPath(); ctx.ellipse(sx+ts*0.50,sy+ts*0.58,ts*0.09,ts*0.12,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(ox,oy+sc,sc*3.6,sc*4.8,0,0,Math.PI*2); ctx.fill();
     ctx.globalAlpha=0.4; ctx.fillStyle="#7a9a3a";
-    ctx.beginPath(); ctx.arc(sx+ts*0.50,sy+ts*0.56,ts*0.12,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox,oy+sc*0.2,sc*4.8,0,Math.PI*2); ctx.fill();
+   } else if(roll < 0.026){
+    // a fallen leaf, curled and half-buried in the soil
+    ctx.globalAlpha=0.55; ctx.fillStyle="#5a6a24";
+    ctx.save(); ctx.translate(ox,oy); ctx.rotate(jr*Math.PI*2);
+    ctx.beginPath(); ctx.ellipse(0,0,sc*4.2,sc*2.0,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle="#7a9a3a"; ctx.lineWidth=Math.max(1,sc*0.7); ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(-sc*3.4,0); ctx.lineTo(sc*3.4,0); ctx.stroke();
+    ctx.restore();
    } else {
-    // a patch of glowing seam-moss
-    ctx.globalAlpha=0.35; ctx.fillStyle="#7a9a3a";
-    ctx.beginPath(); ctx.ellipse(sx+ts*0.50,sy+ts*0.58,ts*0.16,ts*0.07,0,0,Math.PI*2); ctx.fill();
+    // a root working its way through the soil
+    ctx.globalAlpha=0.45; ctx.strokeStyle="#4a3a1e";
+    ctx.lineWidth=Math.max(1,sc*1.4); ctx.lineCap="round";
+    ctx.beginPath();
+    ctx.moveTo(sx+ts*0.08,oy);
+    ctx.bezierCurveTo(ox-sc*3,oy-sc*3,ox+sc*3,oy+sc*3,ox+sc*6,oy-sc*1);
+    ctx.stroke();
+    ctx.globalAlpha=0.3; ctx.fillStyle="#7a9a3a";
+    ctx.beginPath(); ctx.ellipse(ox,oy-sc*0.5,sc*2.6,sc*1.2,jr*2,0,Math.PI*2); ctx.fill();
    }
    ctx.restore();
   },
