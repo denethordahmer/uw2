@@ -1,7 +1,7 @@
 window.Delve = window.Delve || {};
 (function(){
-  const SAVE_KEY = "underward_save_v3";
-  const LEGACY_KEYS = ["delve_save_v1", "underward_save_v2", "underward_save"];
+  const SAVE_KEY = "underward_save_v4";
+  const LEGACY_KEYS = ["underward_save_v3", "delve_save_v1", "underward_save_v2", "underward_save"];
   const ATTR_IDS = ["con", "str", "tou", "luc", "agi", "eng"];
 
   function makeDefaultLevels(){
@@ -12,7 +12,7 @@ window.Delve = window.Delve || {};
 
   function makeDefaultSave(){
     return {
-      version: 3,
+      version: 4,
       shards: 0,
       bestFloor: 1,
       lvls: makeDefaultLevels(),
@@ -69,6 +69,20 @@ window.Delve = window.Delve || {};
   // the fields are the run object's own — but strict about the two things that matter:
   // it must survive a JSON round-trip, and it must name a real floor. Anything else
   // returns null, which the game reads as "no run to resume".
+  // v4 item schema: a gear instance carries a continuous `quality` and (for
+  // weapons) an itemMax. Anything older has stale flat-atk gear that would deal
+  // nonsense damage with the new range maths, so it is dropped at the door -
+  // gold, shards, levels and potions all survive.
+  function isCurrentItem(it){
+    if(!it || typeof it !== "object") return false;
+    if(it.slot === "consumable") return true;
+    return typeof it.quality === "number" && it.quality > 0;
+  }
+  function cleanItems(list){
+    if(!Array.isArray(list)) return [];
+    return list.filter(isCurrentItem);
+  }
+
   function sanitizeRun(raw){
     if(!raw || typeof raw !== "object") return null;
     const floor = sanitizeNumber(raw.floor, 0);
@@ -79,6 +93,13 @@ window.Delve = window.Delve || {};
     try {
       const copy = JSON.parse(json);
       copy.floor = Math.round(floor);
+      copy.inventory = cleanItems(copy.inventory);
+      copy.items = cleanItems(copy.items);
+      if(copy.equip && typeof copy.equip === "object"){
+        for(const slot in copy.equip){
+          if(!isCurrentItem(copy.equip[slot])) copy.equip[slot] = null;
+        }
+      }
       return copy;
     } catch(_err){ return null; }
   }
@@ -87,7 +108,7 @@ window.Delve = window.Delve || {};
     const base = makeDefaultSave();
     const src = raw && typeof raw === "object" ? raw : {};
 
-    base.version = 3;
+    base.version = 4;
     base.shards = sanitizeNumber(src.shards, 0);
     base.bestFloor = sanitizeNumber(src.bestFloor, 1);
     base.lastUpdated = sanitizeNumber(src.lastUpdated, Date.now());
@@ -133,7 +154,7 @@ window.Delve = window.Delve || {};
   function writeSaveToStorage(storageKey, saveData){
     try {
       const safeSave = {
-        version: 3,
+        version: 4,
         shards: sanitizeNumber(saveData.shards, 0),
         bestFloor: sanitizeNumber(saveData.bestFloor, 1),
         lvls: sanitizeLevels(saveData.lvls),

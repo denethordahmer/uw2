@@ -44,6 +44,15 @@ window.Delve = window.Delve || {};
   Delve._clutterFamilies[name] = family;
  };
 
+ // ── Item sprite registry ──
+ // Item art lives in con-itemsprites.js. Builders are LAZY (first request),
+ // because item drawing only starts once the player sees loot - no load-time
+ // cost for 40+ canvases. Key: "weapon:dagger:4", "head:2", "unique:thornbite".
+ Delve._itemSpriteBuilders = Delve._itemSpriteBuilders || {};
+ Delve.registerItemSprite = function(key, builderFn){
+  Delve._itemSpriteBuilders[key] = builderFn;
+ };
+
  // ── Boss sprite registry ──
  // Satellite files call Delve.registerBossSprite(key, builderFn). buildAll()
  // consumes this registry after laying down the base sprites. Adding a new

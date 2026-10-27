@@ -325,7 +325,7 @@ biome ground-cover layer and the wall texture/shadow pass (§6.15). Per-biome cl
 painters are registered content (con-worldart.js) — only the ruins fallback stays here.
 `Delve.drawPaperDoll`, `Delve.markVisited`,
 `Delve.renderMinimap`.
-Draw order is: floored tiles (+ their biome clutter) → **mycelium veins** (soil biomes) → **biome ground cover** → **ward growth**
+Draw order is: floored tiles (+ their biome clutter) → **biome ground cover** → **ward growth**
 (floor blobs) → **floor props** → **wall drop shadows** → walls (+ torches and the secret-wall
 shimmer) → **growth climbs** → **hanging props** → path highlight →
 chests/items/gold/barrels/shop → monsters and boss (a boss gets a pool of torchlight
@@ -1069,19 +1069,6 @@ that sits against a wall. All of it lives in `js/puddles.js`.
   with the floor, exactly like growth and ground cover. A ward can set `puddles:false` to
   opt out; ward 5's lava inherits automatically through its `water` colour.
 
-opt out; ward 5's lava inherits automatically through its `water` colour.
-
-### 6.19 Biome floor & wall surfaces (Batch 22)
-Two optional per-biome surface knobs in `render.js`, named by each `BIOMES` entry:
-- `floorStyle`: `"runningbond"` (ward 1's baked 3×3-tile torus masonry) or `"soil"` (ward 2's
-  continuous, mottled forest loam — two octaves of smooth world-space noise drawn per tile, no
-  slabs and no grid; a separate pass `drawVeins` lays thin silver mycelium threads on ~20% of
-  plain floor tiles). Omitted = the older per-tile flagstone.
-- `wallStyle`: `"roots"` (ward 2) swaps the wall's masonry course lines for wandering root
-  strands and rootlets, keeping the shared organic silhouette, top-down light, chips, torch
-  sheen and the lichen/frost top edge; other wards keep the masonry look.
-
----
 ---
 
 ## 7. Extension recipes

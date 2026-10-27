@@ -175,8 +175,6 @@ window.Delve = window.Delve || {};
     floor:"#2c3524", floor2:"#242c1e", moss:"#7a9a3a",
     water:"#3a2048", torch:"#c8d84a", light:"rgba(120,180,60,0.06)",
     clutter:"blackvein",
-    // Surfaces (render.js): continuous forest-soil floor + root-bound walls.
-    floorStyle:"soil", wallStyle:"roots",
     // Ground-cover sprite (js/ground.js): blood moss creeping over the floor.
     groundCover:"ground_moss" },
   { name:"The Frosted Vault",

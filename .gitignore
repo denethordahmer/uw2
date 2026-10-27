@@ -1,3 +1,8 @@
 .git
 *.zip
 *.log
+*.py
+*.pyc
+__pycache__/
+docs/results/
+docs/sim_report.md

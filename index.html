@@ -322,7 +322,7 @@ body{
 
 /* ── Shop screen ── */
 #shopScreen{ display:none;padding:22px 18px calc(22px + env(safe-area-inset-bottom)); }
-#shopStock{ display:flex;flex-direction:column;gap:10px;width:100%;max-width:460px; }
+#shopStock, #shopSellList{ display:flex;flex-direction:column;gap:10px;width:100%;max-width:460px; }
 .shop-item{
   display:flex;justify-content:space-between;align-items:center;gap:12px;
   background:#141b23;border:1px solid #2a3440;border-radius:14px;padding:12px 14px;
@@ -446,8 +446,8 @@ body{
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
-#shopGold, #shopGreeting, #shopStock{ flex: 0 0 auto; min-height: 0; }
-#shopHealBtn, #shopLeaveBtn{
+#shopGold, #shopGreeting, #shopStock, #shopSellList{ flex: 0 0 auto; min-height: 0; }
+#shopHealBtn, #shopLeaveBtn, #shopSellAll{
   flex: 0 0 auto;
   width: 100%;
   min-height: 48px;
@@ -787,6 +787,9 @@ body{
     <p class="sub" id="shopGreeting"></p>
     <div class="walletbar">💰 <span id="shopGold">0</span></div>
     <div id="shopStock"></div>
+    <div class="inv-section-label">SELL CARRIED</div>
+    <div id="shopSellList"></div>
+    <button class="btn-ghost" id="shopSellAll">Sell all carried</button>
     <button class="btn-ghost" id="shopHealBtn">❤️ Restore 50% HP</button>
     <button class="btn big" id="shopLeaveBtn">Leave</button>
   </div>
@@ -939,6 +942,7 @@ body{
 <script src="js/config.js"></script>
 <script src="js/content/con-monsters.js"></script>
 <script src="js/content/con-items.js"></script>
+<script src="js/content/con-itemaffixes.js"></script>
 <script src="js/content/con-biomes.js"></script>
 <script src="js/content/con-traits.js"></script>
 <script src="js/content/con-progression.js"></script>
@@ -947,6 +951,7 @@ body{
 <script src="js/items.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/content/con-bosssprites.js"></script>
+<script src="js/content/con-itemsprites.js"></script>
 <script src="js/content/con-worldart.js"></script>
 <script src="js/content/con-monstersprites.js"></script>
 <script src="js/state.js"></script>

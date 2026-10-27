@@ -151,5 +151,61 @@ Delve.CONFIG = {
     return (l.legendaryBase + l.legendaryPerFloor*f) * (1 + l.legendaryPerLuck*L);
    }
   }
+ },
+
+ // ---------- ITEMS OVERHAUL (docs/results/items_overhaul.md) ----------
+ // Every number here is sim-locked. Change it only with a new sim run.
+ ITEMS: {
+  // Quality: continuous 1-100. Floor is the dominant term, Luck a real second.
+  //   Q = min(cap, floorScale*floor + luckScale*luck) + gaussian(0, sigma)
+  //   sigma = noiseBase + noiseFloor*floor     points = Q * perPoint
+  quality: { floorScale:2.5, luckScale:3.0, cap:100, noiseBase:5, noiseFloor:0.3, perPoint:0.2 },
+  // Display bands only - never used for maths. Upper bound exclusive.
+  bands: [20, 40, 60],
+
+  // What one point buys. 1 ATK = 2 points is the validated anchor; every other
+  // entry was swept against it (budget_validation.md).
+  // Economy stats are priced off the same 1 ATK = 2 point anchor:
+  // 5% gold = 0.8, 3% drop = 0.8, 2 boss damage = 1.0, 1 shard = 1.0,
+  // 1 life-on-kill = 1.8 (it is a small permanent heal, worth more than HP).
+  pointCost: { atk:2.0, str:1.0, hp:0.6, crit:0.4, red:3.8, dodge:0.7, speed:0.7, luck:1.2,
+               goldBonus:0.16, dropBonus:0.2667, bossAtk:0.5, shardBonus:1.0, healOnKill:1.8 },
+
+  // Gear and potions roll separately (L5). Gear: 15.5% + 2.5pp per Luck = 18%
+  // at Luck 1. Potions: flat 7%.
+  drop: { gearBase:0.155, gearPerLuck:0.025, potion:0.07, cap:0.60 },
+
+  // Slot weights (L6). Weapon drops less often than it used to, rings and
+  // amulets are genuinely rare.
+  slotWeights: { weapon:2.0, body:1.5, head:1.0, hands:1.0, feet:1.0, cloak:0.9, offhand:0.5, ring:0.4, amulet:0.35 },
+
+  // price = points * (base + perWard * ward); sell = points * sellPerPoint.
+  // Holds 28-34% of arrival gold at every shop (price_formula.md).
+  price: { base:19, perWard:24, sellPerPoint:4 },
+
+  // The weapon is the offence slot: it absorbs the kit's offence share, so its
+  // budget is multiplied by this before it buys damage. Without it, six slots
+  // of points leave the player at ~3.3s per kill on floor 15 (measured), about
+  // half of today's pace - the defence points on armour do not kill anything.
+  weaponShare: 2.0,
+
+  // Character level growth (LOCKED). Applied in attrs.js.
+  levelAtk: 1, levelHp: 2,
+
+  // Affix counts per display band: Common none, Uncommon 1, Rare 2, Legendary 3.
+  affixes: { 1:0, 2:1, 3:2, 4:3, maxPrefix:1, maxSuffix:2 },
+
+  // Uniques never roll from a plain kill and never appear in shop stock.
+  unique: { chestChance:0.10, secretChance:0.25, bossChance:1.0 }
+ },
+
+ // Family rhythm. Damage comes from quality, so these are shape/speed/cap only.
+ // maxHit = min(itemMax + Strength, itemMax + strCeiling); minHit = shape*itemMax.
+ WEAPON_FAMILIES: {
+  dagger: { shape:0.45, critBonus:0.05, strCeiling:10, speed:1.40, label:"Dagger" },
+  sword:  { shape:0.65, critBonus:0.00, strCeiling:16, speed:1.00, label:"Sword" },
+  spear:  { shape:0.75, critBonus:0.00, strCeiling:16, speed:0.95, label:"Spear" },
+  axe:    { shape:0.55, critBonus:0.00, strCeiling:18, speed:0.85, label:"Axe" },
+  hammer: { shape:0.70, critBonus:0.00, strCeiling:22, speed:0.70, label:"Hammer" }
  }
 };

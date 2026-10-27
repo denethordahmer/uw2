@@ -182,7 +182,10 @@ window.Delve = window.Delve || {};
  G.swing = Date.now();
  m.hitFlash = Date.now();
 
- let dmg = Delve.atk();
+ // Weapon damage is a ROLL now (L10): uniform between minHit and maxHit.
+ // Flat bonuses (rings, gloves, traits, buffs, levels) are added on top; the
+ // weapon's own atk is never in bonusAtk(), so nothing is counted twice.
+ let dmg = Delve.weaponRoll() + Delve.bonusAtk() * (Delve.speedScale ? Delve.speedScale() : 1);
  if(m.isBoss){
  dmg += Delve.bossBonus ? Delve.bossBonus() : (Delve.itemBuffs().bossAtk || 0);
  // Warden's Bane: +10% of the whole hit, on top of the flat boss bonus.
@@ -191,6 +194,12 @@ window.Delve = window.Delve || {};
 
  const fs = Delve.firstStrikeBonus();
  if(fs && !m.hasActed) dmg += fs;
+
+ // Unique proc: Gravemaker hits harder on a wounded target.
+ const wielded = G.equip && G.equip.weapon;
+ if(wielded && wielded.proc === "execute" && m.maxHp > 0 && (m.hp / m.maxHp) < 0.30){
+  dmg = Math.round(dmg * 1.30);
+ }
 
  const weaponStyle = (G.equip && G.equip.weapon && G.equip.weapon.style) || "sword";
  let isCrit = false;
@@ -469,6 +478,8 @@ window.Delve = window.Delve || {};
  const wardIdx = Math.ceil(G.floor / 10);
  if(G.bossesBeaten.indexOf(wardIdx) < 0) G.bossesBeaten.push(wardIdx);
  if(Delve.rollKillDrop) Delve.rollKillDrop(m.x, m.y, { guaranteed:true, minTier:3, name:m.name, elite:false, boss:true });
+ // Ward bosses always leave one unique behind (design 3.6).
+ if(Delve.dropUnique) Delve.dropUnique(m.x, m.y, "boss", { kind:"boss", name:m.name });
  Delve.triggerVictory(wardIdx);
  } else {
  G.monsters = G.monsters.filter(x => x !== m);
@@ -479,6 +490,11 @@ window.Delve = window.Delve || {};
  Delve.addShake(2);
  if(Delve.sfx) Delve.sfx(m.elite ? "elite_kill" : "kill", { monster: m.kind });
  if(Delve.rollKillDrop) Delve.rollKillDrop(m.x, m.y, { name:m.name, elite:!!m.elite });
+ // Potions are their own roll (L5): 7% per kill, independent of gear.
+ const potionChance = ((C().ITEMS || {}).drop || {}).potion || 0;
+ if(Delve.dropPotion && Math.random() < potionChance){
+  Delve.dropPotion(m.x, m.y, 2, { kind:"monster", name:m.name, elite:!!m.elite });
+ }
  if(m.elite && C().elite.guaranteedPotion && Delve.dropPotion){
  Delve.dropPotion(m.x, m.y, 2, { kind:"monster", name:m.name, elite:true });
  }
@@ -551,7 +567,10 @@ window.Delve = window.Delve || {};
  G.inCombat = false;
  if(G.combatTimer){ clearInterval(G.combatTimer); G.combatTimer = null; }
 
- Delve.convertGold(); // js/rewards.js — gold → run shards only
+ // Gold is NOT converted here. The player is about to choose "descend deeper" or
+ // "return to hub", and the design (items_overhaul L11) is that gold only turns
+ // into shards when they LEAVE the dungeon. Kill/floor shards still bank here,
+ // because clearing a ward is a commit point.
  const totalBanked = Delve.bankRunShards(); // commit point
 
  Delve.recordStat("victories", 1);

@@ -23,6 +23,321 @@ window.Delve = window.Delve || {};
  return Math.max(1, Math.ceil((isFinite(f) && f > 0 ? f : 1) / 10));
  };
 
+ // ══════════════════════════════════════════════════════════════
+ //  CONTINUOUS-QUALITY ITEM GENERATION (docs/results/items_overhaul.md)
+ //  One budget of POINTS decides an item's power. Quality sets the
+ //  budget, the slot decides which stats spend it, affixes carve a slice
+ //  out of it. Nothing is added on top, so two items of equal quality are
+ //  worth the same whichever stats they carry.
+ // ══════════════════════════════════════════════════════════════
+ const IT = function(){ return (Delve.CONFIG && Delve.CONFIG.ITEMS) || {}; };
+ const FAM = function(style){
+  const t = (Delve.CONFIG && Delve.CONFIG.WEAPON_FAMILIES) || {};
+  return t[style] || t.sword;
+ };
+ function gauss(){
+  let u = 0, v = 0;
+  while(u === 0) u = Math.random();
+  while(v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+ }
+
+ // Q = min(cap, 2.5*floor + 3*Luck) + noise, sigma = 5 + 0.3*floor
+ Delve.qualityOf = function(floor, luck){
+  const q = IT().quality || {};
+  const f = Math.max(0, Number(floor) || 0);
+  const L = Math.max(0, Number(luck) || 0);
+  const mean = Math.min(q.cap || 100, (q.floorScale || 2.5) * f + (q.luckScale || 3) * L);
+  const sigma = (q.noiseBase || 5) + (q.noiseFloor || 0.3) * f;
+  return Math.max(1, Math.min(q.cap || 100, Math.round(mean + gauss() * sigma)));
+ };
+
+ // Display band only. tier stays 1-4 so colours / status tables / sfx keep working.
+ Delve.bandOf = function(quality){
+  const b = IT().bands || [20, 40, 60];
+  const q = Number(quality) || 1;
+  if(q < b[0]) return 1;
+  if(q < b[1]) return 2;
+  if(q < b[2]) return 3;
+  return 4;
+ };
+
+ Delve.pointsOfQuality = function(quality){
+  const per = (IT().quality || {}).perPoint || 0.2;
+  return Math.max(0.5, (Number(quality) || 1) * per);
+ };
+
+ // Fraction stats are stored as fractions but costed per whole percent.
+ const PCT_STATS = { crit:1, dodge:1, speed:1, goldBonus:1, dropBonus:1 };
+
+ // What one stat point is worth, in points. Inverse of the generation below.
+ Delve.statPoints = function(stat, value){
+  const c = (IT().pointCost || {})[stat];
+  if(!c || !value) return 0;
+  return (PCT_STATS[stat] ? value * 100 : value) * c;
+ };
+
+ // A weapon's budget buys its own average hit: avg = P/2, so itemMax*(1+shape)/2 = P/2.
+ Delve.itemPoints = function(item){
+  if(!item) return 0;
+  if(item.unique){
+   let p = 0;
+   Object.keys(item).forEach(function(k){ p += Delve.statPoints(k, item[k]); });
+   if(item.itemMax){
+    const sh = Number(item.shape) || FAM(item.style).shape || 0.65;
+    const sp = Number(item.speed) || FAM(item.style).speed || 1.0;
+    p += item.itemMax * (1 + sh) * sp;
+   }
+   return Math.round(p * 100) / 100;
+  }
+  if(typeof item.points === "number") return item.points;
+  let p = 0;
+  ["atk","str","hp","crit","red","dodge","speedBonus","luck","goldBonus","dropBonus","bossAtk","shardBonus","healOnKill"].forEach(function(k){
+   const v = item[k];
+   if(!v) return;
+   const stat = k === "speedBonus" ? "speed" : k;
+   p += Delve.statPoints(stat, v);
+  });
+  if(item.itemMax){
+   const sh = Number(item.shape) || FAM(item.style).shape || 0.65;
+   const sp = Number(item.speed) || FAM(item.style).speed || 1.0;
+   p += item.itemMax * (1 + sh) * sp;
+  }
+  return Math.round(p * 100) / 100;
+ };
+
+ // Slot first, then the item inside it (L5) - pool size can no longer bias drops.
+ Delve.rollSlot = function(){
+  const w = IT().slotWeights || {};
+  const keys = Object.keys(w);
+  let total = 0;
+  keys.forEach(function(k){ total += Math.max(0, Number(w[k]) || 0); });
+  if(total <= 0) return "weapon";
+  let r = Math.random() * total;
+  for(let i = 0; i < keys.length; i++){
+   r -= Math.max(0, Number(w[keys[i]]) || 0);
+   if(r <= 0) return keys[i];
+  }
+  return keys[keys.length - 1];
+ };
+
+ // Base definitions for a slot, nearest tier first (so a Rare floors 20+ gets a
+ // Rare name, but a thin slot still finds something).
+ function basesForSlot(slot, tier){
+  const slotKey = slot === "ring" ? "ring" : slot;
+  const all = Object.keys(Delve.itemDefs || {}).map(function(k){ return Delve.itemDefs[k]; })
+   .filter(function(d){ return d.slot === slotKey; });
+  if(!all.length) return [];
+  const near = all.filter(function(d){ return d.tier === tier; });
+  if(near.length) return near;
+  let best = all[0].tier, bestDist = 99;
+  all.forEach(function(d){ const dist = Math.abs(d.tier - tier); if(dist < bestDist){ bestDist = dist; best = d.tier; } });
+  return all.filter(function(d){ return d.tier === best; });
+ }
+
+ function pickBase(slot, tier){
+  const pool = basesForSlot(slot, tier);
+  if(!pool.length) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+ }
+
+ // ── Affixes ───────────────────────────────────────────────────
+ const STAT_LABEL = {
+  atk:"Attack Power", str:"Strength", hp:"Maximum Health", crit:"Critical Chance",
+  red:"Damage Reduction", dodge:"Dodge Chance", speed:"Attack Speed", luck:"Luck",
+  goldBonus:"Gold Find", dropBonus:"Item Find", bossAtk:"Damage vs Ward Bosses",
+  shardBonus:"Bonus Shards", healOnKill:"Life Steal on Kill",
+  poison:"Poison", bleed:"Bleed", burn:"Burn"
+ };
+
+ Delve.affixText = function(a){
+  if(!a) return "";
+  if(a.stat.indexOf("status:") === 0){
+   const s = a.stat.split(":")[1];
+   return "+" + Math.round(a.per * 100) + "% " + (STAT_LABEL[s] || s) + " Chance";
+  }
+  const label = STAT_LABEL[a.stat] || a.stat;
+  const v = PCT_STATS[a.stat] ? Math.round(a.per * 1000) / 10 + "%" : (Math.round(a.per * 10) / 10);
+  return "+" + v + " " + label;
+ };
+
+ function slotGroup(slot){
+  if(slot === "weapon") return "weapon";
+  if(slot === "ring" || slot === "amulet") return "accessory";
+  if(slot === "offhand") return "offhand";
+  return "armour";
+ }
+ function affixPool(kind, slot){
+  const g = slotGroup(slot);
+  const list = (Delve.ITEM_AFFIXES || {})[kind] || [];
+  return list.filter(function(a){
+   if(a.group.indexOf(g) >= 0) return true;
+   return g === "offhand" && a.group.indexOf("armour") >= 0;
+  });
+ }
+ function applyAffix(item, a){
+  if(a.stat.indexOf("status:") === 0){
+   item.status = a.stat.split(":")[1];
+   item.statusBonus = (item.statusBonus || 0) + a.per;
+   return;
+  }
+  const key = a.stat === "speed" ? "speedBonus" : a.stat;
+  item[key] = (item[key] || 0) + a.per;
+ }
+
+ // Affix count comes from the display band; the points come out of the budget.
+ Delve.rollAffixes = function(slot, band, budget){
+  const cfg = IT().affixes || {};
+  const want = cfg[band] || 0;
+  if(!want) return [];
+  const out = [], used = {};
+  let pre = 0, suf = 0, spent = 0, guard = 0;
+  while(out.length < want && guard++ < 40){
+   let kind = (pre < (cfg.maxPrefix || 1) && Math.random() < 0.55) ? "prefixes" : "suffixes";
+   if(kind === "prefixes" && pre >= (cfg.maxPrefix || 1)) kind = "suffixes";
+   if(kind === "suffixes" && suf >= (cfg.maxSuffix || 2)) kind = "prefixes";
+   const pool = affixPool(kind, slot).filter(function(a){
+    return !used[a.stat] && spent + a.pts <= budget * 0.40;
+   });
+   if(!pool.length) break;
+   const a = pool[Math.floor(Math.random() * pool.length)];
+   used[a.stat] = 1;
+   spent += a.pts;
+   out.push(a);
+   if(kind === "prefixes") pre++; else suf++;
+  }
+  return out;
+ };
+
+ // Name: prefixes + base + suffixes ("Heavy Keen Shortsword of the Fox").
+ Delve.affixName = function(baseName, affixes){
+  const pre = [], suf = [];
+  (affixes || []).forEach(function(a){
+   if(a.name.indexOf("of ") === 0) suf.push(a.name);
+   else pre.push(a.name);
+  });
+  let n = baseName;
+  if(pre.length) n = pre.join(" ") + " " + n;
+  if(suf.length) n = n + " " + suf.join(" ");
+  return n;
+ };
+
+ // Spend points on a stat. Fractions are stored as fractions (0.01 = 1%).
+ function addStat(item, stat, points){
+  const c = (IT().pointCost || {})[stat];
+  if(!c || points <= 0) return;
+  const value = PCT_STATS[stat] ? points / (c * 100) : points / c;
+  if(stat === "speed") item.speedBonus = (item.speedBonus || 0) + value;
+  else item[stat] = (item[stat] || 0) + value;
+ }
+
+ // ── The generator ─────────────────────────────────────────────
+ // makeGear(slot, floor, {tier, qualityBonus, luck}) -> a complete item.
+ // Every field an old item had still exists, so the rest of the game is
+ // unchanged: tier, atk, hp, red, crit, dodge, luck, status, style, lore.
+ Delve.makeGear = function(slot, floor, opts){
+  opts = opts || {};
+  if(!slot) slot = Delve.rollSlot();
+  const fl = (floor === undefined || floor === null) ? ((Delve.G && Delve.G.floor) || 1) : floor;
+  const luck = (opts.luck === undefined) ? (Delve.luckPts ? Delve.luckPts() : 1) : opts.luck;
+  let quality = Delve.qualityOf(fl, luck);
+  if(opts.qualityBonus) quality = Math.min(100, quality + opts.qualityBonus);
+  const band = Delve.bandOf(quality);
+  const wantedTier = opts.tier || band;
+  const base = pickBase(slot, wantedTier) || { id:"scrap_" + slot, name:"Scrap", slot:slot, tier:band };
+  const P = Delve.pointsOfQuality(quality);
+
+  const item = {
+   id: base.id, baseId: base.id, baseName: base.name, name: base.name,
+   slot: base.slot, tier: band, quality: quality, points: P,
+   lore: base.lore, flavour: base.flavour, affixes: []
+  };
+  if(base.keep) item.keep = true;
+  if(base.slot === "weapon"){
+   item.style = opts.style || base.style || "sword";
+   const fam = FAM(item.style);
+   item.shape = fam.shape;
+   item.strCeiling = fam.strCeiling;
+   if(fam.critBonus) item.crit = fam.critBonus;
+  }
+  if(base.status) item.status = base.status;
+
+  const affixes = Delve.rollAffixes(base.slot, band, P);
+  let affixPts = 0;
+  affixes.forEach(function(a){
+   applyAffix(item, a);
+   affixPts += a.pts;
+   item.affixes.push({ id:a.id, name:a.name, stat:a.stat, value:a.per, pts:a.pts, text: Delve.affixText(a) });
+  });
+  const basePts = Math.max(P * 0.2, P - affixPts);
+
+  if(base.slot === "weapon"){
+   const wPts = basePts * (IT().weaponShare || 1);
+   // Points buy DPS, not average hit: an ATK point is one damage on a SWORD
+   // swing (1.67 hits/s). A dagger must hit for less per swing, a hammer more,
+   // or the family speeds would break parity.
+   //   avg = (P/2) * (swordSpeed / familySpeed)  and  avg = itemMax*(1+shape)/2
+   const famSpeed = FAM(item.style).speed || 1.0;
+   const strNow = Delve.strPts ? Delve.strPts() : 6;
+   const strTerm = Math.min(strNow, item.strCeiling);
+   // Strength now shifts the whole band (attrs.js weaponBand), so it is not
+   // subtracted from the budget - a point still buys the same DPS in any family.
+   const critAdj = 1 + (FAM(item.style).critBonus || 0) * 0.5;
+   // The band carries a speed-normalised Strength lift, so it comes out of the
+   // budget first: a weapon never sells the same point twice.
+   const raw = (wPts / famSpeed / critAdj - strTerm / famSpeed) / (1 + item.shape);
+   item.itemMax = Math.round(Math.max(0.1, raw) * 10) / 10;
+  } else {
+   const aff = (Delve.SLOT_AFFINITY || {})[base.slot] || { hp:0.6, red:0.4 };
+   Object.keys(aff).forEach(function(stat){ addStat(item, stat, basePts * aff[stat]); });
+   // one decimal is plenty for display; keep the maths honest
+   ["atk","hp","red","luck","crit","dodge","speedBonus","goldBonus","dropBonus","bossAtk","shardBonus","healOnKill"].forEach(function(k){
+    if(typeof item[k] === "number") item[k] = Math.round(item[k] * 100) / 100;
+   });
+  }
+
+  item.name = Delve.affixName(base.name, item.affixes);
+  item.points = Math.round(P * 10) / 10;
+  item.provenance = item.provenance || null;
+  return item;
+ };
+
+ // A unique: fixed stats, never budget-scaled, never in shop stock.
+ Delve.makeUnique = function(id, floor){
+  const u = Delve.uniqueById ? Delve.uniqueById(id) : null;
+  if(!u) return null;
+  const fl = (floor === undefined || floor === null) ? ((Delve.G && Delve.G.floor) || 1) : floor;
+  const item = {
+   id: u.id, baseId: u.id, baseName: u.name, name: u.name,
+   slot: u.slot, tier: u.tier || 4, unique: true,
+   quality: 100, lore: u.lore, flavour: u.flavour,
+   affixes: [], provenance: null
+  };
+  Object.keys(u).forEach(function(k){
+   if(["id","name","slot","tier","lore","flavour"].indexOf(k) >= 0) return;
+   item[k] = u[k];
+  });
+  if(u.slot === "weapon"){
+   const fam = FAM(u.style || "sword");
+   item.shape = fam.shape;
+   item.strCeiling = fam.strCeiling;
+  }
+  item.points = Math.round(Delve.itemPoints(item) * 10) / 10;
+  item.floorFound = fl;
+  return item;
+ };
+
+ // Returns a unique item or null. Source gating lives in CONFIG.ITEMS.unique.
+ Delve.rollUnique = function(sourceKind, floor){
+  const cfg = (IT().unique) || {};
+  const chance = cfg[sourceKind + "Chance"];
+  if(!chance || Math.random() > chance) return null;
+  const list = (Delve.ITEM_UNIQUES || []).slice();
+  if(!list.length) return null;
+  const u = list[Math.floor(Math.random() * list.length)];
+  return Delve.makeUnique(u.id, floor);
+ };
+
  // ── Tier roll (always returns integer 1-4) ─────────────────────
  // `rarityMult` is an optional nudge from the loot source (elite, chest, boss).
  // It scales the rare + legendary weights only, never the common/uncommon bulk.
@@ -50,17 +365,14 @@ window.Delve = window.Delve || {};
  return 4;
  };
 
- Delve.makeItem = function(tier){
- const t = Math.max(1, Math.min(4, Math.round(Number(tier)) || 1));
- // try requested tier, then step down, then step up
- const order = [];
- for(let i = t; i >= 1; i--) order.push(i);
- for(let i = t + 1; i <= 4; i++) order.push(i);
- let pool = [];
- for(let i = 0; i < order.length && !pool.length; i++) pool = Delve.itemsByTier(order[i]);
- if(!pool.length) return null;
- const d = pool[Math.floor(Math.random() * pool.length)];
- return Object.assign({}, d);
+ Delve.makeItem = function(tier, opts){
+  opts = opts || {};
+  if(opts.unique){
+   const u = Delve.rollUnique(opts.kind || "chest", opts.floor);
+   if(u) return u;
+  }
+  const slot = opts.slot || Delve.rollSlot();
+  return Delve.makeGear(slot, opts.floor, { tier: tier, qualityBonus: opts.qualityBonus, luck: opts.luck });
  };
 
  // ── Provenance ────────────────────────────────────────────────
@@ -98,18 +410,19 @@ window.Delve = window.Delve || {};
  opts = opts || {};
  const G = Delve.G;
  const L = Delve.CONFIG.loot;
- let chance = Math.min(L.dropCap, L.baseDrop + Delve.luckPts() * L.luckDrop);
+ // Gear rolls on its own (L5); potions are a separate roll in combat.js.
+ const D = IT().drop || {};
+ let chance = Math.min(D.cap || 0.60, (D.gearBase || 0.155) + Delve.luckPts() * (D.gearPerLuck || 0.025));
  if(opts.elite) chance += (L.eliteDropBonus || 0);
  if(opts.guaranteed) chance = 1;
  if(Math.random() > chance) return false;
- // Source edge: elites and bosses roll the rarity curve better than a plain kill.
+ // Source edge: elites and bosses find better-made gear, not more of it.
  const S = L.sourceRarityMult || {};
- let mult = 1;
- if(opts.elite) mult *= (S.elite || 1);
- if(opts.boss) mult *= (S.boss || 1);
- let tier = Delve.rollTier(G.floor, mult);
- if(opts.minTier) tier = Math.max(opts.minTier, tier);
- const item = Delve.makeItem(tier);
+ let bonus = 0;
+ if(opts.elite) bonus += 8 * (S.elite || 1);
+ if(opts.boss) bonus += 12 * (S.boss || 1);
+ const tier = opts.minTier ? Math.max(opts.minTier, Delve.bandOf(Delve.qualityOf(G.floor, Delve.luckPts()) + bonus)) : null;
+ const item = Delve.makeItem(tier || undefined, { qualityBonus: bonus });
  if(!item) return false;
  item.x = x; item.y = y;
  Delve.stampProvenance(item, { kind:"monster", name:opts.name || "foe", elite:!!opts.elite });
@@ -129,18 +442,71 @@ window.Delve = window.Delve || {};
  return it;
  };
 
+ // ── Unique drops ──────────────────────────────────────────────
+ // Bosses, chests and secrets only. Never a plain kill, never shop stock.
+ Delve.dropUnique = function(x, y, kind, source){
+  const G = Delve.G;
+  if(!G || !G.items) return null;
+  const it = Delve.rollUnique(kind, G.floor);
+  if(!it) return null;
+  it.x = x; it.y = y;
+  Delve.stampProvenance(it, source || { kind:"chest" });
+  G.items.push(it);
+  if(Delve.flash) Delve.flash("UNIQUE: " + it.name);
+  if(Delve.logSystem) Delve.logSystem("A unique item: " + it.name + ".");
+  return it;
+ };
+
  // ── Shop price ─────────────────────────────────────────────────
  Delve.itemPrice = function(item){
  const e = Delve.CONFIG.economy;
  // Goods get the Luck discount plus any Haggler / Silver Tongue node discount.
  const disc = Delve.goodsDiscount ? Delve.goodsDiscount() : Delve.luckDiscount();
- let base;
  if(item.slot === "consumable"){
- base = e.consumablePrices[item.tier] || (item.tier * 10);
- } else {
- base = e.tierPrices[item.tier - 1] || (item.tier * 12);
+ return Math.max(1, Math.round((e.consumablePrices[item.tier] || (item.tier * 10)) * (1 - disc)));
  }
- return Math.max(1, Math.round(base * (1 - disc)));
+ // price = points x (19 + 24 x ward). A rule, not a price list.
+ const P = Delve.itemPoints(item);
+ const pr = IT().price || {};
+ const ward = Delve.wardOf((Delve.G && Delve.G.floor) || 1);
+ const rate = (pr.base || 19) + (pr.perWard || 24) * ward;
+ return Math.max(1, Math.round(P * rate * (1 - disc)));
+ };
+
+ // Salvage value. Deliberately NOT a share of the buy price (design 3.5).
+ Delve.sellValue = function(item){
+ if(!item || item.slot === "consumable") return Math.max(1, Math.round((item && item.tier || 1) * 3));
+ const pr = IT().price || {};
+ return Math.max(1, Math.round(Delve.itemPoints(item) * (pr.sellPerPoint || 4)));
+ };
+
+ // ── Selling (design 5.8) ──────────────────────────────────────
+ // Selling lives in the shop only. Carried items convert to gold at the salvage
+ // rate; equipped items are untouched (they live in G.equip, not the bag).
+ Delve.sellItem = function(item){
+ const G = Delve.G;
+ if(!G || !G.inventory || !item) return 0;
+ const i = G.inventory.indexOf(item);
+ if(i < 0) return 0;
+ const value = Delve.sellValue(item);
+ G.inventory.splice(i, 1);
+ G.gold = (G.gold || 0) + value;
+ if(Delve.recordStat) Delve.recordStat("goldFromSales", value);
+ if(Delve.logSystem) Delve.logSystem("Sold " + item.name + " for " + value + " gold.");
+ if(Delve.updateHUD) Delve.updateHUD();
+ return value;
+ };
+
+ Delve.sellAll = function(){
+ const G = Delve.G;
+ if(!G || !G.inventory) return { gold:0, count:0 };
+ let gold = 0, count = 0;
+ // Slice first: sellItem splices the live array.
+ G.inventory.slice().forEach(function(it){
+  const v = Delve.sellItem(it);
+  if(v > 0){ gold += v; count++; }
+ });
+ return { gold:gold, count:count };
  };
 
  // ── Inventory capacity ────────────────────────────────────────
@@ -224,11 +590,13 @@ window.Delve = window.Delve || {};
  Delve.itemBuffs = function(){
  const G = Delve.G;
  const eq = G && G.equip ? G.equip : {};
- const b = { atk:0, red:0, hp:0, luck:0, dropBonus:0, goldBonus:0, shardBonus:0, bossAtk:0, speedBonus:0, healOnKill:0, crit:0, dodge:0, weightSpeed:0, weightDodge:0 };
+ const b = { atk:0, str:0, red:0, hp:0, luck:0, dropBonus:0, goldBonus:0, shardBonus:0, bossAtk:0, speedBonus:0, healOnKill:0, crit:0, dodge:0, weightSpeed:0, weightDodge:0 };
 
  const add = function(it){
  if(!it) return;
- b.atk += it.atk || 0;
+ // A weapon's power lives in its damage band (see Delve.weaponBand), so its
+ // flat atk must NOT be added here or the hit would count it twice.
+ if(it.slot !== "weapon") b.atk += it.atk || 0;
  b.red += it.red || 0;
  b.hp += it.hp || 0;
  b.luck += it.luck || 0;
@@ -240,6 +608,7 @@ window.Delve = window.Delve || {};
  b.healOnKill += it.healOnKill || 0;
  b.crit += it.crit || 0;
  b.dodge += it.dodge || 0;
+ b.str += it.str || 0;
  };
  add(eq.weapon); add(eq.offhand); add(eq.head); add(eq.body); add(eq.hands);
  add(eq.feet); add(eq.cloak); add(eq.amulet); add(eq.ring1); add(eq.ring2);
@@ -400,6 +769,30 @@ window.Delve = window.Delve || {};
  }
  const pct = function(v){ return "+" + Math.round(v * 100) + "%"; };
 
+ // Weapon: the actual damage band, not a single number (L10).
+ if(item.itemMax){
+  const fam = FAM(item.style);
+  const str = Delve.strPts ? Delve.strPts() : 6;
+  const ceiling = item.strCeiling || fam.strCeiling;
+  const mx = item.itemMax + Math.min(str, ceiling);
+  const mn = (item.shape || fam.shape) * item.itemMax;
+  lines.push({ label:"Damage", value: Math.round(mn) + " - " + Math.round(mx), delta:0 });
+  lines.push({ label:"Strength cap", value: "+" + ceiling, delta:0 });
+ }
+
+ // Quality is the real stat; the band name is just its label.
+ if(item.quality){
+  const bandName = (Delve.TIERS && Delve.TIERS.names) ? (Delve.TIERS.names[item.tier] || "") : "";
+  lines.push({ label:"Quality", value: bandName + " (" + Math.round(item.quality) + "/100)", delta:0 });
+ }
+
+ (item.affixes || []).forEach(function(a){
+  lines.push({ label:"Affix", value: a.text, delta:0 });
+ });
+ if(item.proc || item.unique){
+  lines.push({ label:"Unique", value: item.flavour || "", delta:0 });
+ }
+
  cmp("atk", "Attack Power");
  cmp("red", "Damage Reduction");
  cmp("hp", "Maximum Health");
@@ -454,15 +847,15 @@ window.Delve = window.Delve || {};
  }
 
  Delve.makeShopStock = function(G){
- const shopNum = Math.floor(G.floor/10)+1;
- const maxTier = shopNum>=3?4:shopNum===2?3:2;
  const stock = [];
- let gear = shopItemPool("gear").filter(function(d){ return d.tier <= maxTier; });
- const top = gear.filter(function(d){ return d.tier === maxTier; });
- if(top.length && Math.random()<0.7) gear = top;
- for(let i=0;i<(Delve.CONFIG.shop.stockGear||1) && gear.length;i++){
- stock.push({ item: Object.assign({}, gear[Math.floor(Math.random()*gear.length)]), sold:false });
+ // Rolled goods, not catalogue rows: a shop item is a real quality roll with
+ // a small bonus so buying feels like a shortcut, not a downgrade.
+ const gearCount = (Delve.CONFIG.shop.stockGear || 1) + 2;
+ for(let i=0;i<gearCount;i++){
+ const it = Delve.makeGear(null, G.floor, { qualityBonus: 10 });
+ if(it) stock.push({ item: it, sold:false });
  }
+ const maxTier = Math.min(4, Math.floor(G.floor/10)+1);
  const cons = shopItemPool("consumable").filter(function(d){ return d.tier <= Math.min(maxTier,3); });
  const used = {};
  const want = Math.min(Delve.CONFIG.shop.stockConsumables||4, cons.length);

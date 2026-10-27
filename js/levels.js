@@ -545,7 +545,9 @@ window.Delve = window.Delve || {};
   if(!G) return;
   G.floorCleared = false;
   G.floorType = null;
-  G.items = G.items || [];
+  // Stale drops used to survive a descent (audit #9): you could walk into a
+  // new floor and step on an item from the last one. Clear them.
+  G.items = [];
   G.monsters = [];
   G.goldPiles = [];
   G.barrels = [];
@@ -957,7 +959,7 @@ window.Delve = window.Delve || {};
    if(roll < 0.30){          // an item sleeps with the dead
     let tier = Delve.rollTier(G.floor, (Delve.CONFIG.loot.sourceRarityMult || {}).chest || 1);
     if(Delve.hasProgression && Delve.hasProgression("lucky_find")) tier = Math.min(4, tier+1);
-    const it = Delve.makeItem(tier);
+    const it = Delve.makeItem(tier, { unique:true, kind: (source && source.kind === "secret") ? "secret" : "chest" });
     it.x = x; it.y = y;
     Delve.stampProvenance(it, source);
     G.items.push(it);
@@ -1004,7 +1006,7 @@ window.Delve = window.Delve || {};
   if(chest.highValue){
    let tier = Math.max(3, Delve.rollTier(G.floor, (Delve.CONFIG.loot.sourceRarityMult || {}).treasure || 1));
    if(Delve.hasProgression && Delve.hasProgression("lucky_find")) tier = Math.min(4, tier+1);
-   const it = Delve.makeItem(tier);
+   const it = Delve.makeItem(tier, { unique:true, kind: (source && source.kind === "secret") ? "secret" : "chest" });
    it.x = x; it.y = y;
    Delve.stampProvenance(it, source);
    G.items.push(it);
@@ -1022,7 +1024,7 @@ window.Delve = window.Delve || {};
   if(prob(0.45)){
    let tier = Delve.rollTier(G.floor, (Delve.CONFIG.loot.sourceRarityMult || {}).chest || 1);
    if(Delve.hasProgression && Delve.hasProgression("lucky_find")) tier = Math.min(4, tier+1);
-   const it = Delve.makeItem(tier);
+   const it = Delve.makeItem(tier, { unique:true, kind: (source && source.kind === "secret") ? "secret" : "chest" });
    it.x = x; it.y = y;
    Delve.stampProvenance(it, source);
    G.items.push(it);

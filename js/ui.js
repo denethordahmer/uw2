@@ -71,7 +71,12 @@ window.Delve = window.Delve || {};
  Delve.updateHUD = function(){
   const G = Delve.G; if(!G) return;
   $("hudHp").textContent = G.hp + "/" + Delve.maxHp();
-  $("hudAtk").textContent = Delve.atk();
+  if(Delve.weaponBand && Delve.G && Delve.G.equip){
+   const bd = Delve.weaponBand();
+   $("hudAtk").textContent = Math.round(bd.min) + "-" + Math.round(bd.max);
+  } else {
+   $("hudAtk").textContent = Delve.atk();
+  }
   $("hudTou").textContent = Math.round(Delve.dmgRed()*100) + "%";
   $("hudAgi").textContent = Math.round(Delve.dodge()*100) + "%";
   $("hudLuc").textContent = Math.round(Delve.luckPts());
@@ -180,6 +185,21 @@ window.Delve = window.Delve || {};
   const overlay = $("itemCardOverlay");
   const tierCol = Delve.TIERS.colors[item.tier] || "#cfd8e0";
   const tierName = Delve.TIERS.names[item.tier] || "";
+
+  // Item sprite: same art as the floor, so the card is recognisable.
+  let spr = $("icSprite");
+  if(!spr){
+   spr = document.createElement("canvas");
+   spr.id = "icSprite";
+   spr.width = 72; spr.height = 72;
+   spr.style.cssText = "image-rendering:pixelated;display:block;margin:0 auto 6px;";
+   const host = $("icName").parentNode;
+   host.insertBefore(spr, $("icName"));
+  }
+  const sctx = spr.getContext("2d");
+  sctx.clearRect(0, 0, 72, 72);
+  const img = Delve.itemSprite ? Delve.itemSprite(item) : null;
+  if(img){ sctx.imageSmoothingEnabled = false; sctx.drawImage(img, 0, 0, 72, 72); }
 
   $("icName").textContent = item.name;
   $("icName").style.color = tierCol;
@@ -533,6 +553,49 @@ window.Delve = window.Delve || {};
    row.appendChild(info); row.appendChild(buy);
    wrap.appendChild(row);
   });
+
+  // ── Sell carried (design 5.8): salvage at 4 gold per point ──
+  const sellWrap = $("shopSellList");
+  if(sellWrap){
+   sellWrap.innerHTML = "";
+   const inv = G.inventory || [];
+   if(!inv.length){
+    const empty = document.createElement("div");
+    empty.className = "si-desc";
+    empty.textContent = "Nothing carried to sell.";
+    sellWrap.appendChild(empty);
+   }
+   inv.forEach(function(item){
+    const value = Delve.sellValue(item);
+    const row = document.createElement("div"); row.className = "shop-item";
+    const info = document.createElement("div");
+    const nm = document.createElement("div"); nm.className = "si-name";
+    nm.style.color = Delve.TIERS.colors[item.tier] || "#fff";
+    nm.textContent = item.name;
+    const ds = document.createElement("div"); ds.className = "si-desc";
+    ds.textContent = (Delve.TIERS.names[item.tier] || "") +
+     (typeof item.points === "number" ? " · " + item.points + " pts" : "");
+    info.appendChild(nm); info.appendChild(ds);
+    const sell = document.createElement("button");
+    sell.className = "btn shop-buy";
+    sell.textContent = "Sell " + value + "g";
+    sell.addEventListener("click", function(){
+     if(Delve.sellItem(item) > 0){
+      if(Delve.sfx) Delve.sfx("buy");
+      Delve.buildShop();
+     }
+    });
+    row.appendChild(info); row.appendChild(sell);
+    sellWrap.appendChild(row);
+   });
+   const all = $("shopSellAll");
+   if(all){
+    all.disabled = !inv.length;
+    all.textContent = inv.length
+     ? "Sell all carried (" + inv.length + ")"
+     : "Sell all carried";
+   }
+  }
  };
 
  function closeShop(){
@@ -564,6 +627,7 @@ window.Delve = window.Delve || {};
    ["Elites slain", s.elitesKilled || 0],
    ["Gold earned", s.goldEarned || 0],
    ["Gold spent", s.goldSpentShop || 0],
+   ["Gold from sales", s.goldFromSales || 0],
    ["Barrels smashed", s.barrelsSmashed || 0],
    ["Consumables used", s.consumablesUsed || 0],
    ["Shards this run", Delve.G ? Delve.G.runShards : 0]
@@ -747,6 +811,30 @@ window.Delve = window.Delve || {};
  $("shopHealBtn").addEventListener("click", doShopHeal);
  $("shopLeaveBtn").addEventListener("click", closeShop);
 
+ // Sell-all is a two-tap action: the first tap arms it, the second sells. No
+ // browser confirm() on mobile, and no accidental wipe of a full bag.
+ $("shopSellAll").addEventListener("click", function(){
+  const G = Delve.G;
+  if(!G || !(G.inventory || []).length) return;
+  const btn = this;
+  if(btn.dataset.armed !== "1"){
+   btn.dataset.armed = "1";
+   btn.textContent = "Tap again to sell all";
+   setTimeout(function(){
+    if(!btn.dataset || btn.dataset.armed !== "1") return;
+    btn.dataset.armed = "";
+    if(Delve.G === G && Delve.buildShop) Delve.buildShop();
+   }, 3000);
+   return;
+  }
+  btn.dataset.armed = "";
+  const r = Delve.sellAll();
+  if(Delve.sfx) Delve.sfx("buy");
+  Delve.flash("Sold " + r.count + " for " + r.gold + "g");
+  Delve.updateHUD();
+  Delve.buildShop();
+ });
+
  $("victoryContinue").addEventListener("click", function(){
   hideAll();
   $("hud").style.display = "flex";
@@ -759,7 +847,14 @@ window.Delve = window.Delve || {};
   Delve.showFloorCard(G.floor);
  });
  $("victoryHub").addEventListener("click", function(){
-  if(Delve.G) Delve.G.runEnded = true;
+  const G = Delve.G;
+  // Leaving the dungeon is the ONLY place gold becomes shards (design L11).
+  // triggerVictory no longer converts, because the player may descend instead.
+  if(G && !G.runEnded && Delve.convertGold){
+   Delve.convertGold();
+   if(Delve.bankRunShards) Delve.bankRunShards();
+  }
+  if(G) G.runEnded = true;
   Delve.clearRunCheckpoint();   // the run is abandoned from here, not paused (§6.12)
   Delve.showHub();
  });
