@@ -34,6 +34,13 @@ window.Delve = window.Delve || {};
     patches:[
       { type:"grass", seed:0.45, nGen:3, amount:0.06 }
     ],
+    // Floor growth (js/growth.js placeGrowth): an overgrown forest floor needs
+    // more than the default — more rooms grow, bigger patches, biased toward
+    // wall bases so moss and roots climb the stone. BIOMES[1].growthPal supplies
+    // the yellow-green gradient; without this block placeGrowth bails entirely.
+    growth:{ roomChance:0.88, largeArea:36, largeChance:0.60, bigChance:0.30,
+           cornerBias:0.55, wallBias:0.42,
+           sizeMin:0.55, sizeMax:1.10, bigSizeMin:1.30, bigSizeMax:2.10 },
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
@@ -172,8 +179,16 @@ window.Delve = window.Delve || {};
     clutter:"ruins" },
   { name:"The Blackvein",
     wall:"#2a3524", wallEdge:"#4d5c3e", wallBrick:"#141c10", mortar:"#080c06",
-    floor:"#2c3524", floor2:"#242c1e", moss:"#7a9a3a",
+    floor:"#3b2f1d", floor2:"#2e2517", moss:"#7a9a3a",
     water:"#3a2048", torch:"#c8d84a", light:"rgba(120,180,60,0.06)",
+    // Organic forest floor: smooth periodic soil with mycelium threads instead
+    // of masonry. No lattice means no tile grid can read at all, and the brown
+    // earth sits under the existing thorn/vine clutter and moss ground cover.
+    floorStyle:"dirt",
+    // Wall growth climbs from floor patches like ward 1's moss (js/growth.js).
+    growthLinked:true,
+    // Dark root → bright growing tip, in the Blackvein's yellow-green.
+    growthPal:["#2a3a18","#3d5222","#5a7a2e","#7a9a3a","#9dbd52"],
     clutter:"blackvein",
     // Ground-cover sprite (js/ground.js): blood moss creeping over the floor.
     groundCover:"ground_moss" },

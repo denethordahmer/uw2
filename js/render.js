@@ -225,8 +225,67 @@ const DEATH_LIFE = 460;
   let bondKey = null, bondTex = null;
   function rgbOf(hex){ return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)]; }
   function mixRGB(a, b, t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+
+  // ── SEAMLESS FLOOR STYLES ─────────────────────────────────────
+  // Every style here bakes a 48x48-pixel torus (= 3x3 tiles at 16px) and blits
+  // 16x16 cells from it, so pattern edges continue across the tile seam and the
+  // square grid never reads. "dirt" is the exception with no lattice at all —
+  // periodic noise only, for biomes whose floor is earth rather than masonry.
+  // A biome opts in with floorStyle:"<name>"; anything unknown keeps the old
+  // per-tile slab look.
+  const BOND_STYLES = { runningbond:true, dirt:true };
+
+  // Exact 32-bit position hash for texture baking. Delve.hash3 (state.js) loses
+  // precision on large float products and skews low for small integer inputs —
+  // measured: every value it returned for salt 1409 landed between 0 and 0.46,
+  // which flattened the dirt floor and killed the mycelium threads entirely.
+  // Math.imul multiplies as true 32-bit ints, so the output is evenly spread.
+  // Used ONLY by the organic styles below; the runningbond masonry keeps its
+  // original hash so ward 1's locked-in look does not shift.
+  function texHash(x, y, salt){
+   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(salt | 0, 1274126177);
+   h = Math.imul(h ^ (h >>> 13), 1274126177);
+   h = h ^ (h >>> 16);
+   return (h >>> 0) / 4294967295;
+  }
+
+  // Periodic value noise on the S-pixel torus: N control points across the
+  // repeat, smoothstep-interpolated and wrapped in both axes, so the field is
+  // seamless no matter how it tiles.
+  function periodicNoise(px, py, N, S, salt){
+   const fx = (px / S) * N, fy = (py / S) * N;
+   const x0 = Math.floor(fx), y0 = Math.floor(fy);
+   const tx = fx - x0, ty = fy - y0;
+   const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+   const v = function(a, b){ return texHash(((a % N) + N) % N, ((b % N) + N) % N, salt); };
+   const a = v(x0, y0), b = v(x0 + 1, y0);
+   const c = v(x0, y0 + 1), d = v(x0 + 1, y0 + 1);
+   const top = a + (b - a) * sx, bot = c + (d - c) * sx;
+   return top + (bot - top) * sy;
+  }
+
+  // Dirt / forest floor (The Blackvein): continuous soil, no seams, with pale
+  // mycelium threads running through it. Two noise octaves give broad patches
+  // and finer clumping; a third field crossing its midpoint draws the threads.
+  function dirtPixel(px, py, S, floorA, floorB, thread){
+   const n1 = periodicNoise(px, py, 6, S, 1409);    // broad soil patches
+   const n2 = periodicNoise(px, py, 12, S, 1411);   // finer clumping
+   const n3 = periodicNoise(px, py, 16, S, 1417);   // dry-earth flecks (16 divides 48)
+   const grain = texHash(px, py, 1427) - 0.5;
+   let t = n1 * 0.54 + n2 * 0.28 + grain * 0.12;
+   t = Math.max(0, Math.min(1, t));
+   let base = mixRGB(floorA, floorB, t);
+   // a third octave lifts sparse patches toward dry, paler soil — this is what
+   // breaks the banding a pure two-colour blend leaves behind
+   if(n3 > 0.68) base = mixRGB(base, [132, 110, 74], (n3 - 0.68) * 1.4);
+   // mycelium threads: pale filaments where the vein field crosses its midpoint
+   const m = periodicNoise(px, py, 4, S, 1423);
+   if(Math.abs(m - 0.5) < 0.011) base = mixRGB(base, thread || [196, 208, 150], 0.34);
+   return base;
+  }
   function bondTexture(b){
-   const key = b.floor + "|" + b.floor2;
+   const style = BOND_STYLES[b.floorStyle] ? b.floorStyle : "runningbond";
+   const key = style + "|" + b.floor + "|" + b.floor2;
    if(bondKey === key && bondTex) return bondTex;
    const S = BOND_PX * BOND_N;             // 48x48 fine pixels = 3x3 tiles
    const c = document.createElement("canvas");
@@ -237,18 +296,23 @@ const DEATH_LIFE = 460;
    const floorA = rgbOf(b.floor), floorB = rgbOf(b.floor2);
    const mortar = mixRGB(mixRGB(floorB, [8, 11, 15], 0.72), [0, 0, 0], 0.12);
    const lit = [214, 226, 236], shade = [5, 7, 10];
-   // The masonry lattice: 8px columns, a 16px course period inside each, and
-   // every second column shifted down 8px so neighbouring courses interlock.
-   // 8 divides 48 and 16 divides 48, so the lattice wraps the torus exactly.
+   // Style dispatch. "dirt" skips the lattice entirely and paints continuous
+   // soil; every other style uses the interlocking masonry courses below.
    const COL_W = 8, ROW_H = 16;
+   const isDirt = style === "dirt";
+   const thread = b.moss ? rgbOf(b.moss) : [196, 208, 150];
    for(let py = 0; py < S; py++){
     for(let px = 0; px < S; px++){
+     let col3;
+     if(isDirt){
+      // no seams anywhere — smooth earth with pale mycelium threads
+      col3 = dirtPixel(px, py, S, floorA, floorB, thread);
+     } else {
      const col = (px / COL_W) | 0;              // 0..5 across the torus
      const lx = px % COL_W;
      const shift = (col & 1) ? 8 : 0;           // stagger every other column
      const yy = (py + shift) % ROW_H;           // position in this column's course
      const period = ((py + shift) / ROW_H) | 0;
-     let col3;
      // the mortar grid: a seam every 8px across, and two seams per course, so
      // no seam ever runs unbroken from column to column
      if(lx === 0 || yy === 0 || yy === 12){
@@ -269,8 +333,11 @@ const DEATH_LIFE = 460;
        col3 = mixRGB(base, shade, 0.05);        // block body
       }
      }
-     // fine weathered grain over everything, a few units of brightness either way
-     const g = (hash3(px, py, 1223) - 0.5) * 8;
+     }
+     // fine weathered grain over everything, a few units of brightness either way.
+     // Dirt uses the unbiased texHash; runningbond keeps its original grain so
+     // ward 1's locked-in surface does not shift.
+     const g = ((isDirt ? texHash(px, py, 1223) : hash3(px, py, 1223)) - 0.5) * 8;
      const o = (py * S + px) * 4;
      d[o]   = Math.max(0, Math.min(255, col3[0] + g));
      d[o+1] = Math.max(0, Math.min(255, col3[1] + g));
@@ -295,17 +362,24 @@ const DEATH_LIFE = 460;
    const t = floorTone(gx, gy);
    ctx.save();
    ctx.globalAlpha = 0.05 + Math.abs(t - 0.5) * 0.22;
-   ctx.fillStyle = t < 0.5 ? "#060a0e" : "#9fb2c4";
+   if(b.floorStyle === "dirt"){
+    // Brown earth must not pick up the old slate-blue cast, so the drift is
+    // tinted from the biome's own floor colours instead.
+    ctx.fillStyle = t < 0.5 ? blendHex(b.floor2, "#04070a", 0.55) : blendHex(b.floor, "#ffffff", 0.62);
+   } else {
+    // runningbond keeps its locked-in look, byte for byte.
+    ctx.fillStyle = t < 0.5 ? "#060a0e" : "#9fb2c4";
+   }
    ctx.fillRect(sx, sy, ts, ts);
    ctx.restore();
   }
  function drawFloorTile(ctx, sx, sy, ts, gx, gy, b){
   const n = hash2(gx,gy), n3 = hash3(gx,gy,31), n4 = hash3(gx,gy,53);
-  if(b.floorStyle === "runningbond"){
-   // B2) Seamless running bond — the baked 3x3-tile torus masonry above. No
-   //     slab, no joint frame, no per-tile outline: the pattern's edges
-   //     continue into the neighbouring copies, so the floor reads as one
-   //     continuous paved surface and the tile grid is invisible.
+  if(BOND_STYLES[b.floorStyle]){
+   // B2) Seamless torus floor — runningbond masonry, or the organic "dirt"
+   //     field. Either way the pattern is baked across a 3x3-tile torus and its
+   //     edges continue into the neighbouring copies, so the floor reads as one
+   //     continuous surface and the tile grid is invisible.
    drawBondFloor(ctx, sx, sy, ts, gx, gy, b);
   } else {
   // A) Continuous-tone shading — floorTone replaces the old (gx+gy)%2 two-tone

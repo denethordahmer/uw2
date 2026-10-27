@@ -928,6 +928,11 @@ window.Delve = window.Delve || {};
     const w = adjWalls[Math.floor(Math.random()*adjWalls.length)];
     for(let yy = w.y-1; yy !== w.y+2; yy++){
      for(let xx = w.x-1; xx !== w.x+2; xx++){
+      // Never carve onto the map's outer ring. A false wall one tile in from the
+      // edge would punch FLOOR through row 0 / column 0 (or leave floor sitting
+      // against the VOID ring with no stone between), which is the "room running
+      // off the top of the screen" report. The ring stays sealed stone.
+      if(yy === 0 || yy === G.gridH - 1 || xx === 0 || xx === G.gridW - 1) continue;
       if(G.grid[yy] && G.grid[yy][xx] === T().WALL) G.grid[yy][xx] = T().FLOOR;
      }
     }
@@ -952,15 +957,23 @@ window.Delve = window.Delve || {};
     if(G.grid[y] && G.grid[y][r.right] === T().VOID) G.grid[y][r.right] = T().WALL;
    }
   });
+  // Hard cap on the map's outer ring. Any walkable tile sitting ON the ring
+  // becomes stone, and any ring cell whose inward neighbour is walkable becomes
+  // stone too — so a room that reaches the edge is always closed off by a drawn
+  // wall instead of running straight into the black VOID band. Cells with no
+  // room behind them stay VOID, which is what keeps the ragged map silhouette.
+  const walkable = function(v){ return v !== undefined && v !== T().WALL && v !== T().VOID; };
   for(let x = 0; x !== G.gridW; x++){
-   const top = G.grid[0][x], bottom = G.grid[G.gridH-1][x];
-   if(top !== T().VOID && top !== T().WALL) G.grid[0][x] = T().WALL;
-   if(bottom !== T().VOID && bottom !== T().WALL) G.grid[G.gridH-1][x] = T().WALL;
+   if(walkable(G.grid[0][x])) G.grid[0][x] = T().WALL;
+   if(walkable(G.grid[G.gridH-1][x])) G.grid[G.gridH-1][x] = T().WALL;
+   if(G.grid[0][x] === T().VOID && walkable(G.grid[1][x])) G.grid[0][x] = T().WALL;
+   if(G.grid[G.gridH-1][x] === T().VOID && walkable(G.grid[G.gridH-2][x])) G.grid[G.gridH-1][x] = T().WALL;
   }
   for(let y = 0; y !== G.gridH; y++){
-   const left = G.grid[y][0], right = G.grid[y][G.gridW-1];
-   if(left !== T().VOID && left !== T().WALL) G.grid[y][0] = T().WALL;
-   if(right !== T().VOID && right !== T().WALL) G.grid[y][G.gridW-1] = T().WALL;
+   if(walkable(G.grid[y][0])) G.grid[y][0] = T().WALL;
+   if(walkable(G.grid[y][G.gridW-1])) G.grid[y][G.gridW-1] = T().WALL;
+   if(G.grid[y][0] === T().VOID && walkable(G.grid[y][1])) G.grid[y][0] = T().WALL;
+   if(G.grid[y][G.gridW-1] === T().VOID && walkable(G.grid[y][G.gridW-2])) G.grid[y][G.gridW-1] = T().WALL;
   }
 
   // Wall-fed puddles (js/puddles.js) — after every prop is placed, so a pool can
