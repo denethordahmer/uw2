@@ -186,7 +186,7 @@ window.Delve = window.Delve || {};
  G.gold += pile.amount;
  Delve.recordStat("goldEarned", pile.amount);
  if(Delve.sfx) Delve.sfx("pickup_gold");
- if(G.grid[ty] && G.grid[ty][tx] === T().GOLD) G.grid[ty][tx] = T().FLOOR;
+ if(G.grid[ty] && G.grid[ty][tx] === T().GOLD) G.grid[ty][tx] = pile.tile || T().FLOOR;
  if(Delve.logSystem) Delve.logSystem("+" + pile.amount + " gold");
  Delve.updateHUD();
  };

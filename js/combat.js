@@ -485,7 +485,9 @@ window.Delve = window.Delve || {};
  G.monsters = G.monsters.filter(x => x !== m);
  const mult = Delve.goldMult ? Delve.goldMult() : 1;
  G.goldPiles = G.goldPiles || [];
- G.goldPiles.push({ x: m.x, y: m.y, amount: Math.round(rewards.gold * mult) });
+ // Remember the tile the monster stood on (plain floor or a grass patch) so
+ // collecting the pile restores it instead of punching a bare square in a patch.
+ G.goldPiles.push({ x: m.x, y: m.y, amount: Math.round(rewards.gold * mult), tile: m.tile || T().FLOOR });
  g[m.y][m.x] = T().GOLD;
  Delve.addShake(2);
  if(Delve.sfx) Delve.sfx(m.elite ? "elite_kill" : "kill", { monster: m.kind });

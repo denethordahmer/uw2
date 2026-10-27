@@ -239,13 +239,17 @@ window.Delve = window.Delve || {};
  // Kind-specific spawner used by swarm/cluster floors. Skips the standard
  // safety-radius check so enemies can pack tightly around a chest.
  function spawnMonsterKind(G, x, y, kind){
-  if(!G.grid[y] || G.grid[y][x] !== T().FLOOR) return null;
+  // GRASS patches are walkable floor too — a swarm can stand on a tuft. Remember
+  // the tile we replaced so clearing the floor restores the patch instead of
+  // leaving a bare stone square punched through it.
+  if(!G.grid[y] || (G.grid[y][x] !== T().FLOOR && G.grid[y][x] !== T().GRASS)) return null;
   const row = C().MONSTER_ROSTER[kind];
   if(!row) return null;
   const m = {
    id:"m"+Date.now()+"_"+Math.floor(Math.random()*99999),
    kind: row.kind, name: row.name,
    x:x, y:y,
+   tile: G.grid[y][x],
    maxHp: row.hp + Math.floor((G.floor-1) * row.hpPerFloor),
    atk: row.atk + Math.floor(G.floor * row.atkPerFloor),
    speed: row.speed,
@@ -274,18 +278,50 @@ window.Delve = window.Delve || {};
   if(!usable.length) return;
 
   G.monsters.forEach(function(m){
-   if(G.grid[m.y] && G.grid[m.y][m.x] === T().MONSTER) G.grid[m.y][m.x] = T().FLOOR;
+   if(G.grid[m.y] && G.grid[m.y][m.x] === T().MONSTER) G.grid[m.y][m.x] = m.tile || T().FLOOR;
   });
   G.monsters = [];
 
-  const room = usable[Math.floor(Math.random() * usable.length)];
+  // Pick the LARGEST usable chamber. A random pick could land on a 2x2 BSP
+  // stub, where 18-26 bodies simply do not fit — that produced swarm floors
+  // with 3-5 monsters. Area-weight the choice so the pack fills a real room.
+  const room = usable.reduce(function(best, r){
+   const area = Math.max(0, r.w) * Math.max(0, r.h);
+   const bestArea = Math.max(0, best.w) * Math.max(0, best.h);
+   // ties and near-ties still vary, so swarms aren't always the same room
+   if(area > bestArea * 1.4) return r;
+   if(area >= bestArea * 0.72 && Math.random() < 0.5) return r;
+   return best;
+  }, usable[0]);
   const kind = (special && special.swarmKind) || "spore_swarm";
-  const count = Delve.rng((special && special.swarmMin) || 18, (special && special.swarmMax) || 26);
+  const roomTiles = Math.max(1, Math.max(0, room.w) * Math.max(0, room.h));
+  const rolled = Delve.rng((special && special.swarmMin) || 18, (special && special.swarmMax) || 26);
+  // Never ask for more bodies than the chamber has tiles; the centre becomes a chest.
+  const count = Math.max(1, Math.min(rolled, roomTiles - 1));
   let placed = 0, attempts = 400;
   while(placed < count && attempts-- > 0){
    const ox = room.x + Delve.rng(0, room.w - 1);
    const oy = room.y + Delve.rng(0, room.h - 1);
    if(spawnMonsterKind(G, ox, oy, kind)) placed++;
+  }
+  // If the chamber still came up short (props, merged walls, patch overlap),
+  // top the swarm up on open floor elsewhere rather than shipping a thin floor.
+  // Candidates are shuffled so the overflow never lines up in the map corner.
+  if(placed < count){
+   const spare = [];
+   for(let ty = 1; ty !== G.gridH - 1; ty++){
+    for(let tx = 1; tx !== G.gridW - 1; tx++){
+     const tt = G.grid[ty][tx];
+     if((tt === T().FLOOR || tt === T().GRASS) && !leq(Delve.mdist(tx, ty, G.px, G.py), 2)) spare.push({ x:tx, y:ty });
+    }
+   }
+   for(let i = spare.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = spare[i]; spare[i] = spare[j]; spare[j] = tmp;
+   }
+   for(let i = 0; i !== spare.length && placed < count; i++){
+    if(spawnMonsterKind(G, spare[i].x, spare[i].y, kind)) placed++;
+   }
   }
 
   const cx = room.cx, cy = room.cy;
@@ -599,7 +635,12 @@ window.Delve = window.Delve || {};
   let all = null;
   for(let attempt = 0; attempt !== 40 && !all; attempt++){
    const leaves = [];
-   splitRect({ left:0, top:0, right:G.gridW - 1, bottom:G.gridH - 1 }, leaves);
+   // Partition the map INSET by one tile on every side. No room can ever reach
+   // the outermost ring, so the ring always stays VOID and renders as pure black:
+   // a visible hard cap between the northmost (or any edge) rooms and the end of
+   // the map. It also stops room centres from sitting on row 0 / row gridH-1,
+   // where the ±2 monster scatter used to push coordinates outside the grid.
+   splitRect({ left:1, top:1, right:G.gridW - 2, bottom:G.gridH - 2 }, leaves);
    if(leaves.length >= minRooms){
     all = leaves.map(function(r, i){
      return { idx:i, left:r.left, top:r.top, right:r.right, bottom:r.bottom,
@@ -807,16 +848,42 @@ window.Delve = window.Delve || {};
   const band = Delve.getMonsterBand(G.floor);
   const count = Delve.rng(band.countMin || 10, band.countMax || 14);
   let placed = 0;
-  const usable = rooms.slice(1);
+  // The entrance room stays clear so the player never lands in a pack. If the BSP
+  // collapsed to a single room, use it anyway — an empty floor is worse than a
+  // tight start.
+  const usable = rooms.length > 1 ? rooms.slice(1) : rooms.slice(0);
   for(let ri = 0; ri !== usable.length && placed !== count; ri++){
    const room = usable[ri];
    const remaining = count - placed;
    const roomsLeft = usable.length - ri;
    const perHere = Math.ceil(remaining / roomsLeft);
    for(let k = 0; k !== perHere && placed !== count; k++){
-    const ox = room.cx + Delve.rng(-2, 2);
-    const oy = room.cy + Delve.rng(-2, 2);
+    // Clamp the scatter to the room's interior. A room sitting near the map edge
+    // used to hand spawnMonster a coordinate off the grid; now it slides back in.
+    const ox = Math.max(room.x, Math.min(room.x + room.w - 1, room.cx + Delve.rng(-2, 2)));
+    const oy = Math.max(room.y, Math.min(room.y + room.h - 1, room.cy + Delve.rng(-2, 2)));
     if(spawnMonster(G, ox, oy, band)) placed = placed + 1;
+   }
+  }
+  // Guarantee the band's population. The per-room pass above is a best-effort
+  // scatter and can come up short when rooms merge into blobs, when patches or
+  // props eat the offsets, or when the map produces few rooms. Sweep every open
+  // floor tile until the count is met, so a floor is never left near-empty.
+  if(placed < count){
+   const spare = [];
+   for(let sy = 1; sy !== G.gridH - 1; sy++){
+    for(let sx = 1; sx !== G.gridW - 1; sx++){
+     const st = G.grid[sy][sx];
+     if((st === T().FLOOR || st === T().GRASS) && !leq(Delve.mdist(sx, sy, G.px, G.py), 2)) spare.push({ x:sx, y:sy });
+    }
+   }
+   // Shuffle: without it the fallback always fills from the top-left corner.
+   for(let i = spare.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = spare[i]; spare[i] = spare[j]; spare[j] = tmp;
+   }
+   for(let i = 0; i !== spare.length && placed !== count; i++){
+    if(spawnMonster(G, spare[i].x, spare[i].y, band)) placed = placed + 1;
    }
   }
 
@@ -921,8 +988,14 @@ window.Delve = window.Delve || {};
 
  // monster spawn helper: respects safety radius and tile state
  function spawnMonster(G, x, y, band){
+  // Bounds first: a scatter offset from a room near the map edge could land on
+  // row -1 or row gridH. G.grid[y] was undefined there and the dereference threw,
+  // aborting genFloor halfway — which left the floor with no monsters AND no
+  // edge sealing. That single throw caused both reported bugs.
+  if(!G.grid[y] || G.grid[y][x] === undefined) return null;
   if(leq(Delve.mdist(x,y,G.px,G.py), 2)) return null;
-  if(G.grid[y][x] !== T().FLOOR) return null;
+  const tile = G.grid[y][x];
+  if(tile !== T().FLOOR && tile !== T().GRASS) return null;
   const kind = Delve.pickWeighted(band.weights);
   if(!kind) return null;
   const row = C().MONSTER_ROSTER[kind] || C().MONSTER_ROSTER.goblin;
@@ -930,6 +1003,7 @@ window.Delve = window.Delve || {};
    id:"m"+Date.now()+"_"+Math.floor(Math.random()*99999),
    kind: row.kind, name: row.name,
    x:x, y:y,
+   tile: tile,
    maxHp: row.hp + Math.floor((G.floor-1) * row.hpPerFloor),
    atk: row.atk + Math.floor(G.floor * row.atkPerFloor),
    speed: row.speed,
