@@ -1,39 +1,145 @@
-name: Unzip and Deploy
+name: Unzip
 
+# Upload underward.zip to the repo root (any branch) and this unpacks it over the
+# working tree, then commits the result. Rename the archive here and below if you
+# ever change its filename.
 on:
   push:
     paths:
-      - 'underward.zip'
+      # Any .zip dropped at the TOP LEVEL of the repo. The filename doesn't
+      # matter, so whatever your export command calls it will work - as long as
+      # it is a zip and it lands at the repo root, not inside a folder.
+      - '*.zip'
+  # Lets you re-run by hand from the Actions tab without pushing a new zip.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Two unpacks of the same branch must never race each other.
+concurrency:
+  group: "unzip-${{ github.ref }}"
+  cancel-in-progress: false
 
 jobs:
   unzip:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 10
+
+    # This job's own commit deletes underward.zip, and `paths` above matches a
+    # deletion as well as an addition - so without this guard the workflow can
+    # trigger itself. GITHUB_TOKEN pushes do not start new runs by default, which
+    # is why it usually "works", but that is luck: swap in a PAT and it loops.
+    if: github.actor != 'github-actions[bot]'
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Unzip archive
+      - name: Find the archive
+        id: guard
         run: |
-          # Extract the zip
-          unzip -o underward.zip
-          
-          # Move everything out of the 'underward' folder to the root
-          if [ -d "underward" ]; then
-            cp -r underward/* .
-            cp -r underward/.[!.]* . 2>/dev/null || true
+          set -euo pipefail
+          COUNT=$(find . -maxdepth 1 -name '*.zip' -type f | wc -l)
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No .zip found at the repo root - nothing to unpack."
+            exit 0
           fi
-          
-          # Clean up
-          rm -rf underward
-          rm underward.zip
 
-      - name: Commit and push changes
+          if [ "$COUNT" -gt 1 ]; then
+            echo "::warning::$COUNT zips at the repo root; using the first one."
+            find . -maxdepth 1 -name '*.zip' -type f
+          fi
+
+          ZIP=$(find . -maxdepth 1 -name '*.zip' -type f | sort | head -1)
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "Archive found: $ZIP ($(du -h "$ZIP" | cut -f1))"
+
+      - name: Unpack into a temp directory
+        if: steps.guard.outputs.found == 'true'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          set -euo pipefail
+
+          rm -rf /tmp/payload && mkdir -p /tmp/payload
+          unzip -q -o "$ZIP" -d /tmp/payload
+
+          # Archives made on a phone usually wrap everything in one folder
+          # ("underward/", "underward-main/", ...). Descend while there is exactly
+          # one entry and no index.html yet, so the folder name never matters.
+          SRC=/tmp/payload
+          for _ in 1 2 3 4; do
+            [ -f "$SRC/index.html" ] && break
+            COUNT=$(find "$SRC" -mindepth 1 -maxdepth 1 | wc -l)
+            [ "$COUNT" -eq 1 ] || break
+            ONLY=$(find "$SRC" -mindepth 1 -maxdepth 1)
+            [ -d "$ONLY" ] || break
+            SRC="$ONLY"
+          done
+
+          # Refuse to touch the repo unless the payload is recognisably the game.
+          if [ ! -f "$SRC/index.html" ]; then
+            echo "::error::No index.html found in the archive - refusing to copy anything."
+            echo "Top level of the archive was:"
+            find /tmp/payload -maxdepth 2 | head -20
+            exit 1
+          fi
+
+          echo "Content root: $SRC"
+          echo "SRC=$SRC" >> "$GITHUB_ENV"
+
+      - name: Copy payload over the working tree
+        if: steps.guard.outputs.found == 'true'
+        run: |
+          set -euo pipefail
+
+          # tar rather than cp so dotfiles come across too.
+          #
+          # The excludes are not cosmetic:
+          #   .git     - extracting a stale .git over the checkout corrupts the
+          #              repository mid-job and the later commit/push fails
+          #   .github  - an older copy of these workflows would replace themselves
+          #   *.zip    - stops an archive nested inside itself from coming back
+          tar -C "$SRC" \
+            --exclude='./.git' --exclude='./.git/*' \
+            --exclude='./.github' --exclude='./.github/*' \
+            --exclude='./*.zip' \
+            --exclude='./__MACOSX' --exclude='./__MACOSX/*' \
+            -cf - . | tar -C "$GITHUB_WORKSPACE" -xf -
+
+          # The archive has served its purpose; dropping it keeps the repo small
+          # and stops the same payload being unpacked twice.
+          rm -f "$ZIP"
+
+          # Fail loudly if the checkout was somehow damaged.
+          git rev-parse --git-dir >/dev/null
+
+      - name: Stage and show what changed
+        if: steps.guard.outputs.found == 'true'
+        run: |
+          set -euo pipefail
           git add -A
-          git commit -m "Auto-deploy from zip upload" || echo "No changes to commit"
-          git push
+          git status --short | head -60
+          echo "---"
+          echo "Changed paths: $(git status --porcelain | wc -l)"
+
+      - name: Commit and push
+        if: steps.guard.outputs.found == 'true'
+        run: |
+          set -euo pipefail
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit - the archive matched the repo."
+            exit 0
+          fi
+
+          git commit -m "Unzip underward.zip"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "Pushed. Any .js changes will now be checked by the CI workflow."

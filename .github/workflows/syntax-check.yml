@@ -1,32 +1,73 @@
-name: Syntax Check
+name: CI
 
+# The filename is still syntax-check.yml on purpose: the zip upload flow copies
+# over the tree without deleting, so renaming this file would leave the old
+# workflow running on GitHub alongside the new one.
 on:
   push:
     paths:
       - '**.js'
+      - '**.html'
+      - 'css/**'
+      - 'tools/**'
+      - '.github/workflows/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "ci-${{ github.ref }}"
+  cancel-in-progress: true
 
 jobs:
-  check-syntax:
+  check:
+    name: Syntax, load order, regression
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Run syntax check on all JS files
+      - name: JavaScript syntax
+        shell: bash
         run: |
-          echo "Checking JavaScript syntax..."
-          # Find all .js files and check them
-          find . -name "*.js" -not -path "./.git/*" | while read -r file; do
-            echo "Checking $file..."
-            node --check "$file"
-            if [ $? -ne 0 ]; then
-              echo "Syntax error found in $file"
-              exit 1
+          set -euo pipefail
+          fail=0
+          while IFS= read -r -d '' f; do
+            if ! node --check "$f"; then
+              echo "::error file=$f::JavaScript syntax error"
+              fail=1
             fi
-          done
-          echo "All JavaScript files passed the syntax check."
+          done < <(find . -name '*.js' -not -path './.git/*' -print0)
+          if [ "$fail" -ne 0 ]; then
+            echo "One or more files failed the syntax check."
+            exit 1
+          fi
+          echo "All JavaScript files parsed."
+
+      # js/manifest.js is the single declared load order. This asserts that
+      # index.html and the files on disk still agree with it.
+      - name: Load order and manifest consistency
+        run: node tools/check-order.js
+
+      # test_items.js runs the load-order guard first, then the 84 item checks.
+      - name: Item + load-order regression suite
+        run: node test_items.js
+
+      - name: Stylesheet is present and linked
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f css/game.css || { echo "::error::css/game.css is missing"; exit 1; }
+          grep -q 'css/game.css' index.html || { echo "::error::index.html does not link css/game.css"; exit 1; }
+          echo "Stylesheet present and linked from index.html."
