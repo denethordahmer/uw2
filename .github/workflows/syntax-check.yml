@@ -11,6 +11,7 @@ on:
       - 'css/**'
       - 'tools/**'
       - '.github/workflows/**'
+      - 'music/**'
   pull_request:
   workflow_dispatch:
 
@@ -71,3 +72,29 @@ jobs:
           test -f css/game.css || { echo "::error::css/game.css is missing"; exit 1; }
           grep -q 'css/game.css' index.html || { echo "::error::index.html does not link css/game.css"; exit 1; }
           echo "Stylesheet present and linked from index.html."
+
+      # js/sfx.js owns the ward -> MP3 table. A renamed or missing upload would
+      # only show up as silence on the phone, so fail the build instead.
+      - name: Music beds are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("fs");
+            const src = fs.readFileSync("js/sfx.js", "utf8");
+            const start = src.indexOf("MUSIC_TRACKS");
+            const end = src.indexOf("const BGM_FADE_IN_MS");
+            if (start < 0 || end < 0) { console.error("::error::MUSIC_TRACKS table not found in js/sfx.js"); process.exit(1); }
+            const table = src.slice(start, end);
+            const paths = (table.match(/"([^"]+\.mp3)"/g) || []).map(function(x){ return x.slice(1, -1); });
+            if (!paths.length) { console.error("::error::No .mp3 paths in the MUSIC_TRACKS table"); process.exit(1); }
+            let bad = 0;
+            paths.forEach(function(p){
+              if (!fs.existsSync(p) || fs.statSync(p).size === 0) {
+                console.error("::error file=" + p + "::missing or empty music bed");
+                bad++;
+              }
+            });
+            if (bad) process.exit(1);
+            console.log(paths.length + " music bed(s) present.");
+          '
