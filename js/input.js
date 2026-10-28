@@ -32,7 +32,8 @@ window.Delve = window.Delve || {};
   // over the map while the player is meant to be walking up the corridor toward
   // the arena, so taps must pass through it. Every other overlay still blocks.
   const list = ["hubScreen","deathScreen","inventoryScreen","shopScreen","victoryScreen",
-   "titleScreen","levelupScreen","stairsPrompt","itemCardOverlay","logWindow","pauseMenu"];
+   "titleScreen","levelupScreen","stairsPrompt","itemCardOverlay","logWindow","pauseMenu",
+   "statsOverlay"];
   const hits = [];
   for(let i=0;i<list.length;i++){
    const el = document.getElementById(list[i]);

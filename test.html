@@ -35,12 +35,19 @@
   <canvas id="charCanvas" width="200" height="260"></canvas>
 
   <div id="hud">
-    <span id="hudHp"></span><span id="hudAtk"></span><span id="hudTou"></span>
-    <span id="hudAgi"></span><span id="hudLuc"></span><span id="hudFloor"></span>
-    <span id="hudEnergy"></span><span id="hudGold"></span><span id="hudShards"></span>
-    <div id="restDots"></div>
-    <button id="minimapBtn"></button><button id="gearBtn"></button><button id="invBtn"></button>
+    <div id="hudBars">
+      <div class="hud-bar hp"><div class="bar-track"><div id="hudHpFill" class="bar-fill"></div></div><span id="hudHp"></span></div>
+      <div class="hud-bar en"><div class="bar-track"><div id="hudEnFill" class="bar-fill"></div></div><span id="hudEnergy"></span></div>
+      <div class="hud-bar xp"><span id="hudLevel"></span><div class="bar-track"><div id="hudXpFill" class="bar-fill"></div></div><span id="hudXp"></span></div>
+    </div>
+    <div id="hudMeta">
+      <span id="hudFloor"></span><div id="restDots"></div>
+      <span id="hudGold"></span><span id="hudShards"></span>
+      <button id="statsBtn"></button><button id="minimapBtn"></button>
+      <button id="gearBtn"></button><button id="invBtn"></button>
+    </div>
   </div>
+  <div id="statsOverlay" class="overlay"><h2>CHARACTER</h2><div id="statsList"></div><button id="statsCloseBtn"></button></div>
 
   <div id="abilityBar"></div>
   <div id="minimapWrap"></div>
@@ -199,7 +206,7 @@ var EXPECT_OWNER = {
   "Delve.items.isShopFloor":      ["isShopFloor", "js/items.js"],
   "Delve.items.healCost":         ["healCost", "js/items.js"],
   "Delve.levels.genFloor":        ["genFloor", "js/levels.js"],
-  "Delve.levels.genBossFloor":    ["genBossFloor", "js/levels.js"],
+  "Delve.levels.genBossFloor":    ["genBossFloor", "js/gen/bossarena.js"],
   "Delve.levels.openChest":       ["openChest", "js/levels.js"],
   "Delve.state.rng":              ["rng", "js/state.js"],
   "Delve.state.mdist":            ["mdist", "js/state.js"],

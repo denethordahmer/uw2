@@ -532,8 +532,11 @@ window.Delve = window.Delve || {};
 
  if(Delve.logKill) Delve.logKill(m.name || m.kind || "enemy", rewards.gold, rewards.shards, m.isBoss);
 
- if(buffs.healOnKill){
- const steal = Math.round(buffs.healOnKill * (Delve.healMult ? Delve.healMult() : 1));
+ // Item life-steal AND the Bloodthirst passive land here. The trait half used
+ // to be aggregated but never read, so the card healed for nothing.
+ const lifeSteal = ((buffs && buffs.healOnKill) || 0) + (tb().healOnKill || 0);
+ if(lifeSteal > 0){
+ const steal = Math.round(lifeSteal * (Delve.healMult ? Delve.healMult() : 1));
  G.hp = Math.min(Delve.maxHp(), G.hp + steal);
  Delve.addFloater("+" + steal, G.px, G.py, "#7ee08a");
  if(Delve.logHeal) Delve.logHeal(steal, "Life Steal");

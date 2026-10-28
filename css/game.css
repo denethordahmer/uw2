@@ -13,10 +13,29 @@ body{
 /* ── HUD ── */
 #hud{
   position:absolute;top:0;left:0;right:0;z-index:5;
-  display:flex;flex-wrap:wrap;align-items:center;gap:5px;
+  display:flex;flex-direction:column;gap:5px;
   padding:6px 8px env(safe-area-inset-top,0px);
   background:rgba(8,12,16,.88);backdrop-filter:blur(6px);
 }
+/* Three bars only — health, energy, experience. Every combat number lives in
+   the character sheet (#statsOverlay, opened with 📊) so the play area stays
+   clear, and the energy bar is what tells you whether you can afford a cast. */
+#hudBars{ display:flex;flex-direction:column;gap:3px; }
+.hud-bar{ display:flex;align-items:center;gap:6px; }
+.hud-bar > .sico{ width:20px;text-align:center;font-size:12px;flex-shrink:0; }
+.bar-track{
+  position:relative;flex:1;height:9px;background:#0b1117;
+  border:1px solid #2a3440;border-radius:6px;overflow:hidden;
+}
+.bar-fill{ height:100%;width:0;border-radius:5px;transition:width .18s ease; }
+.hud-bar.hp .bar-fill{ background:linear-gradient(90deg,#7d1f1a,#ff6b5e); }
+.hud-bar.en .bar-fill{ background:linear-gradient(90deg,#155a7e,#7ee0ff); }
+.hud-bar.xp .bar-fill{ background:linear-gradient(90deg,#6b5216,#ffd75e); }
+.bar-num{
+  font-size:11px;font-weight:800;color:#cfd8e0;
+  min-width:56px;text-align:right;flex-shrink:0;
+}
+#hudMeta{ display:flex;align-items:center;gap:5px; }
 .stat{
   display:flex;align-items:center;gap:4px;background:#141b23;
   border:1px solid #2a3440;border-radius:9px;padding:4px 8px;
@@ -57,15 +76,21 @@ body{
 #abilityBar{
   position:absolute;left:8px;bottom:26px;z-index:6;
   display:flex;gap:6px;padding-bottom:env(safe-area-inset-bottom,0px);
+  /* Abilities are uncapped, so the bar wraps into rows and scrolls instead of
+     running off the right edge. align-content:flex-end keeps the newest row
+     sitting on the floor, which is where the thumb reaches. */
+  flex-wrap:wrap;align-content:flex-end;
+  max-width:calc(100% - 16px);max-height:34vh;overflow-y:auto;
+  scrollbar-width:thin;
 }
 .ability-btn{
-  min-width:76px;background:#141b23;border:1px solid #7ee0ff44;border-radius:10px;
-  padding:7px 10px;display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  min-width:0;max-width:112px;background:#141b23;border:1px solid #7ee0ff44;border-radius:10px;
+  padding:6px 9px;display:flex;flex-direction:column;gap:1px;align-items:flex-start;
   font-family:inherit;color:#d7e3ee;cursor:pointer;text-align:left;touch-action:manipulation;
 }
 .ability-btn:active{ background:#1a2a3a; }
 .ability-btn:disabled{ opacity:.4;cursor:default; }
-.ability-name{ font-size:11px;font-weight:800; }
+.ability-name{ font-size:11px;font-weight:800;max-width:91px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .ability-cost{ font-size:10px;color:#7ee0ff;font-weight:700; }
 
 /* ── Minimap ── */
@@ -99,6 +124,26 @@ body{
 .overlay h1{ font-size:clamp(36px,10vw,58px);letter-spacing:2px;margin:4px 0 0;line-height:1; }
 .overlay h2{ font-size:clamp(22px,6vw,30px);color:#ff9a9a;margin:0; }
 .sub{ color:#a9bccd;font-size:16px;line-height:1.45;max-width:420px; }
+/* Character sheet — the stats that used to crowd the HUD */
+#statsOverlay{
+  padding:14px 12px calc(14px + env(safe-area-inset-bottom,0px));
+  overflow-y:auto;
+}
+#statsList{
+  width:100%;max-width:460px;display:flex;flex-direction:column;gap:6px;
+  margin:10px 0;
+}
+.stats-head{
+  font-size:11px;font-weight:800;letter-spacing:.08em;color:#7f94a8;
+  margin:8px 2px 0;text-align:left;
+}
+.stats-row{
+  display:flex;justify-content:space-between;gap:12px;
+  background:#141b23;border:1px solid #2a3440;border-radius:12px;padding:9px 13px;
+  font-size:14px;
+}
+.stats-row .sr-label{ color:#9fb3c5;text-align:left; }
+.stats-row .sr-value{ font-weight:800;color:#e6eef6;white-space:nowrap; }
 .walletbar{
   display:flex;align-items:center;justify-content:center;gap:10px;font-size:20px;font-weight:800;
   background:#141b23;border:1px solid #2a3440;border-radius:14px;padding:12px 20px;
@@ -581,9 +626,13 @@ body{
    block holds text invisible while the font arrives (near-instant with the preloads) and
    still falls back after ~3s if a load ever fails. Swapping a font later means replacing
    the file and bumping ?v= — these are cached as hard as anything else on a phone. */
-@font-face{ font-family:"UwTitle"; src:url("fonts/title.ttf") format("truetype"); font-weight:400 900; font-display:block; }
-@font-face{ font-family:"UwSub";   src:url("fonts/sub.ttf") format("truetype"); font-weight:400 900; font-display:block; }
-@font-face{ font-family:"UwBtn";   src:url("fonts/buttons.ttf") format("truetype"); font-weight:400 900; font-display:block; }
+/* Paths are relative to THIS file, not to index.html. These live in /css, so
+   the fonts need one level up: "fonts/..." would resolve to /css/fonts/... and
+   404, silently falling back to a system font. Change these to "../fonts/..."
+   only by moving the file, never by trimming the "../". */
+@font-face{ font-family:"UwTitle"; src:url("../fonts/title.ttf") format("truetype"); font-weight:400; font-display:block; }
+@font-face{ font-family:"UwSub";   src:url("../fonts/sub.ttf") format("truetype"); font-weight:400; font-display:block; }
+@font-face{ font-family:"UwBtn";   src:url("../fonts/buttons.ttf") format("truetype"); font-weight:400; font-display:block; }
 
 /* ── Title screen (owned by js/menu.js — see architecture.md §6.11) ────────
    Everything here is additive: it only names #titleScreen and its own

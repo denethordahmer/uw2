@@ -44,7 +44,8 @@ one global namespace (`Delve`).
    distant tile to pathfind.
 4. **Combat** — walking into a monster starts an auto-attack loop on a fixed tick
    (weapon speed vs monster speed). Tap elsewhere to flee, taking one hit.
-5. **Trait choices** — XP from kills → level up → pick 1 of 3 traits or an ability.
+5. **Trait choices** — XP from kills → level up → pick 1 of 3 cards. One is always an
+   unlearned ability while any remain; abilities are **uncapped** and never expire.
 6. **Boss floors (10, 20, 30)** — a bespoke arena: entry chamber → corridor → boss chamber.
    Nothing else on the floor. Beat the boss → victory screen → gold converts to shards,
    and every shard earned so far is banked (§6.10).
@@ -56,7 +57,8 @@ one global namespace (`Delve`).
   **The Frosted Vault** (21–30) and **The Bone Ossuary** (31–40).
 - Nothing beyond floor 40 yet. The plan is ~10 wards / 100 floors; loot and
   difficulty scale with depth, with no ward count baked into the engine.
-- ~100 items, a roster of monsters, 6 progression trees, passives/uniques/abilities.
+- ~100 items, a roster of monsters, 6 progression trees, **12 passive lines in 4 tags**
+  (three ranks each, with set bonuses), 4 uniques and **16 abilities**.
 
 ---
 
@@ -187,17 +189,34 @@ Derived player stats: `baseMaxHp`, `maxHp`, `baseAtk`, `atk`, `baseLuck`, `luckP
 `energyCap`.
 Notes: derived stats are split — `items.js` owns `playerSpeed` and `itemBuffs`.
 
-**`js/items.js`** — LOGIC
-`rollTier`, `makeItem`, `stampProvenance`, `rollKillDrop`, `dropPotion`, `itemPrice`,
-`inventoryCap`, `pickupItem`, `playerSpeed`, `itemBuffs`, `equipItem`, `unequipItem`,
-`equipWeapon`, `equipArmour`, `weaponStatus`, `useConsumable`, `itemStatLines`,
-`wardOf`, `itemsByTier`, `makeShopStock`, `shopHealCost`, `isShopFloor`, `healCost`.
+**`js/items.js`** — RUNTIME
+`rollTier`, `stampProvenance`, `rollKillDrop`, `dropPotion`, `dropUnique`, `itemPrice`,
+`sellValue`, `sellItem`, `sellAll`, `inventoryCap`, `pickupItem`, `playerSpeed`,
+`itemBuffs`, `equipItem`, `unequipItem`, `equipWeapon`, `equipArmour`, `weaponStatus`,
+`useConsumable`, `itemStatLines`, `wardOf`, `itemsByTier`, `makeShopStock`,
+`shopHealCost`, `isShopFloor`, `healCost`.
+What happens to an item **once it exists**. Construction — the quality budget, stat
+spending, affixes, `makeGear` / `makeItem` / `makeUnique` — is in `js/itemgen.js`.
 `rollTier(floor, rarityMult)` — the optional second argument nudges the rare + legendary
 weights for a special source (elite/boss kills in `rollKillDrop`, and the two chest paths
 in `levels.js`).
-Notes: the catalogue lives in `con-items.js`. This is the only file that knows item
-stat field names. **All shop-domain logic lives here** (stock, pricing, shop-floor
-predicate, heal cost).
+Notes: the catalogue lives in `con-items.js`. **All shop-domain logic lives here** (stock,
+pricing, shop-floor predicate, heal cost). Destructures `IT` and `FAM` back from
+`Delve.itemGen`; those two are the only names that cross the seam.
+
+**`js/itemgen.js`** — CONSTRUCTION
+`qualityOf`, `bandOf`, `pointsOfQuality`, `statPoints`, `itemPoints`, `rollSlot`,
+`rollAffixes`, `affixText`, `affixName`, `makeGear`, `makeItem`, `makeUnique`,
+`rollUnique`, plus internal helpers (`IT`, `FAM`, `gauss`, `PCT_STATS`, `basesForSlot`,
+`pickBase`, `STAT_LABEL`, `slotGroup`, `affixPool`, `applyAffix`, `addStat`).
+The continuous-quality model (docs/results/items_overhaul.md): one budget of POINTS decides
+an item's power. Quality sets the budget, the slot decides which stats spend it, affixes
+carve a slice out of it, and nothing is added on top — so two items of equal quality are
+worth the same whichever stats they carry.
+**Public names are unchanged**: these still assign straight onto `Delve.*`, so no call site
+moved. `IT()` and `FAM()` are exported on `Delve.itemGen` for `items.js`; nothing else
+crosses back. Depends on data only — `CONFIG.ITEMS`, `CONFIG.WEAPON_FAMILIES`,
+`CONFIG.SLOT_*`, `Delve.ITEM_UNIQUES` — all resolved at call time. No save, no DOM, no `G`.
 
 **`js/sprites.js`**
 `Delve.SPR`, `Delve._spriteUtils`, `Delve.registerBossSprite`, `Delve._bossSpriteBuilders`,
@@ -221,15 +240,26 @@ Notes: tile enum + RNG + math utils + ward/band lookup + run construction.
 interchangeable — mixing them caused a live bug (§8).
 
 **`js/levels.js`**
-`Delve.genFloor`, **`Delve.genBossFloor`**, `Delve.openChest`, plus internal helpers
-(`placeRoom`, `spawnMonster`, `spawnMonsterKind`, `applySwarmFloor`,
-`applyClusteredLootFloor`, `ensureWardPlan`, `specialRooms`, **`dressBossArena`**).
-`genFloor` resets `G.decor = []`; `genBossFloor` then fills it via `dressBossArena`,
-which places arena props from `G.bossArena` alone (§6.6). Props are **never written into
-the grid** — they exist only in that array.
-Single source of level generation. Boss floors branch out early (§6.6).
-`genFloor` resets `G.floorData = {}` each floor — needed so a secret room found on one
-floor can't leave a phantom false-wall on the next.
+`Delve.genFloor`, `Delve.openChest`, plus internal helpers (`placeRoom`, `spawnMonster`,
+`spawnMonsterKind`, `applySwarmFloor`, `applyClusteredLootFloor`, `ensureWardPlan`,
+`specialRooms`).
+Single source of the **dungeon** generator. `genFloor` resets `G.floorData = {}` each floor —
+needed so a secret room found on one floor can't leave a phantom false-wall on the next.
+Boss floors branch out early (§6.6) into `js/gen/bossarena.js`.
+
+**`js/gen/bossarena.js`**
+`Delve.genBossFloor` — **public name unchanged, so no call site moved** — plus internal
+`dressBossArena`, re-exported as `Delve.gen.dressBossArena` for `levels.js` to destructure
+back, exactly as the BSP geometry already is. Builds the three-part vertical arena (entry
+chamber → corridor → boss chamber) from the ward's optional `bossArena` tuning, then dresses
+it from `CONFIG.DRESSING`.
+`genFloor` resets `G.decor = []`; `genBossFloor` fills it via `dressBossArena`, which places
+props from `G.bossArena` alone (§6.6). Props are **never written into the grid** — they
+exist only in that array.
+Depends only on `Delve.T`, `Delve.CONFIG` and the `placeGroundCover` / `placeGrowth` /
+`logSystem` hooks, all resolved at call time — no save, no DOM. Because the layout and the
+dressing are both position-derived, a boss floor is fully deterministic, which is what makes
+a before/after snapshot comparison possible after any future edit here.
 
 **`js/ground.js`**
 `Delve.placeGroundCover`, `Delve.drawGroundCover`. Biome floor decoration (§6.14): a shared
@@ -271,9 +301,19 @@ position of its own — it sits after `growth.js` only to group generation code.
 **`js/traits.js`**
 `xpCurveFor`, `addXP`, `addAbility`, `castAbility`, `injectHubAbilities`, `traitBuffs`,
 `traits`, `hasUnbroken`, `secondWindHealOverride`.
-Notes: `addAbility` silently drops the oldest ability past `levelMaxAbilities` —
-intentional, UI surfacing deferred. **A new ability id needs a new `case` in
-`castAbility`.**
+Notes: **abilities are uncapped** — `CONFIG.levelMaxAbilities: 0` means "no limit", and
+`addAbility` appends, refusing only a duplicate, so a player never loses one they learned.
+Every level-up puts an unlearned ability on one of the three cards while any remain.
+**A new ability id needs a new `case` in `castAbility`**; the bar wraps and scrolls, so the
+UI needs no change as the list grows.
+
+Passives are **ranked**. `effects` is what rank I gives and `perRank` is the step for each
+rank after it, so a passive is stored as `{id, rank}` and `traitBuffs()` scales it. Picking a
+line you already own offers its **next rank** (`Sharpened Edge II`) instead of a duplicate,
+and a line at `maxRank` leaves the pool. Four tags — **Edge** (offence), **Iron**
+(survival), **Blood** (sustain) and **Greed** (economy) — carry set bonuses at **3 and 6
+total ranks** per tag (`CONFIG.TRAITS.sets`), counted in ranks rather than in lines, so
+taking one line to rank III advances its set as far as three different lines would.
 
 **`js/combat.js`**
 - Combat loop: `startCombat`, `endCombat`, internal `playerSwing`, `monsterSwing`
@@ -317,12 +357,31 @@ slider) — keep in sync if you change it.
 `log`, `clearLog`, `flushLogWindow`, and all `logXxx` shorthands.
 Two destinations: a rolling strip (`#combatLog`) and a modal (`#logWindowContent`).
 
+**`js/render/tiles.js`**
+`Delve.tiles` = `biome`, `tileAt`, `ensureCache`, `isTorchTile`, `blitTile`, `drawClutter`,
+`drawWallTile`, `drawWallShadows`, `drawWallTorch`, `tickTorch`; internal `floorTone`,
+`texHash`, `drawFloorTile`, `drawWeed`, `drawDoorTile`, `drawGrassPatch`, `drawStairs`,
+`arenaTorches` and the seamless-floor texture bakers.
+The tile atlas: the offscreen per-tile cache, every per-tile painter and the 48×48 torus
+texture bakers (Phase 3). Split out of `render.js` by verbatim move — the moved body is
+byte-identical to the lines it replaced, and `render.js` destructures it back into the same
+local names, so no call site changed.
+Depends only on `Delve.hash2`/`hash3`, `Delve.rgbOf`/`mixRGB`/`blendHex`, `Delve.getWard`,
+`Delve.CONFIG.BIOMES` and `Delve._clutterFamilies`, all resolved at call time. Holds no
+save state and touches no DOM.
+`torchFrame` — the 3-frame flicker — is this module's state, advanced by
+`Delve.tiles.tickTorch()` from `render.js`'s animation clock. That tick is the only write
+that crosses the seam.
+
 **`js/render.js`**
-`Delve.draw`, `addFloater`, `addShake`, `addDeath`, `isTorchTile`, tile/floor/wall/torch/stairs
-drawing, sprite drawing (idle / hurt / elite / **attack** frames, plus the hurt-recoil
-and the attack-lunge offsets), the offscreen tile cache, the
-biome ground-cover layer and the wall texture/shadow pass (§6.15). Per-biome clutter/growth
-painters are registered content (con-worldart.js) — only the ruins fallback stays here.
+`Delve.draw`, `addFloater`, `addShake`, `addDeath`, `isTorchTile`, sprite drawing (idle /
+hurt / elite / **attack** frames, plus the hurt-recoil and the attack-lunge offsets), the
+biome ground-cover layer, corpse fades and the wall texture/shadow pass (§6.15).
+Tile, floor, wall, torch and stair painting plus the offscreen tile cache are **not here** —
+they are `js/render/tiles.js` (Phase 3), destructured into the same local names.
+Per-biome clutter/growth painters are registered content (con-worldart.js) — only the ruins
+fallback stays inline. Also owns the floaters, the attack lunges, the hurt recoils and the
+corpse-fade records, all as render-local state deliberately kept off `G`.
 `Delve.drawPaperDoll`, `Delve.markVisited`,
 `Delve.renderMinimap`.
 Draw order is: floored tiles (+ their biome clutter) → **biome ground cover** → **ward growth**
@@ -344,8 +403,8 @@ player (blue for a walkable neighbour, orange for a monster) were removed by own
 `drawDecor(layer)` paints `G.decor`: floor props sit centred on their tile; wall props
 hang from the top of theirs, and because their art is 1.5 tiles tall they spill into the
 tile below — which is what makes them read as hanging.
-A **150ms** `setInterval` animation clock lives here (`ANIM_MS`). It advances the torch
-frame and redraws **only while something is genuinely animating**, and does nothing at
+A **150ms** `setInterval` animation clock lives here (`ANIM_MS`). It ticks the torch frame
+through `Delve.tiles.tickTorch()` and redraws **only while something is genuinely animating**, and does nothing at
 all while `document.hidden` — a phone in a pocket shouldn't be redrawing a dungeon.
 **`draw()` sets `Delve.camX`/`Delve.camY`
 each frame**, and `input.js` reads those for tap→tile conversion. Uses
@@ -376,20 +435,35 @@ Its settings ids are `title*`-prefixed **on purpose** — reusing `muteBtn` / `v
 the in-run pause menu dead (§8). It defines no name another file defines, and overrides nothing.
 
 **`js/ui.js`**
-- HUD: `updateHUD`, `renderAbilityBar`
+- HUD: `updateHUD`, `renderAbilityBar`, `openStats`, `closeStats`
+  The top bar is deliberately **three bars only** — health, energy (against the cap, so it
+  answers "can I afford this cast?"), and XP toward the next level — plus floor, rest dots,
+  gold, shards and the four buttons. Every combat number (attack, weapon damage, crit,
+  attack speed, damage reduction, dodge, luck, merchant discount) lives in the **character
+  sheet** (`#statsOverlay`, opened with 📊), together with your passives, their ranks and
+  set progress. It is read standing still, so it uses the full screen, and it is in
+  `uiBlocked()` while open.
 - Inventory: `openInventory`, `showItemCard`, `isSlotUnlocked`, `equipSlots`
 - Shop screen: `openShop`, `buildShop`
 - Screen orchestration: `showHub`, `hideHub`, `startRun`, `showEndScreen`, `showVictory`,
   `showFloorCard`, `showBossIntro`, `showStairsPrompt`, `refreshHub`, `buildHub`
 - Debug panel: `initDebug`
-- **All DOM event wiring (~25 listeners)**
+- **All DOM event wiring (41 listeners)**
 Screens + DOM + wiring only. No canvas drawing, no item-pool or shop-economy logic.
 Uses a **guarded `$()`** that returns an inert stub instead of `null` for missing ids,
 recording misses in `Delve.missingEls` — so one missing element can't kill the rest of
-the file. Every id that wiring asks for must exist in **both** `index.html` and
+the file.
+⚠️ **A stub is truthy**, so `if(!el)` is *not* an existence test against `$()`. Use
+`el.isStub`, or `document.getElementById` when the element is created on demand. Getting
+this wrong is silent: the guard never fires, the element is never built, and the handler
+throws before it reaches its `style.display` line — which is exactly how tapping an item
+in the inventory came to do nothing (CHANGELOG, "Fixed — tapping an item in the inventory
+did nothing"). `test_ui.js` now clicks through this path.
+
+Every id that wiring asks for must exist in **both** `index.html` and
 `test.html`'s `#fixtures` block, or `test.html` §9 reports it (and says which of the two
-you are looking at). No longer the largest file — `render.js` is — and no longer
-multi-purpose.
+you are looking at). The largest file again (875 lines) now that `render.js` has been split
+into `render.js` + `render/tiles.js` — and no longer multi-purpose.
 
 **`js/progression.js`**
 `hasProgression`, `markRunTrait`, `_hooks` registration, `renderTabs`, `renderTree`,
@@ -404,12 +478,30 @@ Runs `resize()` then `showHub()` at load. Last script on the page.
 
 ### 3.6 Page shell & dev tooling
 
-**`index.html`** — the page. Holds **three `<style>` blocks**: the main stylesheet, then
-a **shop layout fix** (§6.7), then an additive **visual-pass layer** (rounding, soft
-shadows, spacing) that only overrides the selectors it names — the map canvas and all
-tap geometry are untouched by it. Script tags must match §5 exactly.
-**`test.html`** — the test suite, 12 sections (§10). Must be served over http, not opened
-from disk — it uses synchronous XHR.
+**`index.html`** — the page: structure and `<script>` tags only. Script tags must match §5
+exactly. All styling was extracted into `css/game.css` (Phase 1), which is why the page
+carries a single `<link>` and no `<style>` block.
+**`css/game.css`** — the stylesheet. **Order matters**: it keeps the original cascade, so
+the main sheet comes first, then the **shop layout fix** (§6.7), then the additive
+**visual-pass layer** (rounding, soft shadows, spacing) that only overrides the selectors
+it names. The map canvas and all tap geometry are untouched by it.
+**`test.html`** — the browser suite, 12 sections (§10). Must be served over http, not
+opened from disk — it uses synchronous XHR.
+**`test_items.js`** — `node test_items.js` is the single pre-upload gate: load order, then
+DOM wiring, then item maths. Nothing ships on a red result.
+**`test_ui.js`** — builds a DOM from the real `index.html` and dispatches real clicks. The
+only suite that can catch a handler which throws on an actual element; every other suite
+stubs `document` down to one generic object and cannot see the difference.
+**It covers all of `ui.js`, not just the inventory**: HUD (including the three bar fills),
+the character sheet, ability bar, stairs prompt, floor
+card, boss intro, hub (including the parked-run lock), shop (buy / sell / sell-all / heal),
+victory and end screens, pause menu, the three audio controls, the log window, the minimap
+toggle, all 16 debug buttons, start-vs-resume, slot unlocks, `hideAllScreens`, and a check
+that all 21 `ui.js` entry points still exist (157 checks). Game-flow functions that need a
+generated map or a real canvas are replaced by recorders, so a red check means broken
+wiring rather than a stub limitation. Mutation-tested: breaking the sell-all arming, or
+letting a parked run buy hub upgrades, each turns it red — a suite that cannot fail is
+worth nothing.
 **`ARCHITECTURE.md`** — this file.
 
 ---
@@ -534,43 +626,53 @@ Every hand-over ends with what to test. Include:
 
 ## 5. Load order
 
-Order in `index.html` is load-bearing. `test.html` §1 compares it against the suite's
-own `FILES[]` array and fails loudly on drift. **If you add, remove or reorder a script,
-update both in the same order.**
+Order in `index.html` is load-bearing, and `js/manifest.js` is its single declaration.
+`tools/check-order.js` asserts that `index.html` matches the manifest exactly and that no
+file on disk is unlisted; `test.html` loads from the manifest rather than keeping its own
+copy of the list. **If you add, remove or reorder a script, edit the manifest and
+`index.html` together, in the same order, then run `node test_items.js`.**
 
 ```
- 1  js/config.js
- 2  js/content/con-monsters.js
- 3  js/content/con-items.js
- 4  js/content/con-biomes.js
- 5  js/content/con-traits.js
- 6  js/content/con-progression.js
- 7  js/save.js
- 8  js/attrs.js
- 9  js/items.js
-10  js/sprites.js
-11  js/content/con-bosssprites.js      ← ordering exception (needs sprites.js)
-12  js/content/con-worldart.js         ← same constraint (needs sprites.js)
-13  js/content/con-monstersprites.js   ← same constraint (needs sprites.js)
-14  js/state.js
-15  js/levels.js
-16  js/ground.js                       ← no load-dependency; grouped with generation
-17  js/growth.js                       ← no load-dependency; grouped with generation
-18  js/puddles.js                      ← no load-dependency; grouped with generation
-19  js/traits.js
-20  js/combat.js
-21  js/movement.js                     ← follows combat.js
-22  js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
-23  js/effects.js
-24  js/sfx.js
-25  js/log.js
-26  js/render.js
-27  js/pathfind.js
-28  js/input.js
-29  js/ui.js
-30  js/menu.js
-31  js/progression.js
-32  js/main.js
+ 1  js/manifest.js
+ 2  js/util.js
+ 3  js/config.js
+ 4  js/content/con-monsters.js
+ 5  js/content/con-items.js
+ 6  js/content/con-itemaffixes.js
+ 7  js/content/con-biomes.js
+ 8  js/content/con-traits.js
+ 9  js/content/con-progression.js
+10  js/save.js
+11  js/attrs.js
+12  js/itemgen.js                      ← item construction: quality budget, stats, affixes
+13  js/items.js                        ← item runtime: price, sell, pickup, equip, shop
+14  js/sprites.js
+15  js/content/con-bosssprites.js      ← ordering exception (needs sprites.js)
+16  js/content/con-itemsprites.js      ← same constraint (needs sprites.js)
+17  js/content/con-worldart.js         ← same constraint (needs sprites.js)
+18  js/content/con-monstersprites.js   ← same constraint (needs sprites.js)
+19  js/state.js
+20  js/gen/bsp.js                      ← floor-plan geometry
+21  js/gen/bossarena.js                ← boss floors: arena layout + dressing
+22  js/levels.js
+23  js/ground.js                       ← no load-dependency; grouped with generation
+24  js/growth.js                       ← no load-dependency; grouped with generation
+25  js/puddles.js                      ← no load-dependency; grouped with generation
+26  js/traits.js
+27  js/combat.js
+28  js/movement.js                     ← follows combat.js
+29  js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
+30  js/effects.js
+31  js/sfx.js
+32  js/log.js
+33  js/render/tiles.js                 ← tile atlas; render.js destructures Delve.tiles
+34  js/render.js
+35  js/pathfind.js
+36  js/input.js
+37  js/ui.js
+38  js/menu.js
+39  js/progression.js
+40  js/main.js
 ```
 
 ### Hard constraints (violate = silent breakage)
@@ -747,9 +849,10 @@ immediately.
   adjacent monster gets one `ambientMob` attack.
 
 ### 6.9 Level up
-`killMonster` → `addXP` → level-up loop → 3 choices (passives, with a chance swapped
-for an unknown ability and a chance for an unused unique) → pick → `applyTrait` →
-repeat while `pendingLevelUps > 0`.
+`killMonster` → `addXP` → level-up loop → 3 choices → pick → `applyTrait` → repeat while
+`pendingLevelUps > 0`. Card 1 is always an unlearned ability while any remain; the other two
+are passive lines you have not maxed, each offering its **next rank**, and a 25% chance
+swaps one of them for an unused unique.
 
 ### 6.10 End of run
 - Run-earned shards live in `G.runShards` and are **not** in the save while the run is in
@@ -1108,9 +1211,14 @@ that sits against a wall. All of it lives in `js/puddles.js`.
    whether any ward has a higher id), so adding a ward needs no edit here.
 
 **Add a trait / unique / ability**
-`con-traits.js` only: one entry in `passives` / `uniques` / `abilities`. Ability `data`
-fields must match what `castAbility` reads. **A new ability id needs a new `case` in
-`castAbility`** (`traits.js`).
+`con-traits.js` only: one entry in `passives` / `uniques` / `abilities`. A passive needs
+`tag`, `maxRank`, `effects` (rank I) and `perRank` (the step per rank); its numbers must use
+a key `traitBuffs()` already aggregates **and** something must read that key — `SpeedBonus`
+and `HealOnKill` were aggregated for months with no reader, so two passives did nothing.
+Ability `data` fields must match what `castAbility` reads. **A new ability id needs a new `case` in
+`castAbility`** (`traits.js`). Abilities are uncapped, so a new one needs no slot change;
+`target` is only compared against `"self"` (cast-now vs tap-a-target), so any other string
+works provided the `case` validates its own range and shape.
 
 **Add a shard-tree node**
 `con-progression.js`: one `NODES.<tree>` entry, **plus the numbers it promises** as its
@@ -1152,8 +1260,14 @@ the write-to-storage whitelist.
   still shows and fades.
 - **The floors 10/20 `boss:true` bands were removed** from `con-monsters.js` in the
   tidy-up pass (§3.1). If you ever see one, it's a leftover — nothing reads it.
-- **`addAbility` silently drops the oldest ability** past `levelMaxAbilities`. UI
-  surfacing is deferred, not forgotten.
+- **Abilities are uncapped** (`levelMaxAbilities: 0`). They were capped at 3 with the
+  oldest silently dropped; that was removed at the owner's request, because a learned
+  ability is a choice the player made. `addAbility` now only refuses a duplicate, and the
+  bar wraps and scrolls (34vh) instead of overflowing. Do not reintroduce a cap without
+  asking.
+- **Passives are ranked, and the same card is meant to reappear.** A line you own is offered
+  again as rank II/III, and a maxed line drops out of the pool. That repetition *is* the
+  upgrade path — do not "fix" it by filtering owned ids out of the passive pool.
 - **`ui.js`'s guarded `$()`** returns an inert stub for missing ids on purpose.
 - **The level-up screen is absent from `hideAll()`'s sweep** (`ui.js`) but *is* in
   `uiBlocked()` (`input.js`), and is hidden explicitly in `showHub`, `hideHub` and

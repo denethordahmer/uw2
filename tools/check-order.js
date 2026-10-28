@@ -11,6 +11,9 @@
 //   3. index.html's <script src> tags equal the manifest, in order
 //   4. every .js file on disk under js/ is in the manifest (nothing orphaned)
 //   5. every manifest entry exists on disk (no ghosts)
+//   6. every url() in css/game.css resolves (these are relative to css/, so a
+//      path moved out of index.html's inline styles needs a "../")
+//   7. every <link href> in index.html resolves (stylesheet, icons, preloads)
 //
 // Usage:  node tools/check-order.js
 // Exit:   0 = consistent, 1 = drift found (safe to run in CI)
@@ -111,10 +114,53 @@ else pass("every js file on disk is in the manifest (" + onDisk.length + " files
 if(ghosts.length) fail("manifest entry points at a missing file: " + ghosts.join(", "));
 else pass("every manifest entry exists on disk");
 
+// ── 6. referenced assets resolve ───────────────────────────────
+// Moving CSS out of index.html silently breaks every url() inside it: a path
+// that resolved against the page now resolves against the stylesheet. That is
+// how the title font stopped loading — "fonts/title.ttf" became
+// /css/fonts/title.ttf, and the browser hid the 404 by falling back to a system
+// font. These checks make a broken path loud instead of invisible.
+const CSS = path.join(ROOT, "css", "game.css");
+const SKIP = /^(data:|https?:|\/\/|#)/i;
+const stripRef = r => r.split("?")[0].split("#")[0];
+
+if(!fs.existsSync(CSS)){
+  fail("css/game.css not found");
+} else {
+  const css = fs.readFileSync(CSS, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const bad = [];
+  const urlRe = /url\(\s*["']?([^"')]+)["']?\s*\)/g;
+  let um;
+  while((um = urlRe.exec(css)) !== null){
+    const ref = um[1].trim();
+    if(SKIP.test(ref)) continue;
+    const target = path.resolve(path.dirname(CSS), stripRef(ref));
+    if(!fs.existsSync(target)) bad.push(ref + " -> " + path.relative(ROOT, target));
+  }
+  if(bad.length) fail("css/game.css references a missing file: " + bad.join(" | "));
+  else pass("every url() in css/game.css resolves (relative to css/, not the page)");
+}
+
+if(!fs.existsSync(INDEX)){
+  fail("index.html not found");
+} else {
+  const page = fs.readFileSync(INDEX, "utf8").replace(/<!--[\s\S]*?-->/g, "");
+  const badLinks = [];
+  const linkRe = /<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  let lm;
+  while((lm = linkRe.exec(page)) !== null){
+    const ref = lm[1].trim();
+    if(SKIP.test(ref)) continue;
+    if(!fs.existsSync(path.resolve(ROOT, stripRef(ref)))) badLinks.push(ref);
+  }
+  if(badLinks.length) fail("index.html links to missing file(s): " + badLinks.join(", "));
+  else pass("every <link href> in index.html resolves");
+}
+
 // ── result ─────────────────────────────────────────────────────
 console.log("");
 if(failed){
-  console.log("FAILED — " + failed + " problem(s). Fix js/manifest.js and/or index.html.");
+  console.log("FAILED — " + failed + " problem(s). See the ✗ lines above.");
   process.exit(1);
 }
-console.log("OK — load order is consistent.");
+console.log("OK — load order and asset paths are consistent.");

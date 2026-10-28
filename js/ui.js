@@ -16,6 +16,9 @@ window.Delve = window.Delve || {};
  function nullEl(id){
   const noop = function(){};
   return {
+   // isStub lets callers tell a stand-in from a real element. Plain
+   // `if(!el)` tests do NOT work here: a stub is truthy by design.
+   isStub: true,
    id: id, style: {}, dataset: {}, children: [],
    textContent: "", innerHTML: "", value: "", disabled: false,
    classList: { add: noop, remove: noop, toggle: noop, contains: function(){ return false; } },
@@ -45,7 +48,8 @@ window.Delve = window.Delve || {};
 
  function hideAll(){
   ["titleScreen","hubScreen","deathScreen","inventoryScreen","shopScreen","victoryScreen",
-   "stairsPrompt","bossIntroOverlay","itemCardOverlay","logWindow","pauseMenu"].forEach(function(id){
+   "stairsPrompt","bossIntroOverlay","itemCardOverlay","logWindow","pauseMenu",
+   "statsOverlay"].forEach(function(id){
    const el = $(id); if(el) el.style.display = "none";
   });
  }
@@ -68,20 +72,35 @@ window.Delve = window.Delve || {};
  };
 
  // ── HUD update ────────────────────────────────────────────────
+ // The top bar shows THREE things — health, energy, experience — because the
+ // play area is where the player is looking. Every combat number moved into the
+ // character sheet (openStats), which is read while standing still.
+ function setBar(id, frac){
+  const el = $(id);
+  if(el && el.style) el.style.width = Math.round(Math.max(0, Math.min(1, frac || 0)) * 100) + "%";
+ }
+
  Delve.updateHUD = function(){
   const G = Delve.G; if(!G) return;
-  $("hudHp").textContent = G.hp + "/" + Delve.maxHp();
-  if(Delve.weaponBand && Delve.G && Delve.G.equip){
-   const bd = Delve.weaponBand();
-   $("hudAtk").textContent = Math.round(bd.min) + "-" + Math.round(bd.max);
-  } else {
-   $("hudAtk").textContent = Delve.atk();
-  }
-  $("hudTou").textContent = Math.round(Delve.dmgRed()*100) + "%";
-  $("hudAgi").textContent = Math.round(Delve.dodge()*100) + "%";
-  $("hudLuc").textContent = Math.round(Delve.luckPts());
+
+  const maxHp = Delve.maxHp();
+  const hp = Math.max(0, Math.min(maxHp, G.hp || 0));
+  $("hudHp").textContent = hp + "/" + maxHp;
+  setBar("hudHpFill", maxHp > 0 ? hp / maxHp : 0);
+
+  // Energy against the cap, so the bar also answers "can I afford this cast?".
+  const cap = Delve.energyCap ? Delve.energyCap() : 100;
+  const en = Math.max(0, Math.min(cap, Math.floor(G.energy || 0)));
+  $("hudEnergy").textContent = en + "/" + cap;
+  setBar("hudEnFill", cap > 0 ? en / cap : 0);
+
+  const need = (Delve.xpToNext ? Delve.xpToNext() : 1) || 1;
+  const xp = Math.max(0, Math.floor(G.xp || 0));
+  $("hudLevel").textContent = "Lv " + (G.level || 1);
+  $("hudXp").textContent = xp + "/" + need;
+  setBar("hudXpFill", xp / need);
+
   $("hudFloor").textContent = G.floor;
-  const en = $("hudEnergy"); if(en) en.textContent = Math.floor(G.energy || 0);
   $("hudGold").textContent = G.gold;
   $("hudShards").textContent = Delve.save.shards + (Delve.pendingRunShards ? Delve.pendingRunShards() : 0); // banked + unbanked run earnings
   // The 📜 Log pill is visible during a run only — showHub() takes the class off.
@@ -101,6 +120,70 @@ window.Delve = window.Delve || {};
   Delve.renderAbilityBar();
   Delve.renderMinimap();     // render.js
  };
+
+ // ── CHARACTER SHEET ──────────────────────────────────────────
+ // Opened with 📊. This is where the attribute numbers went when they left the
+ // HUD: it is read while standing still, so it may use the whole screen.
+ function statRow(label, value){
+  const row = document.createElement("div");
+  row.className = "stats-row";
+  const l = document.createElement("span");
+  l.className = "sr-label"; l.textContent = label;
+  const v = document.createElement("span");
+  v.className = "sr-value"; v.textContent = value;
+  row.appendChild(l); row.appendChild(v);
+  return row;
+ }
+ function statHead(text){
+  const h = document.createElement("div");
+  h.className = "stats-head"; h.textContent = text;
+  return h;
+ }
+
+ Delve.openStats = function(){
+  const G = Delve.G; if(!G) return;
+  const list = $("statsList");
+  list.innerHTML = "";
+  const pct = v => Math.round((v || 0) * 100) + "%";
+
+  list.appendChild(statHead("OFFENCE"));
+  list.appendChild(statRow("⚔️ Attack", String(Delve.atk())));
+  if(Delve.weaponBand){
+   const bd = Delve.weaponBand();
+   list.appendChild(statRow("Weapon damage", Math.round(bd.min) + "-" + Math.round(bd.max)));
+  }
+  if(Delve.crit) list.appendChild(statRow("🎯 Crit chance", pct(Delve.crit())));
+  if(Delve.playerSpeed) list.appendChild(statRow("⚡ Attack speed", Delve.playerSpeed().toFixed(2) + "x"));
+
+  list.appendChild(statHead("DEFENCE"));
+  list.appendChild(statRow("❤️ Max HP", String(Delve.maxHp())));
+  if(Delve.dmgRed) list.appendChild(statRow("🛡️ Damage reduction", pct(Delve.dmgRed())));
+  if(Delve.dodge) list.appendChild(statRow("👟 Dodge", pct(Delve.dodge())));
+
+  list.appendChild(statHead("LUCK & LOOT"));
+  if(Delve.luckPts) list.appendChild(statRow("🍀 Luck", String(Math.round(Delve.luckPts()))));
+  if(Delve.goodsDiscount) list.appendChild(statRow("Merchant discount", pct(Delve.goodsDiscount())));
+
+  // Passives and tag progress, so the build stays legible away from level-up.
+  const traits = Delve.traits ? Delve.traits() : [];
+  if(traits.length){
+   list.appendChild(statHead("PASSIVES"));
+   traits.forEach(function(t){
+    list.appendChild(statRow(t.name + (t.tag ? " · " + t.tag : ""), "Rank " + (t.rank || 1)));
+   });
+   const tr = (Delve.traitBuffs && Delve.traitBuffs().tagRanks) || {};
+   const parts = Object.keys(tr).map(k => k + " " + tr[k] + "/6");
+   if(parts.length){
+    list.appendChild(statHead("SET PROGRESS"));
+    list.appendChild(statRow("Tags", parts.join("  ·  ")));
+   }
+  }
+
+  $("statsOverlay").style.display = "flex";
+ };
+ Delve.closeStats = function(){ $("statsOverlay").style.display = "none"; };
+ $("statsBtn").addEventListener("click", Delve.openStats);
+ $("statsCloseBtn").addEventListener("click", Delve.closeStats);
 
  // ── INVENTORY ────────────────────────────────────────────────
  Delve.openInventory = function(){
@@ -187,19 +270,25 @@ window.Delve = window.Delve || {};
   const tierName = Delve.TIERS.names[item.tier] || "";
 
   // Item sprite: same art as the floor, so the card is recognisable.
-  let spr = $("icSprite");
+  // This canvas is created on first use, so the lookup must go through the
+  // real DOM: $() hands back a truthy stand-in for a missing id, which would
+  // defeat an `if(!spr)` test and leave getContext() returning null.
+  let spr = document.getElementById("icSprite");
   if(!spr){
    spr = document.createElement("canvas");
    spr.id = "icSprite";
    spr.width = 72; spr.height = 72;
    spr.style.cssText = "image-rendering:pixelated;display:block;margin:0 auto 6px;";
-   const host = $("icName").parentNode;
-   host.insertBefore(spr, $("icName"));
+   const nameEl = document.getElementById("icName");
+   const host = nameEl && nameEl.parentNode;
+   if(host) host.insertBefore(spr, nameEl);
   }
-  const sctx = spr.getContext("2d");
-  sctx.clearRect(0, 0, 72, 72);
-  const img = Delve.itemSprite ? Delve.itemSprite(item) : null;
-  if(img){ sctx.imageSmoothingEnabled = false; sctx.drawImage(img, 0, 0, 72, 72); }
+  const sctx = (spr.getContext ? spr.getContext("2d") : null);
+  if(sctx){
+   sctx.clearRect(0, 0, 72, 72);
+   const img = Delve.itemSprite ? Delve.itemSprite(item) : null;
+   if(img){ sctx.imageSmoothingEnabled = false; sctx.drawImage(img, 0, 0, 72, 72); }
+  }
 
   $("icName").textContent = item.name;
   $("icName").style.color = tierCol;

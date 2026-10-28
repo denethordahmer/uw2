@@ -44,7 +44,8 @@ window.Delve = window.Delve || {};
   "js/attrs.js",
 
   // ── items + sprite builders ────────────────────────────────
-  "js/items.js",
+  "js/itemgen.js",           // item construction: quality budget, stats, affixes
+  "js/items.js",             // item runtime: price, sell, pickup, equip, shop
   "js/sprites.js",
   "js/content/con-bosssprites.js",
   "js/content/con-itemsprites.js",
@@ -54,6 +55,7 @@ window.Delve = window.Delve || {};
   // ── run state + floor generation ───────────────────────────
   "js/state.js",
   "js/gen/bsp.js",           // floor-plan geometry: split, neighbour graph, paint
+  "js/gen/bossarena.js",     // boss floors: three-part arena layout + dressing
   "js/levels.js",
   "js/ground.js",
   "js/growth.js",
@@ -69,6 +71,7 @@ window.Delve = window.Delve || {};
   "js/log.js",
 
   // ── presentation ───────────────────────────────────────────
+  "js/render/tiles.js",
   "js/render.js",
 
   // ── input, ui, boot ────────────────────────────────────────

@@ -11,6 +11,151 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Changed — the HUD is three bars; the stats moved into a character sheet
+
+- **The top bar is now health, energy and experience — nothing else.** It carried eight
+  attribute chips (HP, ATK, TOU, AGI, LUC, floor, energy, gold, shards) across the top of the
+  play area. Now each is a bar: **HP** (`hp/max`), **energy against the cap** — so the bar
+  answers "can I afford this cast?" by itself — and **XP toward the next level**, with the
+  level number beside it. Floor, rest dots, gold, shards and the buttons stay in a slim row
+  underneath.
+- **New character sheet (📊)** holds everything that left the bar: attack, weapon damage
+  range, crit chance, attack speed, max HP, damage reduction, dodge, luck and merchant
+  discount — plus your passives with their ranks and tag set progress (`Edge 2/6`). It is
+  read while standing still, so it may use the whole screen. It blocks map taps while open
+  (`uiBlocked()`), is closed by `hideAllScreens()`, and exists in both `index.html` and
+  `test.html`'s fixtures.
+- **`Delve.xpToNext()`** added in `traits.js`, so the XP bar uses the exact number the
+  level-up loop uses rather than recomputing it.
+- **Verified:** 19 new checks — the three fills track HP/energy/XP, the sheet opens, lists
+  every stat, shows passive ranks and set progress, blocks taps, and the old attribute ids
+  are gone from the markup. `test_ui` 198 → 217.
+
+### Changed — passives: 12 ranked lines, 4 tags, set bonuses
+
+- **Passives are ranked.** Each of the 12 lines has three ranks: picking a line you already
+  own offers `Sharpened Edge II` instead of a duplicate, and a maxed line leaves the pool.
+  `effects` is rank I, `perRank` is the step, and `traitBuffs()` scales by rank. That turns
+  the same card into a build decision rather than a fresh flat number.
+- **Four tags, with set bonuses.** Edge (offence), Iron (survival), Blood (sustain), Greed
+  (economy). A bonus triggers at **3 and 6 total ranks** in a tag, counted in ranks rather
+  than in lines — one line at rank III advances its set as far as three different lines.
+  Edge 3: +1 attack · Edge 6: +10% crit · Iron 3: +2 flat reduction · Iron 6: +12 max HP ·
+  Blood 3: +1 HP per kill · Blood 6: +2 energy per kill · Greed 3: +8% gold · Greed 6: +4%
+  item find.
+- **Two passives did nothing at all.** `traitBuffs()` aggregated `speedBonus` and
+  `healOnKill`, but only *item* buffs were ever read for those keys — so **Swift Hands
+  (+15% attack speed)** and **Bloodthirst (2 HP per kill)** were dead cards, which is part
+  of why the list felt like it had no thought in it. Both are read now: `playerSpeed()` adds
+  the trait's speed and `killMonster()` adds the trait's life-steal on top of the item's.
+- **Four duplicate cards merged away.** Light Feet → Evasive, Hardened Bones → Thick Hide,
+  Iron Will → the Unbroken unique (identical effect), Brute Force dropped.
+- Cards show the **tag and rank** (`EDGE · RANK 2/3 · UPGRADE`), so the choice reads at a
+  glance on a phone.
+- **Verified:** 14 new checks in `test_ui.js` — rank scaling, every set tier, both dead keys
+  reaching `playerSpeed`, an upgrade taken through the real level-up path, and a fully
+  maxed pool offering only the ability card. Mutation-tested: ignoring rank scaling turns
+  six checks red.
+
+### Changed — abilities are uncapped, and there are 16 of them
+
+- **The 3-ability cap is gone.** `CONFIG.levelMaxAbilities` is now `0` ("no limit") and
+  `addAbility` appends instead of shifting the oldest away. The old behaviour silently
+  deleted a choice the player had made — the item this changelog had been carrying as
+  "UI surfacing deferred, not forgotten" for two tiers. It now refuses only a *duplicate*.
+- **Nine new abilities, 7 → 16**, one per archetype, all built from primitives
+  `castAbility` already had (`hurt`, `applyEffect`, healing, energy):
+  **Crushing Blow** (2× attack on an adjacent enemy), **Rend** (strike + bleed),
+  **Rupture** (heavy damage, doubled against a bleeding target), **Leech** (drain, healing
+  half the damage dealt), **Venom Dart** (ranged + poison), **Siphon** (ranged + 3 energy
+  refunded), **Meteor** (ranged, splashing onto the target's neighbours), **Tremor**
+  (every enemy within 2 tiles) and **Brace** (heal 15%, clear poison and bleed).
+- **Every level-up now offers an ability** while any remain unlearned. It used to be a 50%
+  coin flip on one of three cards, so a deep run could roll nothing but passives. Card 1 is
+  the ability; passives and (25% of the time) a unique fill the other two.
+- **A level-up bug fixed on the way past.** The unique roll wrote a random slot *twice*, so
+  it could overwrite the ability card or put the same unique on two cards. It now replaces
+  exactly one of the two non-ability cards.
+- **The ability bar wraps and scrolls.** Uncapped without that, it would have run off the
+  right edge of a phone. `#abilityBar` is now `flex-wrap:wrap` inside a 34vh scroll area,
+  with `align-content:flex-end` so the newest row sits where the thumb reaches; buttons are
+  narrower and long names ellipsise.
+- **Verified:** all nine new abilities are exercised in `test_ui.js` — cast, damage, status,
+  splash radius, energy maths and the refused-cast path (18 new checks), alongside uncapped
+  accumulation, the level-up guarantee and a 16-button bar. Mutation-tested: making
+  Crushing Blow hit for 1× attack turns the suite red.
+
+### Test coverage — the UI suite now covers all of ui.js
+
+- **`test_ui.js` went from 18 checks to 157** and now exercises every screen and every
+  binding `ui.js` owns, not just the inventory path: HUD, ability bar (cast, refuse, and
+  arm/cancel targeting), stairs prompt, floor card (normal / shop / boss), boss intro, hub
+  (attribute purchase, the parked-run lock, start-vs-resume), shop (buy, sell, the two-tap
+  sell-all, heal, leave), victory and end screens (death / retreat / `kind=victory`), pause
+  menu, mute + both volume sliders + haptics, the log window, the minimap toggle, all 16
+  `?debug=1` buttons, slot unlocks, and `hideAllScreens`.
+- **It also asserts its own API surface.** All 21 `ui.js` entry points must still be
+  functions, so a refactor that drops `buildShop` or `resumeRun` fails here instead of in
+  the player's hands.
+- **Two harness-fidelity fixes were needed first, or those areas could not have been tested
+  honestly.** `querySelector` now understands tag selectors, because `showEndScreen()` reads
+  its own `<h1>`; and `getComputedStyle` returns the element's own `display` instead of a
+  constant `"block"`, because the minimap toggle branches on it. The mock still registers
+  ids without rebuilding nesting, so the one nesting the code depends on — the `<h1>` inside
+  `#deathScreen` — is attached explicitly, and the markup is checked first so the test
+  cannot quietly drift into a fiction.
+- **Sensitivity proved, twice.** Setting the sell-all arming from `"1"` to `"0"` turned two
+  checks red; letting a parked run buy hub upgrades turned one red. Both were restored and
+  the suite went green again. A suite that cannot go red has not been shown to test
+  anything.
+- **The suite caught a bug in its own harness.** The resume check overrode
+  `restoreRunFromCheckpoint` with a plain arrow: it answered `true` but never recorded the
+  call, so the check failed for the wrong reason. The stub now records *and* returns.
+
+### Fixed — tapping an item in the inventory did nothing
+
+- **The item card never opened, so gear could not be equipped.** `showItemCard()`
+  found its lazily-created sprite canvas with `$("icSprite")`. That helper
+  returns a *truthy* stand-in when an id is missing — deliberately, so one
+  absent element cannot crash the whole file — so the `if(!spr)` guard never
+  fired, the canvas was never built, `getContext("2d")` returned `null`, and
+  `sctx.clearRect(...)` threw. The handler died before reaching the
+  `overlay.style.display = "flex"` line at the end, so a tap appeared to do
+  nothing at all. The lookup now uses `document.getElementById`, and the 2d
+  context is null-checked.
+- **`nullEl()` stand-ins are marked `isStub: true`.** A stand-in is truthy, so
+  `if(!el)` is not a valid existence test against `$()`. The marker lets a
+  caller say what it means; `menu.js` was checked and has no such test.
+- **`test_ui.js` added — the first suite that clicks anything.** It builds a DOM
+  from the real `index.html` (every declared id becomes a live element with
+  working `addEventListener`, `onclick`, `appendChild`, `insertBefore`, and
+  `innerHTML` that clears children), loads all 37 scripts in page order, then
+  opens the inventory, taps an item, equips it, re-reads the rack, and repeats
+  the tap across 40 random items. Every other suite stubs `document` down to one
+  generic object, which is exactly why this bug passed all of them.
+  `test_items.js` now runs it as a second gate, so `node test_items.js` still
+  remains the single pre-ship command.
+
+### Fixed — the title screen lost its font
+
+- **`css/game.css` pointed at `fonts/*.ttf`, which resolves to `css/fonts/*.ttf`
+  and 404s.** Extracting the CSS out of `index.html` silently changed what every
+  `url()` inside it means: inline styles resolve against the page, external
+  stylesheets resolve against themselves. The three `@font-face` sources now use
+  `../fonts/` and load. Nothing threw — a missing font is not an error, the
+  browser substitutes a system face and carries on, which is why this looked
+  like "the font changed" rather than "the font broke".
+- **`@font-face` weight descriptors changed from `400 900` to `400`.** A weight
+  *range* is variable-font syntax, and these three files are static TrueType
+  (no `fvar` table), so the range invited the browser to synthesise weights the
+  font does not contain.
+- **`tools/check-order.js` now resolves referenced assets**: every `url()` in
+  `css/game.css` (resolved from `css/`) and every `<link href>` in `index.html`
+  (resolved from the page). Verified the new check fails on the old path and
+  passes on the new one.
+- **Font fallbacks are unchanged** — `"UwTitle", system-ui, sans-serif` — so if a
+  font ever fails again the screen still reads, just in a system face.
+
 ### Restructure — Phase 1 (no behaviour change)
 
 - **CSS extracted from `index.html` into `css/game.css`.** The page carried four
@@ -58,28 +203,146 @@ than narrating their own past.
   present and linked, triggers on `.html`/`css/`/`tools/` changes, cancels
   superseded runs, and fails cleanly with `::error` annotations.
 
-### Restructure — Phase 2 (started, no behaviour change)
+### Restructure — Phase 2 (no behaviour change)
 
 - **`js/gen/bsp.js` extracted from `js/levels.js`.** The floor-plan geometry —
   `splitRect`, `splitAt`, `intersectLine`, `edgeKey`, `graphPath`, `distFrom`,
   `dijkstraPath`, `paintRoom`, `tryMerge`, plus the `BSP_MIN`/`BSP_MAX`
   constants — moved out verbatim. Every body is a character-for-character copy,
   and `levels.js` destructures them back into local names, so **no call site
-  changed**. `levels.js`: 1155 → 1017 lines.
+  changed**.
 
-- **Why this seam was taken first.** It is the one large block in `levels.js`
-  with no shared closure state: the functions are pure and read only
-  `Delve.rng` and `Delve.T`, both resolved at call time.
+- **`js/gen/bossarena.js` extracted from `js/levels.js`.** `dressBossArena` (76
+  lines) and `Delve.genBossFloor` (91) moved out verbatim — 184 lines counting
+  their section comments, and `diff` confirms the copy is character-identical.
+  `Delve.genBossFloor` keeps its public name, so **no call site moved**;
+  `dressBossArena` is re-exported as `Delve.gen.dressBossArena` and destructured
+  back, the same pattern the BSP geometry already uses. `levels.js` is now
+  **838 lines**, down from 1155 when Phase 2 started.
 
-- **What was deliberately left alone.** `dressBossArena` (~600 lines, called
-  from exactly one place) and the item-rolling helpers in `items.js` share
-  module-level helpers (`IT`, `FAM`, `gauss`, `basesForSlot`, `pickBase`,
-  `STAT_LABEL`). Splitting those needs an intermediate shared module and carries
-  real risk, and the repo still has no commit history to fall back on.
+- **A correction to the earlier estimate.** This changelog previously recorded
+  `dressBossArena` as "~600 lines, called from exactly one place" and deferred it
+  partly on that basis. It is 76 lines. The ~600 came from the span between two
+  top-level `function` lines, which also contains `Delve.genBossFloor` **and**
+  `genFloor` — and `genFloor` (443 lines) is the dungeon generator, which stays.
+  The real arena seam is 167 lines, with no shared closure state at all.
 
-- Verified after the move: 37-script manifest consistent, `test_items` 84/84,
-  0 interior void gaps, 0 border leaks over 10 floors, all four boss floors
-  (10/20/30/40) generate, dirt texture unchanged at 298 colours.
+- **Why these two seams were taken first.** Both are blocks with no shared
+  closure state: the functions are pure, and read only `Delve.rng`, `Delve.T`
+  and `Delve.CONFIG`, all resolved at call time.
+
+- **Equivalence proved by diff, not by "tests pass".** A boss floor contains no
+  randomness — the only random calls nearby are `placeGroundCover` and
+  `placeGrowth`, reached through `Delve.*` and stubbed for this purpose — so the
+  old and new code could be run side by side and compared. For floors
+  10/20/30/40, the arena geometry, player spawn, every boss stat, all **108 decor
+  props** and a hash of the grid are **identical**. Rendering was compared the
+  same way against the pre-change code in a throwaway copy of the repo: floors 10
+  and 11 give identical samples, luminance, colour counts and seam counts.
+  This exists because the two silent regressions above ("tapping an item did
+  nothing", "the title screen lost its font") both passed a green suite.
+
+- **`test.html`'s `EXPECT_OWNER` updated** for `genBossFloor` →
+  `js/gen/bossarena.js`. That map exists to catch a move that was reverted, or a
+  definition duplicated into the wrong file — so moving the function meant
+  changing the map deliberately. The value is that it can see the move at all.
+
+- **`js/itemgen.js` extracted from `js/items.js`.** The whole construction model —
+  `qualityOf`, `bandOf`, `pointsOfQuality`, `statPoints`, `itemPoints`, `rollSlot`,
+  `rollAffixes`, `affixText`, `affixName`, `makeGear`, `makeItem`, `makeUnique`,
+  `rollUnique` and their private helpers — moved out verbatim: 314 lines, and
+  `diff` confirms the copy is character-identical. `items.js` keeps the *runtime* side of an item
+  (pricing, selling, pickup, equipping, consumables, shop stock, stat lines) and is
+  now **575 lines**, down from 890.
+
+- **The seam was cleaner than this changelog predicted.** It warned that the
+  item-rolling helpers "share module-level helpers" and so would need "an
+  intermediate shared module". Measured, that was **two** names, not seven: the
+  construction block uses *nothing* from the rest of `items.js`, and only `IT()` and
+  `FAM()` are needed back — by the drop roll, both price functions, and the
+  weapon-speed line on the item card. They are exported on `Delve.itemGen` and
+  destructured. Public `Delve.*` names are unchanged, so no call site moved.
+
+- **Equivalence proved with a seeded PRNG, because randomness hides drift.**
+  Item generation is heavily random (`Math.random`, plus `gauss()` on top of it),
+  so a plain before/after comparison means nothing. With `Math.random` replaced
+  by a seeded generator, the old and new code run an identical call sequence and
+  **all 715 results match** — items, affixes, points, prices, shop stock, drops.
+  Because the sequence of random draws is identical too, a reordered modulo or a
+  helper that lost a roll would show up immediately. 98 distinct items across all
+  four tiers were compared, with zero exceptions on either side.
+
+- **The harness was then shown to be sensitive, not vacuous.** A one-character
+  mutation (`+ 1` on the quality roll) changed **167 of 715** results. Worth
+  recording: the *first* mutation tried changed nothing at all, because it edited a
+  `|| 0.2` fallback whose real value comes from `CONFIG`. Fallback edits are
+  invisible.
+
+- Verified after all three moves: 39-script manifest consistent, `test_items` 84/84,
+  `test_ui` 18/18, 0 interior void gaps, 0 border leaks over 20 floors, all four
+  boss floors (10/20/30/40) generate and render, dirt texture unchanged at 298
+  colours.
+  **Correction (Phase 3):** the void-gap and border-leak scanners were *not* actually
+  re-run after the `itemgen.js` move. They still carried hardcoded file lists from
+  before it, so they aborted on load, and the figures above were inherited from the
+  earlier runs rather than re-measured. Both were repaired in Phase 3 and genuinely
+  re-run: **0 interior void gaps over 40 runs, 0 border leaks over 20 floors** — so
+  the claim is true, but it was not verified when this entry was written.
+
+### Restructure — Phase 3 (no behaviour change)
+
+- **`js/render/tiles.js` extracted from `js/render.js`.** The tile atlas — the offscreen
+  per-tile cache (`tileCache`, `ensureCache`, the arena-torch set), every per-tile painter
+  (`tileAt`, `isTorchTile`, `blitTile`, `drawFloorTile`, `drawWeed`, `drawClutter`,
+  `drawWallTile`, `drawWallShadows`, `drawDoorTile`, `drawGrassPatch`, `drawWallTorch`,
+  `drawStairs`), the seamless-floor texture bakers (`texHash`, `floorTone`, the 48×48 torus
+  bakes and their `BOND_*` constants) and `biome()` — moved out verbatim: **646 lines,
+  byte-identical** to the `render.js` lines they replaced, established by comparing the
+  strings rather than by reading the diff. `render.js` is now **673 lines**, down from 1311
+  (`wc -l`, both counted the same way).
+
+- **The seam was chosen by measurement, not by eye.** A scanner listed every top-level
+  function in `render.js` alongside the closure variables it touches. That is how per-frame
+  state was separated from drawing: `recoils`, `lunges`, `floaters`, `deaths` and `shakeT`
+  stay in `render.js` (they belong to entity drawing and the animation clock), while
+  `tileCache`, `arenaSrc`, `bondKey`/`bondTex` and `torchFrame` all sit inside the tile block
+  and travelled with it. Two facts came out that reading would not have given: `blendHex` is
+  declared at line 1259, *after* the painters that call it (it works only because they run
+  later), and `torchFrame` is read by the torch painter but incremented by the clock.
+
+- **Exactly one write crosses the seam.** `torchFrame` is now tiles.js's own state, advanced
+  by `Delve.tiles.tickTorch()` — a single call replacing `torchFrame=(torchFrame+1)%3` in the
+  150ms clock. `biome()` moved as well (the painters were its only callers besides `draw()`),
+  so `render.js` aliases it and its call sites are unchanged. Everything else is destructured
+  into the same local names, so no caller line in `render.js` moved.
+
+- **Equivalence proved operation-for-operation, not by spot-checking pixels.** A recording
+  canvas logs every 2D call `draw()` makes — method, arguments, and every property set such
+  as `fillStyle` — then hashes the log. With `Date.now` pinned and `Math.random` seeded, two
+  runs of the *same* code already agree bit-for-bit (checked first: a comparison that cannot
+  reproduce itself proves nothing). Across **floors 2, 5, 10, 11, 15, 20, 25, 30, 35 and 40**
+  the before and after logs are **identical** — 6,000–12,500 operations per floor. The baked
+  texture is unchanged too: floor 11 still reports **298 distinct colours** and the same
+  near-zero wrap seams.
+
+- **The harness was shown able to fail — which exposed a blind spot.** Changing one hash salt
+  in `floorTone` changed the op hashes on floors 2 and 10 but **not floor 11**: that floor is
+  the `dirt` style, which returns before it ever reaches `floorTone`. A single-floor check
+  would have called the mutation harmless. So the comparison deliberately spans both a
+  masonry ward and a dirt ward — the Phase 2 lesson (a mutation that changes nothing) in a
+  subtler form.
+  Related rot: the old `render_smoke.js` carried a **hardcoded file list** that predated
+  Phase 2 and no longer ran at all, because it was missing `itemgen.js`. Anything listing
+  files by hand goes stale; the new harness reads `js/manifest.js`.
+
+- **Two more stale harnesses repaired.** `scan_void_gaps.js` and `verify_border.js` also
+  carried hardcoded file lists from before Phase 2 and no longer loaded. Both now read
+  `js/manifest.js`, so they cannot go stale again.
+
+- Verified after the move: 40-script manifest consistent, `test_items` 84/84, `test_ui` 18/18,
+  all 40 scripts run against the real markup, tile and floor paint identical on 10 floors,
+  0 interior void gaps over 40 runs, 0 border leaks over 20 floors, all four boss floors
+  (10/20/30/40) identical, dirt texture unchanged at 298 colours.
 
 ### Fixed — map generation
 

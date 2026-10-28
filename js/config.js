@@ -103,7 +103,9 @@ Delve.CONFIG = {
  // ---------- XP & LEVEL-UPS ----------
  XP_CURVE: [4, 9, 16, 25, 36, 50, 66],
  xpWardStep: 2,
- levelMaxAbilities: 3,
+ // Abilities are uncapped: 0 means "no limit". They are the long-term run
+ // progression now, so addAbility appends and never drops the oldest.
+ levelMaxAbilities: 0,
  energyPerKill: 1,
  // Energy cap = starting pool + this. 10 + 90 = 100, the old hardcoded cap.
  energyCapOverStart: 90,

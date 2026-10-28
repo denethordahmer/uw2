@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 // test_items.js - Node regression suite for the item overhaul.
 //
-// This is the ONE command to run before shipping a change. It does two things:
-//   1. Load-order guard — runs tools/check-order.js, which asserts that
-//      js/manifest.js, index.html and the files on disk all agree.
-//   2. Item checks — loads the real game scripts in manifest order (canvas and
-//      document stubbed) and verifies the numbers the item overhaul locks down.
+// This is the ONE command to run before shipping a change. It does three things:
+//   - Load-order guard: runs tools/check-order.js, which asserts that
+//     js/manifest.js, index.html and the files on disk all agree.
+//   - DOM wiring guard: runs test_ui.js, which builds a DOM from the real
+//     index.html and clicks the actual buttons.
+//   - Item checks: loads the real game scripts in manifest order (canvas and
+//     document stubbed) and verifies the numbers the item overhaul locks down.
 //
-// Both must pass. A load-order failure exits non-zero before a single game
+// All three must pass. A load-order failure exits non-zero before a single game
 // script loads, so a broken manifest can never quietly "pass" the item suite.
+// The wiring guard exists because every check below runs against a stubbed
+// `document`: an element lookup that returns a stand-in instead of null looks
+// perfectly healthy here and dies silently in the browser.
 //
 // Run: node test_items.js
 "use strict";
@@ -25,6 +30,19 @@ try {
   console.log("LOAD ORDER FAILED — fix js/manifest.js and/or index.html.");
   console.log("Item results below would be meaningless: the suite may be loading a");
   console.log("different set of files than the game actually ships.");
+  process.exit(1);
+}
+
+// ── 1b. DOM wiring guard ──────────────────────────────────────
+// Numbered 1b so the item sections below keep their own 1-12 numbering.
+// Runs in its own process: it builds a real element tree from index.html and
+// dispatches real clicks, which the stubbed `document` below cannot model.
+try {
+  execFileSync(process.execPath, [path.join(root, "test_ui.js")], { stdio: "inherit" });
+} catch (e) {
+  console.log("");
+  console.log("DOM WIRING FAILED — a button, card or screen stopped responding.");
+  console.log("Open the failing check in test_ui.js; it names the element.");
   process.exit(1);
 }
 console.log("");

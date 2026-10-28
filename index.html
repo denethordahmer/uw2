@@ -20,20 +20,41 @@
 
   <!-- HUD -->
   <div id="hud" style="display:none">
-    <span class="stat"><span class="sico">❤️</span><span id="hudHp">30/30</span></span>
-    <span class="stat"><span class="sico">⚔️</span><span id="hudAtk">6</span></span>
-    <span class="stat"><span class="sico">🛡️</span><span id="hudTou">20%</span></span>
-    <span class="stat"><span class="sico">👟</span><span id="hudAgi">4%</span></span>
-    <span class="stat"><span class="sico">🍀</span><span id="hudLuc">1</span></span>
-    <span class="stat"><span class="sico">🗺️</span><span id="hudFloor">1</span></span>
-    <span class="stat"><span class="sico">⚡</span><span id="hudEnergy">10</span></span>
-    <span class="spacer"></span>
-    <div id="restDots"></div>
-    <span class="stat"><span class="sico">💰</span><span id="hudGold">0</span></span>
-    <span class="stat"><span class="sico">💎</span><span id="hudShards">0</span></span>
-    <button id="minimapBtn">📍</button>
-    <button id="gearBtn">⚙</button>
-    <button id="invBtn">🎒 Bag</button>
+    <div id="hudBars">
+      <div class="hud-bar hp">
+        <span class="sico">❤️</span>
+        <div class="bar-track"><div id="hudHpFill" class="bar-fill"></div></div>
+        <span id="hudHp" class="bar-num">30/30</span>
+      </div>
+      <div class="hud-bar en">
+        <span class="sico">⚡</span>
+        <div class="bar-track"><div id="hudEnFill" class="bar-fill"></div></div>
+        <span id="hudEnergy" class="bar-num">10/100</span>
+      </div>
+      <div class="hud-bar xp">
+        <span id="hudLevel" class="sico">Lv 1</span>
+        <div class="bar-track"><div id="hudXpFill" class="bar-fill"></div></div>
+        <span id="hudXp" class="bar-num">0/4</span>
+      </div>
+    </div>
+    <div id="hudMeta">
+      <span class="stat"><span class="sico">🗺️</span><span id="hudFloor">1</span></span>
+      <div id="restDots"></div>
+      <span class="spacer"></span>
+      <span class="stat"><span class="sico">💰</span><span id="hudGold">0</span></span>
+      <span class="stat"><span class="sico">💎</span><span id="hudShards">0</span></span>
+      <button id="statsBtn">📊</button>
+      <button id="minimapBtn">📍</button>
+      <button id="gearBtn">⚙</button>
+      <button id="invBtn">🎒</button>
+    </div>
+  </div>
+
+  <!-- Character sheet: everything that used to crowd the top bar -->
+  <div id="statsOverlay" class="overlay">
+    <h2>CHARACTER</h2>
+    <div id="statsList"></div>
+    <button class="btn big" id="statsCloseBtn">CLOSE</button>
   </div>
 
   <!-- Ability bar -->
@@ -292,6 +313,7 @@
 <script src="js/content/con-progression.js"></script>
 <script src="js/save.js"></script>
 <script src="js/attrs.js"></script>
+<script src="js/itemgen.js"></script>
 <script src="js/items.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/content/con-bosssprites.js"></script>
@@ -300,6 +322,7 @@
 <script src="js/content/con-monstersprites.js"></script>
 <script src="js/state.js"></script>
 <script src="js/gen/bsp.js"></script>
+<script src="js/gen/bossarena.js"></script>
 <script src="js/levels.js"></script>
 <script src="js/ground.js"></script>
 <script src="js/growth.js"></script>
@@ -311,6 +334,7 @@
 <script src="js/effects.js"></script>
 <script src="js/sfx.js"></script>
 <script src="js/log.js"></script>
+<script src="js/render/tiles.js"></script>
 <script src="js/render.js"></script>
 <script src="js/pathfind.js"></script>
 <script src="js/input.js"></script>
