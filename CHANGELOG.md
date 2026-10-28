@@ -11,6 +11,38 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Added — floor events, ambushes, and an heirloom
+
+- **Floor events.** Roughly 45% of non-boss floors now hide one prop on plain floor:
+  a **Forgotten Shrine** (heal 35% / +4 max HP this run / +8 shards), a **Bone Wager**
+  (pay `20 + 2×floor` gold for a 60% shot at an item two tiers up), or a **Blood Altar**
+  (pay 25% max HP for an unlearned ability, or for 14 shards). Walk onto it to open the
+  card; **Step away** leaves it there for later, and an option you cannot afford is shown
+  disabled. It never lands on a boss floor, a shop floor, or within five tiles of the
+  entrance, and it is placed after every tile and prop so it cannot displace anything.
+  `js/content/con-events.js` holds the data; `js/encounters.js` holds the rules; the prop
+  is primitives in `render.js`, tinted by the kind's `accent`.
+- **Ambushes.** Resting has a 12% chance, and opening a chest 18%, that one enemy (two from
+  floor 15, 35% of the time) arrives two or three tiles away. Capped at two per floor,
+  never in combat, never on floor 1 or a boss floor. Chest contents resolve **before** the
+  roll, so an ambush can never take what you just found. Ambushers are built by the same
+  spawner the floor uses (`Delve.spawnMonsterAt`), so they level, drop and behave normally.
+- **Heirloom.** Death now offers one carried or equipped non-consumable to keep. It is
+  stored in `save.heirloom` and returned to the bag by a `runStart` hook at the start of
+  the next run, then cleared — consumed on the way in, never duplicated. Retreating offers
+  none. The picker lives inside the existing death screen, so no new overlay was added.
+  `save.js` validates it with the same item-schema rule as the bag.
+- **HUD/wiring.** `G.maxHpBonus` is run-only health from a shrine; `attrs.maxHp()` adds it
+  and it is in `CHECKPOINT_FIELDS`, so a resumed floor keeps it. `eventScreen` joins
+  `hideAll()` and `uiBlocked()`; all seven new ids exist in `index.html` and in
+  `test.html`'s `#fixtures`.
+- **Verified:** manifest and `index.html` at **42 scripts** (`tools/check-order.js` green).
+  34 new checks in `test_ui.js`: placement distance and kind, boss/shop/floor-1 exclusion,
+  open / step away / resolve / used-once, healing, +4 max HP, blood-altar HP→shards and
+  HP→ability, disabled wager, ambush distance and per-floor budget, the heirloom runStart
+  hook, and the whole heirloom cycle (offer on death, store, claim, consume, no offer on
+  retreat). `test_ui` 220 → 254.
+
 ### Changed — the HUD is three bars; the stats moved into a character sheet
 
 - **The top bar is now health, energy and experience — nothing else.** It carried eight

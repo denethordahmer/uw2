@@ -49,7 +49,7 @@ window.Delve = window.Delve || {};
  function hideAll(){
   ["titleScreen","hubScreen","deathScreen","inventoryScreen","shopScreen","victoryScreen",
    "stairsPrompt","bossIntroOverlay","itemCardOverlay","logWindow","pauseMenu",
-   "statsOverlay"].forEach(function(id){
+   "statsOverlay","eventScreen"].forEach(function(id){
    const el = $(id); if(el) el.style.display = "none";
   });
  }
@@ -588,6 +588,61 @@ window.Delve = window.Delve || {};
   Delve.draw();
  }
 
+ // ── FLOOR EVENT CARD (js/encounters.js) ──────────────────────
+ // The engine owns placement, costs and effects. This only draws the choices
+ // and closes the card once one is taken.
+ function closeFloorEvent(){
+  const el = $("eventScreen");
+  if(el) el.style.display = "none";
+ }
+ Delve.closeFloorEvent = closeFloorEvent;
+
+ Delve.showFloorEventCard = function(ev){
+  const cfg = (Delve.CONFIG && Delve.CONFIG.FLOOR_EVENTS) || {};
+  const def = (cfg.kinds || []).filter(function(k){ return k.id === ev.kind; })[0];
+  if(!def) return;
+
+  $("eventTitle").textContent = def.name || "Something waits";
+  $("eventTitle").style.color = def.accent || "#ffd75e";
+  $("eventFlavour").textContent = def.flavour || "";
+
+  const wrap = $("eventOptions");
+  wrap.innerHTML = "";
+  (def.options || []).forEach(function(opt){
+   const btn = document.createElement("button");
+   btn.className = "event-option";
+   btn.disabled = Delve.floorEventCanUse ? !Delve.floorEventCanUse(opt) : false;
+
+   const label = document.createElement("div");
+   label.className = "eo-label"; label.textContent = opt.label || "";
+   const desc = document.createElement("div");
+   desc.className = "eo-desc"; desc.textContent = opt.desc || "";
+   btn.appendChild(label); btn.appendChild(desc);
+
+   const cost = Delve.floorEventCost ? Delve.floorEventCost(opt) : { gold:0, hp:0 };
+   if(cost.gold || cost.hp){
+    const bits = [];
+    if(cost.gold) bits.push("💰 " + cost.gold);
+    if(cost.hp) bits.push("❤️ " + cost.hp);
+    const c = document.createElement("div");
+    c.className = "eo-cost"; c.textContent = bits.join("   ");
+    btn.appendChild(c);
+   }
+
+   btn.addEventListener("click", function(){
+    if(Delve.resolveFloorEvent && Delve.resolveFloorEvent(opt.id)){
+     closeFloorEvent();
+     Delve.updateHUD();
+     Delve.draw();
+    }
+   });
+   wrap.appendChild(btn);
+  });
+
+  if(Delve.sfx) Delve.sfx("secret");
+  $("eventScreen").style.display = "flex";
+ };
+
  // ── SHOP (screen only) ───────────────────────────────────────
  // Stock generation and pricing live in items.js
  // (Delve.makeShopStock / Delve.shopHealCost).
@@ -735,6 +790,55 @@ window.Delve = window.Delve || {};
   $("victoryScreen").style.display = "flex";
  };
 
+ // ── HEIRLOOM PICKER (death screen) ───────────────────────────
+ // On death only. Up to ten of the best-carried non-consumables are offered;
+ // picking one stores it in the save (js/items.js) and it arrives in the bag at
+ // the start of the next run. Skipping is just the normal BACK TO HUB button.
+ function hideHeirloomPicker(){
+  const box = $("heirloomBox");
+  if(box) box.style.display = "none";
+ }
+
+ function renderHeirloomPicker(){
+  const G = Delve.G;
+  const box = $("heirloomBox"), list = $("heirloomList");
+  if(!G){ hideHeirloomPicker(); return; }
+
+  const pool = [];
+  (G.inventory || []).forEach(function(it){
+   if(it && it.slot !== "consumable" && pool.indexOf(it) < 0) pool.push(it);
+  });
+  Object.keys(G.equip || {}).forEach(function(slot){
+   const it = G.equip[slot];
+   if(it && it.slot !== "consumable" && pool.indexOf(it) < 0) pool.push(it);
+  });
+  if(!pool.length){ hideHeirloomPicker(); return; }
+
+  if(Delve.itemPoints){
+   pool.sort(function(a, b){ return Delve.itemPoints(b) - Delve.itemPoints(a); });
+  }
+
+  list.innerHTML = "";
+  pool.slice(0, 10).forEach(function(it){
+   const btn = document.createElement("button");
+   btn.className = "heirloom-item";
+   btn.style.color = (Delve.TIERS.colors[it.tier] || "#e8eef5");
+   btn.textContent = (Delve.TIERS.names[it.tier] || "") + " · " + it.name;
+   btn.addEventListener("click", function(){
+    if(Delve.setHeirloom && Delve.setHeirloom(it)){
+     list.innerHTML = "";
+     const done = document.createElement("div");
+     done.className = "heirloom-item";
+     done.style.color = "#7ee08a";
+     done.textContent = "Kept: " + it.name;
+     list.appendChild(done);
+    }
+   });
+   list.appendChild(btn);
+  });
+  if(box) box.style.display = "flex";
+ }
+
  Delve.showEndScreen = function(kind, extra){
  // death or retreat: the run is over, so there is nothing left to resume (§6.12)
  Delve.clearRunCheckpoint();
@@ -754,6 +858,9 @@ window.Delve = window.Delve || {};
    $("deathShards").textContent = "+" + Delve.G.runShards + " shards this run";
   }
   $("deathSummary").innerHTML = summaryRows();
+  // Death offers one keepsake; retreating does not (you carried the bag out).
+  if(kind === "retreat") hideHeirloomPicker();
+  else renderHeirloomPicker();
   $("deathScreen").style.display = "flex";
  };
 
@@ -899,6 +1006,7 @@ window.Delve = window.Delve || {};
 
  $("shopHealBtn").addEventListener("click", doShopHeal);
  $("shopLeaveBtn").addEventListener("click", closeShop);
+ $("eventLeaveBtn").addEventListener("click", closeFloorEvent);
 
  // Sell-all is a two-tap action: the first tap arms it, the second sells. No
  // browser confirm() on mobile, and no accidental wipe of a full bag.

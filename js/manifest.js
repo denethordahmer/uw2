@@ -38,6 +38,7 @@ window.Delve = window.Delve || {};
   "js/content/con-biomes.js",
   "js/content/con-traits.js",
   "js/content/con-progression.js",
+  "js/content/con-events.js",   // floor events: data only
 
   // ── save + derived stats ───────────────────────────────────
   "js/save.js",
@@ -66,6 +67,7 @@ window.Delve = window.Delve || {};
   "js/combat.js",
   "js/movement.js",
   "js/rewards.js",
+  "js/encounters.js",           // floor events + ambushes
   "js/effects.js",
   "js/sfx.js",
   "js/log.js",

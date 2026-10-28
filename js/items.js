@@ -93,6 +93,9 @@ window.Delve = window.Delve || {};
  case "shop":
  line = "Bought from the trader on Floor " + floor + ".";
  break;
+ case "event":
+ line = "Given up by a floor event on Floor " + floor + ".";
+ break;
  default:
  line = "Found on Floor " + floor + ".";
  }
@@ -234,6 +237,40 @@ window.Delve = window.Delve || {};
  Delve.updateHUD();
  return true;
  };
+
+ // ── Heirloom (save.heirloom) ──────────────────────────────────
+ // Death normally costs the whole bag. ONE non-consumable can be kept instead:
+ // ui.js shows the picker on the death screen, this stores it, and the runStart
+ // hook below returns it to the bag at the start of the next run. It is cleared
+ // on the way in, so it cannot be duplicated.
+ Delve.setHeirloom = function(item){
+ if(!Delve.save || !item) return false;
+ if(item.slot === "consumable") return false;
+ if(typeof item.quality !== "number" || item.quality <= 0) return false;
+ const copy = Object.assign({}, item);
+ delete copy.x; delete copy.y;
+ Delve.save.heirloom = copy;
+ if(Delve.persist) Delve.persist();
+ return true;
+ };
+
+ Delve.claimHeirloom = function(){
+ const G = Delve.G, s = Delve.save;
+ if(!G || !s || !s.heirloom) return null;
+ const it = Object.assign({}, s.heirloom);
+ s.heirloom = null;
+ G.inventory = G.inventory || [];
+ G.inventory.push(it);
+ if(Delve.persist) Delve.persist();
+ if(Delve.flash) Delve.flash("Heirloom recovered: " + it.name);
+ if(Delve.logSystem) Delve.logSystem("Your heirloom was waiting: " + it.name + ".");
+ return it;
+ };
+
+ // newRun() fires this before the first floor is generated.
+ Delve._hooks = Delve._hooks || {};
+ Delve._hooks.runStart = Delve._hooks.runStart || [];
+ Delve._hooks.runStart.push(function(){ Delve.claimHeirloom(); });
 
  // ── Weight profile ────────────────────────────────────────────
  function weightProfile(item){

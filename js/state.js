@@ -62,7 +62,7 @@ Delve.newRun = function(){
   energy:(Delve.startEnergy ? Delve.startEnergy() : 10), restCount:0,
   traits:[], abilities:[], takenUniques:[], inventory:[],
   equip:{ weapon:null, offhand:null, head:null, body:null, hands:null, feet:null, cloak:null, amulet:null, ring1:null, ring2:null },
-  atkBuff:0, speedBuff:0, redBuff:0, luckBuff:0,
+  atkBuff:0, speedBuff:0, redBuff:0, luckBuff:0, maxHpBonus:0,
   secondWindUsed:false, unbrokenUsed:false, lastStandUsed:false, victoryDone:false, stoneSkin:0,
   effects:[], runStats:{}, runShards:0, shardsBanked:0,
   combatTarget:null, inCombat:false, combatTimer:null, targetingAbility:null,
@@ -71,6 +71,7 @@ Delve.newRun = function(){
   visited:[], _visitedFloor:-1,
   monsters:[], goldPiles:[], barrels:[], chests:[], items:[], decor:[], puddles:[],
   shop:{ x:-1, y:-1, stock:null }, stairs:null, boss:null, floorData:{},
+  floorEvent:null, ambushCount:0,
   px:0, py:0, gridW:0, gridH:0, grid:[]
  };
   Delve.G.hp = Delve.maxHp();
@@ -98,7 +99,7 @@ Delve.newRun = function(){
 const CHECKPOINT_FIELDS = [
  "floor","hp","gold","level","xp","energy","restCount",
  "traits","abilities","takenUniques","inventory","equip",
- "atkBuff","speedBuff","redBuff","luckBuff","stoneSkin","floorHealLeft","effects",
+ "atkBuff","speedBuff","redBuff","luckBuff","maxHpBonus","stoneSkin","floorHealLeft","effects",
  "secondWindUsed","unbrokenUsed","lastStandUsed","victoryDone",
  "runStats","runShards","shardsBanked",
  "_victoriesProcessed","_bonusesApplied"

@@ -133,6 +133,14 @@ window.Delve = window.Delve || {};
   return m;
  }
 
+ // Public seam for js/encounters.js: ambient ambushes must spawn the exact same
+ // monster shape the floor generator uses, so they level, drop and behave like
+ // any other enemy. Deliberately skips the safety radius — the caller has
+ // already chosen a tile at arm's length from the player.
+ Delve.spawnMonsterAt = function(x, y, kind){
+  return Delve.G ? spawnMonsterKind(Delve.G, x, y, kind) : null;
+ };
+
  // Candidate rooms for a special floor: skip spawn room, stairs, shop.
  function specialRooms(G, rooms){
   return rooms.slice(1).filter(function(r){
@@ -281,6 +289,9 @@ window.Delve = window.Delve || {};
   G.puddles = [];       // wall-anchored water (js/puddles.js): shape data, never saved
   G.shop = { x:-1, y:-1 };
   G.stairs = null;
+  // One optional floor event and the ambush budget are per-floor, never inherited.
+  G.floorEvent = null;
+  G.ambushCount = 0;
   // FIX: floorData used to persist across floors, so a secret room found on
   // floor 9 could leave a phantom false-wall pulse on floor 10.
   G.floorData = {};
@@ -703,6 +714,13 @@ window.Delve = window.Delve || {};
   } catch (e) {
     if (Delve.logSystem) Delve.logSystem("Growth skipped: " + e.message);
   }
+  // One optional floor event (js/encounters.js), placed last: it only chooses a
+  // plain walkable tile, so it can never displace a chest, a monster or the stairs.
+  try {
+    if (typeof Delve.placeFloorEvent === "function") Delve.placeFloorEvent(G);
+  } catch (e) {
+    if (Delve.logSystem) Delve.logSystem("Floor event skipped: " + e.message);
+  }
  };
 
  // monster spawn helper: respects safety radius and tile state
@@ -809,6 +827,7 @@ window.Delve = window.Delve || {};
    G.gold += gold;
    Delve.recordStat("goldEarned", gold);
    Delve.addFloater("+" + gold + "g", x, y, "#ffd75e");
+   if(Delve.maybeAmbush) Delve.maybeAmbush("chest");
    Delve.updateHUD();
    Delve.draw();
    return;
@@ -831,6 +850,9 @@ window.Delve = window.Delve || {};
    Delve.addFloater("+" + gold + "g", x, y, "#ffd75e");
    if(Delve.logSystem) Delve.logSystem("Chest contained " + gold + " gold.");
   }
+  // An opened chest is a noise. The contents are already out by now, so an
+  // ambush can never cost the player the thing they just found.
+  if(Delve.maybeAmbush) Delve.maybeAmbush("chest");
   Delve.updateHUD();
   Delve.draw();
  };

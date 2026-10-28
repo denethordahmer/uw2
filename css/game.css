@@ -709,3 +709,42 @@ body{
 #titleResetNote{ margin:0;font-size:12px;line-height:1.5;color:#e8a0a0; }
 #titleResetYes{ border-color:#ff7a7a66;color:#ff9a9a; }
 #titleResetDone{ margin:0;font-size:12px;line-height:1.4;color:#7ee08a; }
+
+/* ── Floor events (js/encounters.js) ── */
+#eventScreen{
+  display:none;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));
+  overflow-y:auto;
+}
+#eventTitle{ letter-spacing:2px; }
+#eventFlavour{ margin:8px 0 0;font-style:italic; }
+#eventOptions{
+  width:100%;max-width:460px;display:flex;flex-direction:column;gap:10px;
+  margin:16px 0 12px;
+}
+.event-option{
+  width:100%;text-align:left;font:inherit;color:#e8eef5;
+  background:#141b23;border:1px solid #2a3440;border-radius:14px;
+  padding:12px 14px;cursor:pointer;
+}
+.event-option:active{ background:#1c2733; }
+.event-option:disabled{ opacity:.45; }
+.event-option .eo-label{ font-size:16px;font-weight:800; }
+.event-option .eo-desc{ font-size:13px;line-height:1.4;color:#9fb3c5;margin-top:3px; }
+.event-option .eo-cost{ font-size:12px;color:#ffd75e;margin-top:5px; }
+
+/* ── Heirloom picker (death screen only) ── */
+#heirloomBox{
+  display:none;flex-direction:column;gap:8px;
+  width:100%;max-width:460px;margin:12px 0;padding:12px;
+  background:#141b23;border:1px solid #2a3440;border-radius:16px;
+}
+#heirloomList{
+  display:flex;flex-direction:column;gap:6px;
+  max-height:34vh;overflow-y:auto;
+}
+.heirloom-item{
+  width:100%;text-align:left;font:inherit;font-size:14px;
+  background:#1a2a3a;border:1px solid #2a3440;border-radius:10px;
+  padding:9px 12px;cursor:pointer;
+}
+

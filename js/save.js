@@ -23,6 +23,7 @@ window.Delve = window.Delve || {};
       abilityRanks: {},
       runTraits: [],
       runTraitsSeen: [],
+      heirloom: null,            // one item carried through death (js/items.js)
       seenTutorial: false,
       run: null,                 // in-progress run checkpoint (§6.12); null = nothing to resume
       lastUpdated: Date.now()
@@ -83,6 +84,15 @@ window.Delve = window.Delve || {};
     return list.filter(isCurrentItem);
   }
 
+  // The heirloom (js/items.js): one carried item kept through a death and
+  // returned at the start of the next run. Same schema rule as the bag, and a
+  // consumable is never valid — it would be drunk rather than kept.
+  function sanitizeHeirloom(raw){
+    if(!isCurrentItem(raw)) return null;
+    if(raw.slot === "consumable") return null;
+    try { return JSON.parse(JSON.stringify(raw)); } catch(_err){ return null; }
+  }
+
   function sanitizeRun(raw){
     if(!raw || typeof raw !== "object") return null;
     const floor = sanitizeNumber(raw.floor, 0);
@@ -131,6 +141,7 @@ window.Delve = window.Delve || {};
     if(src.abilityRanks && typeof src.abilityRanks === "object") base.abilityRanks = sanitizeAbilityRanks(src.abilityRanks);
     if(Array.isArray(src.runTraits)) base.runTraits = sanitizeStringArray(src.runTraits);
     if(Array.isArray(src.runTraitsSeen)) base.runTraitsSeen = sanitizeStringArray(src.runTraitsSeen);
+    base.heirloom = sanitizeHeirloom(src.heirloom);
 
     return base;
   }
@@ -165,6 +176,7 @@ window.Delve = window.Delve || {};
         abilityRanks: sanitizeAbilityRanks(saveData.abilityRanks),
         runTraits: sanitizeStringArray(saveData.runTraits),
         runTraitsSeen: sanitizeStringArray(saveData.runTraitsSeen),
+        heirloom: sanitizeHeirloom(saveData.heirloom),
         seenTutorial: !!saveData.seenTutorial,
         run: sanitizeRun(saveData.run),
         lastUpdated: Date.now()

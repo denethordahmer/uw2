@@ -62,6 +62,9 @@
 
   <div id="stairsPrompt"><div id="stairsCard"><button id="stairsYes"></button><button id="stairsNo"></button></div></div>
 
+  <div id="eventScreen" class="overlay"><h1 id="eventTitle"></h1><p id="eventFlavour"></p>
+    <div id="eventOptions"></div><button id="eventLeaveBtn"></button></div>
+
   <div id="itemCardOverlay"><div id="itemCard">
     <div id="icHeader"><div><div id="icName"></div><div id="icTier"></div></div><button id="icCloseBtn"></button></div>
     <div id="icFlavour"></div><div id="icStats"></div>
@@ -86,7 +89,9 @@
 
   <!-- h1 kept: showEndScreen() does deathScreen.querySelector("h1") -->
   <div id="deathScreen"><h1>YOU DIED</h1><div id="deathInfo"></div><div id="deathQuote"></div>
-    <div id="deathSummary"></div><span id="deathShards"></span><button id="deathBtn"></button></div>
+    <div id="deathSummary"></div><span id="deathShards"></span>
+    <div id="heirloomBox"><div id="heirloomList"></div></div>
+    <button id="deathBtn"></button></div>
 
   <!-- Keep this mirroring index.html's pause card exactly. ui.js looks up every
        id here at load time, so an element added to the game but not here shows up

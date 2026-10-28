@@ -919,6 +919,129 @@ D.openStats();
 D.hideAllScreens();
 ok(displayOf("statsOverlay") === "none", "hideAllScreens closes the sheet too");
 
+// ── 23. Floor events ────────────────────────────────────────
+console.log("\n── floor events ────────────────────────────────────────");
+newRun(4);
+D.G.grid = Array.from({ length:20 }, () => Array(20).fill(D.T.FLOOR));
+D.G.gridW = 20; D.G.gridH = 20; D.G.px = 5; D.G.py = 5;
+D.G.floorEvent = null;
+
+const realRandom = Math.random;
+Math.random = () => 0;               // force the chance roll and the first kind
+const placed = D.placeFloorEvent(D.G);
+Math.random = realRandom;
+ok(!!placed && !placed.used, "a floor event is placed on open floor");
+ok(!!placed && D.mdist(placed.x, placed.y, 5, 5) >= 5, "it never lands in the entrance room");
+ok(!!placed && placed.kind === "shrine", "the roll picks a real event kind (" + (placed && placed.kind) + ")");
+
+// Walking onto it must open the card (the same path a tap takes).
+D.G.floorEvent = { x:6, y:5, kind:"shrine", used:false };
+D.G.hp = 10;
+D.tryAct(6, 5);
+ok(displayOf("eventScreen") === "flex", "walking onto an event opens its card");
+ok(D.uiBlocked() === true && (D._lastBlockers || []).indexOf("eventScreen") >= 0,
+   "an open event card blocks map taps");
+const opts = registry.get("eventOptions").children;
+ok(opts.length === 3, "the shrine lists its three choices (" + opts.length + ")");
+
+registry.get("eventLeaveBtn").click();
+ok(displayOf("eventScreen") === "none", "step away closes the card");
+ok(D.G.floorEvent.used === false, "walking away leaves the event for later");
+
+D.showFloorEventCard(D.G.floorEvent);
+const hpBefore = D.G.hp;
+registry.get("eventOptions").children[0].click();
+ok(displayOf("eventScreen") === "none", "taking a choice closes the card");
+ok(D.G.hp > hpBefore, "the shrine heals what it promises (" + hpBefore + " -> " + D.G.hp + ")");
+ok(D.G.floorEvent.used === true, "a resolved event is marked used");
+ok(D.eventAt(6, 5) === null, "a used event cannot be triggered again");
+
+// Affordability: the wager must not be clickable without the stake.
+D.G.floorEvent = { x:6, y:5, kind:"wager", used:false };
+D.G.gold = 0;
+D.showFloorEventCard(D.G.floorEvent);
+ok(registry.get("eventOptions").children[0].disabled === true, "an unaffordable wager is disabled");
+D.G.gold = 500;
+D.showFloorEventCard(D.G.floorEvent);
+ok(registry.get("eventOptions").children[0].disabled === false, "it enables once the stake is there");
+registry.get("eventLeaveBtn").click();
+
+// The other two effects, and the floors that must never host an event.
+D.G.floorEvent = { x:6, y:5, kind:"shrine", used:false };
+D.G.maxHpBonus = 0; D.G.hp = 5;
+D.showFloorEventCard(D.G.floorEvent);
+const beforeMax = D.maxHp();
+registry.get("eventOptions").children[1].click();
+ok(D.maxHp() === beforeMax + 4, "+4 max HP is a real, lasting gain");
+ok(D.G.hp > 5, "the new health arrives filled");
+
+D.G.floorEvent = { x:6, y:5, kind:"altar", used:false };
+D.G.hp = D.maxHp(); D.G.runShards = 0;
+D.showFloorEventCard(D.G.floorEvent);
+registry.get("eventOptions").children[1].click();
+ok(D.G.runShards === 14, "the blood altar pays its shards");
+ok(D.G.hp < D.maxHp(), "it takes health as the price");
+
+D.G.floorEvent = { x:6, y:5, kind:"altar", used:false };
+D.G.abilities = []; D.G.hp = D.maxHp();
+D.showFloorEventCard(D.G.floorEvent);
+registry.get("eventOptions").children[0].click();
+ok(D.G.abilities.length === 1, "the blood altar teaches an ability");
+
+D.G.floorEvent = null;
+Math.random = () => 0;
+D.G.floor = 10;
+ok(D.placeFloorEvent(D.G) === null, "boss floors get no floor event");
+D.G.floor = 5;
+ok(D.placeFloorEvent(D.G) === null, "shop floors get no floor event");
+D.G.floor = 1;
+ok(D.placeFloorEvent(D.G) === null, "floor 1 gets no floor event");
+Math.random = realRandom;
+
+// ── 24. Ambush ──────────────────────────────────────────────
+console.log("\n── ambush ──────────────────────────────────────────────");
+newRun(4);
+D.G.grid = Array.from({ length:20 }, () => Array(20).fill(D.T.FLOOR));
+D.G.gridW = 20; D.G.gridH = 20; D.G.px = 5; D.G.py = 5;
+D.G.monsters = []; D.G.ambushCount = 0;
+const pack = D.spawnAmbush({ secondAtFloor:999 });
+ok(Array.isArray(pack) && pack.length === 1, "an ambush spawns one enemy below its second-enemy floor");
+const howFar = (pack && pack[0]) ? D.mdist(pack[0].x, pack[0].y, 5, 5) : -1;
+ok(howFar >= 2, "the ambusher lands at arm's length, never on top of the player (" + howFar + ")");
+ok(D.G.monsters.length === (pack ? pack.length : 0), "the ambusher joins the floor's monsters");
+ok(D.G.ambushCount === 1, "the per-floor ambush budget is spent");
+
+D.showEndScreen("retreat", { shards:0 });
+
+// ── 25. Heirloom ────────────────────────────────────────────
+console.log("\n── heirloom ────────────────────────────────────────────");
+newRun(3);
+D.G.inventory = [D.makeItem(3, { slot:"weapon", floor:10 })];
+D.G.equip = {};
+D.G.runStats = {};
+D.showEndScreen("death", {});
+ok(registry.get("heirloomBox").style.display === "flex", "death offers the heirloom picker");
+const picks = registry.get("heirloomList").children.filter(c => c.className === "heirloom-item");
+ok(picks.length === 1, "each carried item is offered (" + picks.length + ")");
+picks[0].click();
+ok(!!D.save.heirloom && D.save.heirloom.name === D.G.inventory[0].name,
+   "picking one stores it in the save");
+
+const keptName = D.save.heirloom.name;
+const heirloomHook = (D._hooks && D._hooks.runStart || [])
+  .some(fn => String(fn).indexOf("claimHeirloom") >= 0);
+ok(heirloomHook, "a runStart hook claims the heirloom, so a new run really receives it");
+
+D.G = { inventory: [] };
+const claimed = D.claimHeirloom();
+ok(!!claimed && claimed.name === keptName, "the next run claims the heirloom");
+ok(D.save.heirloom === null, "it is consumed on the way in, never duplicated");
+ok(D.G.inventory.length === 1, "it lands in the bag");
+
+D.G.inventory = [D.makeItem(1, { slot:"head", floor:1 })];
+D.showEndScreen("retreat", { shards:0 });
+ok(registry.get("heirloomBox").style.display === "none", "retreating offers no heirloom");
+
 console.log("\n" + (fails ? "FAILED " + fails + "/" + checks : "PASSED " + checks + "/" + checks) + " checks");
 process.exit(fails ? 1 : 0);
 

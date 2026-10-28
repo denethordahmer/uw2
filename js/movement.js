@@ -67,7 +67,14 @@ window.Delve = window.Delve || {};
  Delve.collectGold(tx, ty);
  const idx = G.items.findIndex(i => i.x===tx && i.y===ty);
  if(idx >= 0){ const it = G.items.splice(idx,1)[0]; Delve.pickupItem(it); }
- Delve.enemiesTurn();
+ // A floor event sits on plain floor and opens when stepped on. The card
+ // blocks the map, so enemies do not also get a turn behind it.
+ if(Delve.eventAt && Delve.eventAt(tx, ty) && Delve.openFloorEvent && Delve.openFloorEvent()){
+  G._path = null;
+  if(G._pathTimer){ clearInterval(G._pathTimer); G._pathTimer = null; }
+ } else {
+  Delve.enemiesTurn();
+ }
  }
  Delve.updateHUD();
  };
@@ -126,7 +133,13 @@ window.Delve = window.Delve || {};
  Delve.collectGold(tx, ty);
  const idx = G.items.findIndex(i => i.x===tx && i.y===ty);
  if(idx >= 0){ const it = G.items.splice(idx,1)[0]; Delve.pickupItem(it); }
- Delve.enemiesTurn();
+ // Walking onto a floor event stops the path and opens its card.
+ if(Delve.eventAt && Delve.eventAt(tx, ty) && Delve.openFloorEvent && Delve.openFloorEvent()){
+  G._path = null;
+  if(G._pathTimer){ clearInterval(G._pathTimer); G._pathTimer = null; }
+ } else {
+  Delve.enemiesTurn();
+ }
  }
  Delve.updateHUD();
  };
@@ -171,6 +184,8 @@ window.Delve = window.Delve || {};
  Delve.addFloater("+" + heal, G.px, G.py, "#7ee08a");
  if(Delve.logHeal) Delve.logHeal(heal, "Rest");
  Delve.flash("Rested. (" + ((Delve.restsPerFloor ? Delve.restsPerFloor() : cfg.restPerFloor) - G.restCount) + " left)");
+ // Resting is never entirely safe: something may hear you and come looking.
+ if(Delve.maybeAmbush) Delve.maybeAmbush("rest");
  Delve.enemiesTurn();
  Delve.updateHUD();
  Delve.draw();

@@ -230,6 +230,37 @@ const DEATH_LIFE = 460;
   drawWorldSprite(ctx, chest.open ? "chestOpen" : "chestClosed", cx, cy, ts);
  }
 
+ // Floor event (js/encounters.js): a low altar with a floating, pulsing rune.
+ // Drawn as primitives, so a new event kind only needs an `accent` colour.
+ function drawFloorEvent(ctx, ev, cx, cy, ts){
+  const cfg = (Delve.CONFIG && Delve.CONFIG.FLOOR_EVENTS) || {};
+  const def = (cfg.kinds || []).filter(function(k){ return k.id === ev.kind; })[0] || {};
+  const accent = def.accent || "#7ee0ff";
+  const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.004);
+  ctx.save();
+  const glow = ctx.createRadialGradient(cx, cy, ts*0.08, cx, cy, ts*0.95);
+  glow.addColorStop(0, accent + "66");
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - ts, cy - ts, ts*2, ts*2);
+  // stone base
+  ctx.fillStyle = "#2a3038";
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + ts*0.20, ts*0.34, ts*0.14, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = "#39424c";
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + ts*0.16, ts*0.26, ts*0.10, 0, 0, Math.PI*2);
+  ctx.fill();
+  // the rune
+  ctx.globalAlpha = 0.55 + 0.45 * pulse;
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.arc(cx, cy - ts*0.12, ts*0.12, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+ }
+
  function drawTreasure(ctx, thing, cx, cy, ts){
   if(thing==="gold") drawWorldSprite(ctx,"goldPile",cx,cy,ts);
   else if(thing==="potion") drawWorldSprite(ctx,"potionPile",cx,cy,ts);
@@ -509,6 +540,14 @@ const DEATH_LIFE = 460;
    if(ch.x<camX||ch.y<camY||ch.x>=camX+vw||ch.y>=camY+vh) return;
    drawChest(ctx, ch, (ch.x-camX)*ts+ts/2, (ch.y-camY)*ts+ts/2, ts);
   });
+
+  // floor event (js/encounters.js) — a prop on plain floor, never a tile
+  if(G.floorEvent && !G.floorEvent.used &&
+     G.floorEvent.x>=camX && G.floorEvent.y>=camY &&
+     G.floorEvent.x<camX+vw && G.floorEvent.y<camY+vh){
+   drawFloorEvent(ctx, G.floorEvent,
+    (G.floorEvent.x-camX)*ts+ts/2, (G.floorEvent.y-camY)*ts+ts/2, ts);
+  }
 
   // items
   (G.items||[]).forEach(it=>{

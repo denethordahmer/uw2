@@ -33,7 +33,7 @@ window.Delve = window.Delve || {};
   // the arena, so taps must pass through it. Every other overlay still blocks.
   const list = ["hubScreen","deathScreen","inventoryScreen","shopScreen","victoryScreen",
    "titleScreen","levelupScreen","stairsPrompt","itemCardOverlay","logWindow","pauseMenu",
-   "statsOverlay"];
+   "statsOverlay","eventScreen"];
   const hits = [];
   for(let i=0;i<list.length;i++){
    const el = document.getElementById(list[i]);

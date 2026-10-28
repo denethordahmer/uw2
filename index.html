@@ -102,6 +102,14 @@
     </div>
   </div>
 
+  <!-- Floor event (js/encounters.js). Opened by stepping onto the prop. -->
+  <div id="eventScreen" class="overlay">
+    <h1 class="overlay-title" id="eventTitle">Something waits</h1>
+    <p class="sub" id="eventFlavour"></p>
+    <div id="eventOptions"></div>
+    <button class="btn-ghost" id="eventLeaveBtn">Step away</button>
+  </div>
+
   <!-- Item stat card -->
   <div id="itemCardOverlay">
     <div id="itemCard">
@@ -235,6 +243,10 @@
     <h2 id="deathInfo"></h2>
     <div id="deathSummary"></div>
     <div class="walletbar"><span class="sico">💎</span><span id="deathShards">0</span></div>
+    <div id="heirloomBox">
+      <div class="pause-label">KEEP ONE FOR THE NEXT RUN</div>
+      <div id="heirloomList"></div>
+    </div>
     <button class="btn big" id="deathBtn">BACK TO HUB</button>
   </div>
 
@@ -313,6 +325,7 @@
 <script src="js/content/con-biomes.js"></script>
 <script src="js/content/con-traits.js"></script>
 <script src="js/content/con-progression.js"></script>
+<script src="js/content/con-events.js"></script>
 <script src="js/save.js"></script>
 <script src="js/attrs.js"></script>
 <script src="js/itemgen.js"></script>
@@ -333,6 +346,7 @@
 <script src="js/combat.js"></script>
 <script src="js/movement.js"></script>
 <script src="js/rewards.js"></script>
+<script src="js/encounters.js"></script>
 <script src="js/effects.js"></script>
 <script src="js/sfx.js"></script>
 <script src="js/log.js"></script>

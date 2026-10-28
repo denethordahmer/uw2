@@ -92,7 +92,7 @@ These shape every decision. Do not propose solutions that break them.
 
 ## 3. File map
 
-32 scripts. This is the `index.html` load order (§5 has the constraints).
+42 scripts. This is the `index.html` load order (§5 has the constraints).
 
 ### 3.1 Content — data only, safe to edit blind
 
@@ -128,6 +128,13 @@ with the ruins' weeds (§7).
 **`js/content/con-progression.js`**
 `CONFIG.PROGRESSION.TREES` (6 trees), `CONFIG.PROGRESSION.NODES` (5 trees have nodes).
 Node `type` strings must match the vocabulary `progression.js` consumes (§7).
+
+**`js/content/con-events.js`**
+`CONFIG.FLOOR_EVENTS` — the floor-event kinds (shrine, wager, blood altar) with their
+choices, plus the ambush odds. Every choice is data in the small effect vocabulary
+`encounters.js` resolves (`healPct`, `maxHp`, `shards`, `gamble`, `hpForAbility`,
+`hpForShards`, `nothing`). Adding a kind is one entry; a genuinely new effect needs a
+`case` in `encounters.js`. `accent` tints the prop on the floor.
 
 **`js/content/con-bosssprites.js`** — ⚠️ **ONLY content file with an ordering constraint.**
 One canvas-drawing builder per boss, via `Delve.registerBossSprite(key, fn)`, plus an
@@ -339,6 +346,13 @@ Never owns the combat loop or the economy. `test.html` §8 is the direct guard o
 is in progress; only `bankRunShards()` writes them into the save (§6.10).
 Consumes `Delve.rowFor` from `combat.js` at call time. `monsterStats` has no internal
 caller — kept as public API.
+
+**`js/encounters.js`**
+`placeFloorEvent`, `eventAt`, `openFloorEvent`, `floorEventCost`, `floorEventCanUse`,
+`resolveFloorEvent`, `maybeAmbush`, `spawnAmbush`.
+Owns floor events and ambushes (§6.19). Content lives in `con-events.js`; this file owns
+placement, affordability and effects. Spawns ambushers through `Delve.spawnMonsterAt`
+(exported from `levels.js`) so they are ordinary monsters in every respect.
 
 **`js/effects.js`**
 `applyEffect`, `applyPlayerEffect`, `tickMonsterEffects`, `tickPlayerEffects`,
@@ -1171,6 +1185,50 @@ that sits against a wall. All of it lives in `js/puddles.js`.
   movement, taps, the minimap and the checkpoint are untouched. A resume re-rolls puddles
   with the floor, exactly like growth and ground cover. A ward can set `puddles:false` to
   opt out; ward 5's lava inherits automatically through its `water` colour.
+
+### 6.19 Floor events, ambushes and the heirloom (entertainment pass)
+
+Three additions that put decisions and risk back into a floor without touching the
+combat loop.
+
+**Floor events** — `placeFloorEvent()` runs at the **end** of `genFloor()`, after every
+prop, puddle and growth patch. It only ever picks a plain `FLOOR`/`GRASS` tile at least 5
+tiles from the entrance, and never on a boss floor (`floor % 10 === 0`) or a shop floor.
+The tile stays walkable and becomes `G.floorEvent = {x, y, kind, used}`; nothing is written
+to the grid, so pathfinding, the minimap and the checkpoint are untouched.
+`movement.js` checks `eventAt(tx, ty)` after the player steps and opens the card instead of
+running `enemiesTurn()`. Resolving marks `used = true`; **stepping away leaves it
+available**, so a shrine is a decision the player may walk back to, not a one-shot popup.
+Costs are checked by `floorEventCanUse()` and rendered disabled when unaffordable — an
+option can never kill the player (`hp <= cost` disables it). `maxHp` uses `G.maxHpBonus`,
+which `attrs.maxHp()` adds and which is in `CHECKPOINT_FIELDS` so a resumed floor keeps it.
+The prop is drawn as primitives in `render.js`, tinted by the kind's `accent`.
+
+**Ambushes** — `maybeAmbush("rest"|"chest")` is called from `tryRest()` and
+`openChest()`. Chance is per source (`CONFIG.FLOOR_EVENTS.ambush`), capped at
+`maxPerFloor`, never in combat, never on a boss floor, and never on floor 1. Ambushers
+spawn **2–3 tiles away** (never adjacent, so they never get a free hit on the same turn),
+using the same monster shape as the floor generator. A chest's contents are resolved
+*before* the ambush check, so an ambush can never cost the player what they just found.
+The counter (`G.ambushCount`) is per-floor and reset by `genFloor()`.
+
+**Heirloom** — on **death only**, `showEndScreen` fills `#heirloomBox` with up to ten
+carried/equipped non-consumables sorted by item value. `Delve.setHeirloom(item)` stores one
+in `save.heirloom`; a `runStart` hook (`Delve.claimHeirloom`) puts it in the bag and clears
+the field, so it is consumed on the way in and can never be duplicated. Retreating does not
+offer one — the bag comes out with you. `save.js` validates it with the same item-schema
+rule as the bag and drops consumables. The picker lives **inside** `#deathScreen` (already
+in `hideAll()` and `uiBlocked()`), so there is no new overlay to register.
+
+**Rules for extending**
+- A new event kind is data in `con-events.js`; a new *effect* needs a `case` in
+  `resolveFloorEvent`.
+- Every event id it looks up must exist in `index.html` **and** `test.html`'s `#fixtures`:
+  `eventScreen`, `eventTitle`, `eventFlavour`, `eventOptions`, `eventLeaveBtn`,
+  `heirloomBox`, `heirloomList`.
+- `eventScreen` is in both `hideAll()` and `uiBlocked()`.
+- Do not place events on boss or shop floors, and do not let an ambush spawn on the event
+  tile or adjacent to the player.
 
 ---
 

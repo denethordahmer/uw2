@@ -64,7 +64,10 @@ window.Delve = window.Delve || {};
  Delve.maxHp = function(){
   const I = C().ITEMS || {};
   const lv = Math.max(0, ((Delve.G && Delve.G.level) || 1) - 1) * n(I.levelHp);
-  return Math.max(1, Math.round(Delve.baseMaxHp() + n(ib().hp) + lv + n(tb().maxHp) + nodeTypeSum("flatHp", "hp")));
+  // G.maxHpBonus is run-only health bought from a floor event (js/encounters.js).
+  // It is intentionally not part of the save's permanent attributes.
+  return Math.max(1, Math.round(Delve.baseMaxHp() + n(ib().hp) + lv + n(tb().maxHp) +
+   nodeTypeSum("flatHp", "hp") + n(Delve.G && Delve.G.maxHpBonus)));
  };
 
  // ── Attack ─────────────────────────────────────────────────────
