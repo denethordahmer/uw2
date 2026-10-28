@@ -586,6 +586,21 @@ ok(displayOf("minimapWrap") === "block", "the minimap toggles open");
 ok(recorded("renderMinimap"), "toggling the minimap redraws it");
 registry.get("minimapBtn").click();
 ok(displayOf("minimapWrap") === "none", "the minimap toggles shut");
+// The button now shows whether its panel is up; before, a tap on a dark tile
+// looked inert. State lives on the button, so it cannot drift from the panel.
+registry.get("minimapBtn").click();
+ok(registry.get("minimapBtn").classList.contains("active"), "the map button lights while its panel is up");
+registry.get("minimapBtn").click();
+ok(!registry.get("minimapBtn").classList.contains("active"), "and goes dark again when it closes");
+
+// Guard for the phone-HUD fix: the four action buttons belong in the bottom
+// cluster. In #hudMeta they overflowed a 360px-wide screen and painted 🎒 past
+// the right edge, where it could not be seen or tapped.
+const metaRowHtml = (html.match(/<div id="hudMeta">([\s\S]*?)<div id="hudActions">/) || [])[1] || "";
+ok(metaRowHtml.length > 0 && !/id="(statsBtn|minimapBtn|gearBtn|invBtn)"/.test(metaRowHtml),
+   "no action button is back in the top status row");
+ok(/<div id="hudActions">[\s\S]{0,500}?id="invBtn"/.test(html),
+   "the four action buttons live in the bottom cluster");
 
 // ── 18. Debug panel ─────────────────────────────────────────
 console.log("\n── debug panel ─────────────────────────────────────────");

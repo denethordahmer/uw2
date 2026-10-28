@@ -451,8 +451,15 @@ the in-run pause menu dead (§8). It defines no name another file defines, and o
 **`js/ui.js`**
 - HUD: `updateHUD`, `renderAbilityBar`, `openStats`, `closeStats`
   The top bar is deliberately **three bars only** — health, energy (against the cap, so it
-  answers "can I afford this cast?"), and XP toward the next level — plus floor, rest dots,
-  gold, shards and the four buttons. Every combat number (attack, weapon damage, crit,
+  answers "can I afford this cast?"), and XP toward the next level — plus a status row of
+  floor, rest dots, gold and shards. The four buttons (📊 character, 📍 map, ☰ menu,
+  🎒 inventory) are **not** in that row: they live in `#hudActions`, fixed to the
+  bottom-right at 44px. In the row they overflowed a 360px phone and pushed 🎒 past the
+  right edge. `#hudActions` is a child of `#hud` so show/hide is automatic, and
+  `position:fixed` is what anchors it to the bottom edge — which is why `#hud` itself
+  carries no `filter`/`backdrop-filter` (that would become its containing block); the plate
+  is painted by `#hud::before`. `Delve.setMinimapOpen(open)` owns the map panel and the
+  📍 button's lit state. Every combat number (attack, weapon damage, crit,
   attack speed, damage reduction, dodge, luck, merchant discount) lives in the **character
   sheet** (`#statsOverlay`, opened with 📊), together with your passives, their ranks and
   set progress. It is read standing still, so it uses the full screen, and it is in

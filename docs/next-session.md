@@ -12,13 +12,28 @@ re-discovered. `docs/architecture.md` remains the reference for how the code wor
   `node tools/check-order.js` is green (42 scripts, manifest = index.html).
 - `test.html` is the browser suite and has not been run since the change; the owner is
   testing the build on the phone now.
+- **HUD layout changed (latest).** The four buttons (📊 📍 ☰ 🎒) left the top row for
+  `#hudActions`, fixed bottom-right at 44px, because the status row overflowed a 360px
+  phone and painted 🎒 off-screen. The top strip is status only (FLOOR, rests, 💰, 💎).
+  `#hud` no longer carries the blur (it moved to `#hud::before`) so the fixed cluster can
+  anchor to the bottom. 📜 pill is bottom-left, ability bar `bottom:58px`, minimap panel
+  opens above its button, `Delve.setMinimapOpen(open)` owns the panel + the lit state.
+  `test_ui` 258/258, `test_items` 254/254 + 84/84.
 
 ## Owner decisions (do not drift from these)
 
-1. **Combat stays automatic.** Attack speed (weapon vs monster) decides the pace. The
-   player's decision is made *before* engaging: is my health worth this fight? **No manual
-   input during a fight** — no combo meter, no timed strike, no dodge window, no
-   wind-up reaction. Those options (1, 2, 3, 4, 5 in `entertainment-plan.md`) are dropped.
+1. **Combat stays automatic — except abilities.** Once you tap into a fight, the exchange
+   runs on its own: the player's swing clock is `baseInterval / playerSpeed()` (weapon
+   family speed + armour weight + AGI `speedPerAgi` + Chill/speed effects), the monster's
+   is `baseInterval / m.speed`, both driven by an 80 ms `setInterval` in
+   `Delve.startCombat` (`js/combat.js:109-149`), with hit-stop freezing both timers.
+   **Abilities remain player-triggered**: tap the bar → `activateAbility` (`js/ui.js`) →
+   `Delve.castAbility` (`js/traits.js:334`), which spends Energy and hands the monsters a
+   turn (`enemiesTurn()`); targeted abilities arm `G.targetingAbility` and wait for a tap.
+   So the player still *acts* — just not with the basic attack. The decision the design
+   leans on is made *before* engaging: is this fight worth my health and Energy?
+   **Dropped:** combo meter, timed strike, dodge window, wind-up reaction (options 1, 2, 3,
+   4, 5 in `entertainment-plan.md`).
 2. **Monsters moving once they see the player** (Pixel Dungeon style) is the **last**
    stage of polish. Everything below ships first. Do not start it early; it touches
    `enemiesTurn`, `ambientMob`, pathing and the checkpoint.

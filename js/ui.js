@@ -501,7 +501,7 @@ window.Delve = window.Delve || {};
   $("hubScreen").style.display = "flex";
   $("hud").style.display = "none";
   $("abilityBar").style.display = "none";
-  $("minimapWrap").style.display = "none";
+  if(Delve.setMinimapOpen) Delve.setMinimapOpen(false);
   const lp = $("logPanel"); if(lp) lp.classList.remove("active");
   const vg = $("combatVignette"); if(vg) vg.classList.remove("active");
   Delve.refreshHub();
@@ -961,10 +961,18 @@ window.Delve = window.Delve || {};
   if(Delve.showTitle) Delve.showTitle(); else Delve.showHub();
  });
 
+ // One entry point for the map panel, so the button's lit state can never drift
+ // from what is on screen. It used to toggle the panel silently, which read as
+ // "the button did nothing" when the panel opened over a dark tile.
+ Delve.setMinimapOpen = function(open){
+  const w = $("minimapWrap"), btn = $("minimapBtn");
+  if(w) w.style.display = open ? "block" : "none";
+  if(btn) btn.classList.toggle("active", !!open);
+  if(open && Delve.renderMinimap) Delve.renderMinimap();   // render.js
+  return !!open;
+ };
  $("minimapBtn").addEventListener("click", function(){
-  const w = $("minimapWrap");
-  w.style.display = (getComputedStyle(w).display === "none") ? "block" : "none";
-  Delve.renderMinimap();     // render.js
+  Delve.setMinimapOpen(getComputedStyle($("minimapWrap")).display === "none");
  });
 
  $("gearBtn").addEventListener("click", function(){

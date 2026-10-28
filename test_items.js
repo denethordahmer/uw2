@@ -59,8 +59,19 @@ function ctx2d(){
     set(t,k,v){ t[k] = v; return true; }
   });
 }
-const canvas = (w,h) => ({ width:w||24, height:h||24, style:{}, classList:{add(){},remove(){},contains(){return false}}, getContext:()=>ctx2d(), toDataURL:()=>"", addEventListener(){} });
-const el = () => ({ style:{}, classList:{add(){},remove(){},contains(){return false}}, appendChild(){}, insertBefore(){}, addEventListener(){}, removeEventListener(){}, querySelector:()=>null, getContext:()=>ctx2d(), textContent:"", innerHTML:"", children:[], parentNode:{ insertBefore(){} }, width:100, height:100, getBoundingClientRect:()=>({left:0,top:0,width:100,height:100}) });
+// ui.js toggles the map button's lit state, so this stub needs `toggle` as well
+// as the add/remove/contains trio. Without it the whole script fails to load.
+function fakeClassList(){
+  const set = [];
+  return {
+    add(c){ if(set.indexOf(c) < 0) set.push(c); },
+    remove(c){ const i = set.indexOf(c); if(i >= 0) set.splice(i,1); },
+    contains(c){ return set.indexOf(c) >= 0; },
+    toggle(c){ if(set.indexOf(c) >= 0) this.remove(c); else this.add(c); }
+  };
+}
+const canvas = (w,h) => ({ width:w||24, height:h||24, style:{}, classList:fakeClassList(), getContext:()=>ctx2d(), toDataURL:()=>"", addEventListener(){} });
+const el = () => ({ style:{}, classList:fakeClassList(), appendChild(){}, insertBefore(){}, addEventListener(){}, removeEventListener(){}, querySelector:()=>null, getContext:()=>ctx2d(), textContent:"", innerHTML:"", children:[], parentNode:{ insertBefore(){} }, width:100, height:100, getBoundingClientRect:()=>({left:0,top:0,width:100,height:100}) });
 
 const ctx = { console, setTimeout, clearTimeout, setInterval:()=>0, clearInterval(){}, Date, Math, JSON, requestAnimationFrame:()=>0 };
 ctx.window = ctx;

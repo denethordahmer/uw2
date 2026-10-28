@@ -43,6 +43,39 @@ than narrating their own past.
   hook, and the whole heirloom cycle (offer on death, store, claim, consume, no offer on
   retreat). `test_ui` 220 → 254.
 
+### Fixed — the 🎒 was off the edge of the screen (HUD actions moved to the bottom)
+
+- **The bug.** `#hudMeta` was a single non-wrapping flex row in which every child was
+  `flex-shrink:0`; `.spacer` was the only flexible item. Once the FLOOR label and the 💤
+  rest chip were added, the row measured roughly 450px of fixed content while a phone
+  offers 344–396px, so the tail of the row — ⚙ and 🎒 — was painted past the right edge and
+  clipped by `body{overflow:hidden}`. The inventory was unreachable.
+- **The action cluster.** 📊 📍 ☰ 🎒 now sit in `#hudActions`, fixed to the **bottom-right**
+  at 44×44px, where a thumb reaches without regripping. It stays a child of `#hud`, so
+  every existing show/hide of the HUD hides it too, and `position:fixed` is what lifts it
+  out of the top strip. That in turn required moving the strip's plate, background and
+  `backdrop-filter` onto `#hud::before` — a filter would otherwise make `#hud` the
+  containing block for the fixed child.
+- **Top row is status only** — FLOOR, rests, 💰, 💎 — and `#hudMeta` gained `flex-wrap`, so
+  a narrow phone can never push a chip off-screen again. Approximate width: 450px → 302px.
+- **`#statsBtn` was never styled.** It was left out of the `#invBtn, #minimapBtn, #gearBtn`
+  selectors when the character sheet was added, so 📊 rendered as a raw UA button that
+  matched nothing beside it. All four buttons now share one rule.
+- **Safe-area was on the wrong edge.** `padding:6px 8px env(safe-area-inset-top,0px)` puts
+  the *bottom* slot at the top inset, so on a notched display the bars began 6px from the
+  glass and the notch padding was reserved at the bottom. Now
+  `calc(4px + inset-top) / 8px+inset-right / 6px / 8px+inset-left`.
+- **Bottom edge re-shuffled** so nothing overlaps: the 📜 pill moved to the bottom-left, the
+  ability bar to `bottom:58px` (clear of both the pill and the 44px cluster), and the
+  minimap panel now opens *above* the 📍 button instead of under the HUD.
+- **The map button lights while its panel is up** (`#minimapBtn.active`), via a new
+  `Delve.setMinimapOpen(open)` that both `showHub()` and `showTitle()` use, so the button's
+  state cannot drift from the panel. A tap that opened a dark panel over a dark tile used to
+  read as "the button did nothing".
+- **Verified:** `test_ui` 254 → 258 (lit state on/off, no action button back in the status
+  row, the four buttons inside `#hudActions`), `test_items` 254/254 and 84/84, exit 0. The
+  `test_items` DOM stub gained `classList.toggle`, without which `ui.js` no longer loaded.
+
 ### Changed — the HUD is three bars; the stats moved into a character sheet
 
 - **The top bar is now health, energy and experience — nothing else.** It carried eight

@@ -11,10 +11,24 @@ body{
 #canvas{ display:block;width:100%;height:100%; }
 
 /* ── HUD ── */
+/* The strip carries no background/filter of its own: a backdrop-filter (or any
+   filter) makes #hud the containing block for fixed-position descendants, and
+   #hudActions below has to anchor to the bottom of the screen. The plate is
+   painted by ::before instead, which is inside #hud's stacking context, so it
+   still sits above the canvas and below the bars. */
 #hud{
   position:absolute;top:0;left:0;right:0;z-index:5;
   display:flex;flex-direction:column;gap:5px;
-  padding:6px 8px env(safe-area-inset-top,0px);
+  /* Safe-area on the TOP edge. It used to be the third value — the shorthand's
+     bottom slot — so on a notched/standalone display the bars started 6px from
+     the very top, under the status bar, and reserved the notch at the bottom. */
+  padding:calc(4px + env(safe-area-inset-top,0px))
+          calc(8px + env(safe-area-inset-right,0px))
+          6px
+          calc(8px + env(safe-area-inset-left,0px));
+}
+#hud::before{
+  content:"";position:absolute;inset:0;z-index:-1;
   background:rgba(8,12,16,.88);backdrop-filter:blur(6px);
 }
 /* Three bars only — health, energy, experience. Every combat number lives in
@@ -35,7 +49,10 @@ body{
   font-size:11px;font-weight:800;color:#cfd8e0;
   min-width:56px;text-align:right;flex-shrink:0;
 }
-#hudMeta{ display:flex;align-items:center;gap:5px; }
+/* Wrap instead of overflow: a narrow phone must never push a chip past the
+   right edge again (that is how the 🎒 disappeared). Status is the only thing
+   left up here now, so in practice it stays on one line. */
+#hudMeta{ display:flex;align-items:center;gap:5px;flex-wrap:wrap;row-gap:4px; }
 /* Labelled on purpose: a 🗺️ here read as a second map button beside 📍. */
 .hud-floor-lbl{ font-size:10px;font-weight:800;letter-spacing:.08em;color:#7f94a8; }
 .rest-pips{ gap:5px; }
@@ -46,12 +63,31 @@ body{
 }
 .sico{ font-size:13px;line-height:1;flex-shrink:0; }
 .spacer{ flex:1;min-width:4px; }
-#invBtn,#minimapBtn,#gearBtn{
-  background:#141b23;border:1px solid #7ee0ff44;border-radius:9px;
-  padding:5px 9px;font-size:12px;font-weight:700;color:#7ee0ff;
-  font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0;touch-action:manipulation;
+/* Action cluster: character / map / menu / bag. Bottom-right, where a thumb
+   reaches, instead of the fourth row of pills that used to crowd #hudMeta — the
+   last of them (🎒) was painted past the right edge on a 360px-wide phone.
+   Fixed, not absolute: #hud only spans the top strip. It stays a child of #hud
+   so showHub/hideAll hide it with the rest of the HUD. 44px targets, because
+   these are pressed mid-run, one-handed. */
+#hudActions{
+  position:fixed;
+  right:calc(8px + env(safe-area-inset-right,0px));
+  bottom:calc(8px + env(safe-area-inset-bottom,0px));
+  display:flex;gap:6px;z-index:6;
 }
-#invBtn:active,#minimapBtn:active,#gearBtn:active{ background:#1a2a3a; }
+#statsBtn,#minimapBtn,#gearBtn,#invBtn{
+  background:#141b23;border:1px solid #7ee0ff44;border-radius:12px;
+  font-size:18px;line-height:1;color:#7ee0ff;
+  font-family:inherit;cursor:pointer;flex-shrink:0;touch-action:manipulation;
+}
+#hudActions > button{
+  width:44px;height:44px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 18px rgba(0,0,0,.40), inset 0 1px 0 rgba(255,255,255,.05);
+}
+#statsBtn:active,#minimapBtn:active,#gearBtn:active,#invBtn:active{ background:#1a2a3a; }
+/* tapping the map used to look inert: the button now shows whether its panel is up */
+#minimapBtn.active{ background:#1a2a3a;border-color:#7ee0ff; }
 #restDots{ display:flex;gap:3px;align-items:center;flex-shrink:0; }
 .rest-dot{
   width:7px;height:7px;border-radius:50%;background:#2ad0b0;
@@ -60,10 +96,12 @@ body{
 .rest-dot.used{ background:#1a2a34;border-color:#2a3440; }
 
 /* ── Log strip ── */
+/* The 📜 pill moved to the bottom-LEFT: the action cluster owns bottom-right now. */
 #logPanel{
-  position:absolute;bottom:0;left:0;right:0;z-index:4;
+  position:absolute;left:calc(8px + env(safe-area-inset-left,0px));
+  bottom:calc(6px + env(safe-area-inset-bottom,0px));z-index:4;
   height:34px;pointer-events:none;display:none;
-  align-items:flex-end;justify-content:flex-end;padding:0 8px 6px;
+  align-items:flex-end;justify-content:flex-start;padding:0;
 }
 #logPanel.active{ display:flex; }
 #logFade{ display:none; }
@@ -77,8 +115,11 @@ body{
 
 /* ── Ability bar ── */
 #abilityBar{
-  position:absolute;left:8px;bottom:26px;z-index:6;
-  display:flex;gap:6px;padding-bottom:env(safe-area-inset-bottom,0px);
+  /* Clear of the 📜 pill below it and of the 44px action cluster to its right
+     (the bar wraps, so its width is not predictable). */
+  position:absolute;left:calc(8px + env(safe-area-inset-left,0px));
+  bottom:calc(58px + env(safe-area-inset-bottom,0px));z-index:6;
+  display:flex;gap:6px;
   /* Abilities are uncapped, so the bar wraps into rows and scrolls instead of
      running off the right edge. align-content:flex-end keeps the newest row
      sitting on the floor, which is where the thumb reaches. */
@@ -97,8 +138,10 @@ body{
 .ability-cost{ font-size:10px;color:#7ee0ff;font-weight:700; }
 
 /* ── Minimap ── */
+/* Opens just above the 📍 button that opens it, not under the HUD. */
 #minimapWrap{
-  position:absolute;top:52px;right:8px;z-index:7;display:none;
+  position:absolute;top:auto;right:calc(8px + env(safe-area-inset-right,0px));
+  bottom:calc(60px + env(safe-area-inset-bottom,0px));z-index:7;display:none;
   background:rgba(8,12,16,.92);border:1px solid #2a3440;border-radius:10px;
   padding:6px;backdrop-filter:blur(6px);
 }
@@ -509,14 +552,14 @@ body{
 */
 
 /* ── HUD pills ── */
-.stat, #invBtn, #minimapBtn, #gearBtn{
+.stat, #statsBtn, #invBtn, #minimapBtn, #gearBtn{
   border-radius:12px; border-color:#2b3742;
   box-shadow:0 3px 12px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.045);
 }
 /* keep the HUD only a shade taller — it sits over the map, so wrapping onto an
    extra row would hide more tiles than it's worth */
 .stat{ padding:5px 10px; }
-#invBtn, #minimapBtn, #gearBtn{ padding:6px 10px; }
+/* the action buttons' size comes from #hudActions > button, not from padding */
 /* rest dots (3 by default, 4 with Deep Lungs) */
 .rest-dot{ width:8px; height:8px; box-shadow:0 0 6px rgba(42,208,176,.45); }
 .rest-dot.used{ box-shadow:none; }

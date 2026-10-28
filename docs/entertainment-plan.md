@@ -5,17 +5,20 @@ built and green. Everything below is *not* built. Numbers in brackets are the or
 option numbers, kept so you can just say "do 28 and 4".
 
 > **Partly superseded — read `docs/next-session.md` first.** Latest owner direction:
-> **no manual-input combat** (no combo, timed strike, dodge window or wind-up). Combat
-> stays automatic; the decision is made before engaging. Monsters moving on sight is
-> deferred to the very last polish pass. Current priorities are **drops → music →
-> seamless floor/wall for biomes 3–4**. Section 2 below is therefore dropped.
+> **no manual basic-attack input** (no combo, timed strike, dodge window or wind-up).
+> The swing exchange runs on character attributes, weapon speed and the monster's attack
+> cycle; **abilities stay player-triggered** and cost Energy plus a monster turn. Monsters
+> moving on sight is deferred to the very last polish pass. Current priorities are
+> **drops → music → seamless floor/wall for biomes 3–4**. Section 2 below is dropped.
 
 **What the three additions changed**
 - A floor now has one decision on it (about 45% of non-boss floors).
 - Resting and chests carry a small, capped risk (ambushes).
 - Dying has a silver lining (keep one item).
-- None of that touches the fight itself, which is still automatic and short. That is the
-  remaining gap.
+- None of that touches the fight itself, which stays automatic and short **by design**.
+  The basic attack exchange is attribute/weapon/monster speed, and the player's input in a
+  fight is the **ability bar** (Energy + a monster turn), not the swing. Pacing work
+  therefore means enemy count, maps, drops and readability — never a manual swing.
 
 ---
 
@@ -26,7 +29,7 @@ option numbers, kept so you can just say "do 28 and 4".
 | 28 | **Fewer, tougher enemies.** Counts run 10–18 per floor. Try 8–12 and pay the same total XP/gold per kill. | S | A floor is currently mostly walking plus 1–2 second fights. This fixes the walking-to-fighting ratio with two data files. |
 | 29 | **Smaller maps.** 26–28 tiles down to 22–24. | S | Same reason; less empty corridor. |
 | 30 | **Haptics on crit and kill.** The setting already exists and is never used for this. | S | Free impact on a phone. |
-| 4 | **Combo counter.** Each hit landed without being hit raises damage; being hit resets it. | S–M | Turns a fight into something you are *doing* rather than watching. |
+| ~~4~~ | ~~**Combo counter.**~~ **DROPPED** — no combo mechanics. | — | Owner decision; the swing loop stays untouched. |
 | 22 | **Boss kill: pick 1 of 3 rewards** instead of one random drop. | S | Makes the reward a moment. |
 | 26 | **Build banner.** Flash the tag name when a 3- or 6-rank set bonus triggers. | S | The passive system already has bonuses nobody notices. |
 
