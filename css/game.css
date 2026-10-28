@@ -7,15 +7,28 @@ body{
   font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;font-size:16px;
 }
-#app{ position:fixed;inset:0; }
+/* The app box is the VISIBLE viewport, not the layout viewport. With `inset:0`
+   it was the layout height, which on a phone includes the strip behind the
+   browser's collapsing toolbar — anything anchored to the bottom edge could end
+   up under it. 100dvh shrinks and grows with that toolbar; the vh line is the
+   fallback for browsers without dvh. Everything inside (canvas, HUD, action
+   cluster, overlays) is positioned against this box. */
+#app{
+  position:fixed;inset:0;height:100vh;height:100dvh;overflow:hidden;
+  /* The HUD owns the top strip instead of floating over the board. The canvas is
+     the only child in normal flow, so it fills exactly what is left — which is
+     what stops the status bars from hiding the top rows of a room that reaches
+     the map's edge (it read as an open room with no wall capping it). --hud-h is
+     measured from the real HUD in main.js.
+     The bottom strip is reserved for the same reason: the bag row and the ability
+     bar must not be able to hide the player in the last row. --ui-bottom-px is
+     measured too (52px for the bag row alone, more once abilities wrap). */
+  padding-top:var(--hud-h,0px);
+  padding-bottom:calc(var(--ui-bottom-px, 52px) + env(safe-area-inset-bottom,0px));
+}
 #canvas{ display:block;width:100%;height:100%; }
 
 /* ── HUD ── */
-/* The strip carries no background/filter of its own: a backdrop-filter (or any
-   filter) makes #hud the containing block for fixed-position descendants, and
-   #hudActions below has to anchor to the bottom of the screen. The plate is
-   painted by ::before instead, which is inside #hud's stacking context, so it
-   still sits above the canvas and below the bars. */
 #hud{
   position:absolute;top:0;left:0;right:0;z-index:5;
   display:flex;flex-direction:column;gap:5px;
@@ -26,9 +39,6 @@ body{
           calc(8px + env(safe-area-inset-right,0px))
           6px
           calc(8px + env(safe-area-inset-left,0px));
-}
-#hud::before{
-  content:"";position:absolute;inset:0;z-index:-1;
   background:rgba(8,12,16,.88);backdrop-filter:blur(6px);
 }
 /* Three bars only — health, energy, experience. Every combat number lives in
@@ -66,14 +76,14 @@ body{
 /* Action cluster: character / map / menu / bag. Bottom-right, where a thumb
    reaches, instead of the fourth row of pills that used to crowd #hudMeta — the
    last of them (🎒) was painted past the right edge on a 360px-wide phone.
-   Fixed, not absolute: #hud only spans the top strip. It stays a child of #hud
-   so showHub/hideAll hide it with the rest of the HUD. 44px targets, because
-   these are pressed mid-run, one-handed. */
+   Absolute against #app (the visible viewport), so it sits above the browser's
+   toolbar, never under it. Hidden by default: Delve.setHudVisible() shows it
+   with the HUD, so there is one owner for "is a run on screen". */
 #hudActions{
-  position:fixed;
+  position:absolute;
   right:calc(8px + env(safe-area-inset-right,0px));
   bottom:calc(8px + env(safe-area-inset-bottom,0px));
-  display:flex;gap:6px;z-index:6;
+  display:none;gap:6px;z-index:6;
 }
 #statsBtn,#minimapBtn,#gearBtn,#invBtn{
   background:#141b23;border:1px solid #7ee0ff44;border-radius:12px;
@@ -88,6 +98,17 @@ body{
 #statsBtn:active,#minimapBtn:active,#gearBtn:active,#invBtn:active{ background:#1a2a3a; }
 /* tapping the map used to look inert: the button now shows whether its panel is up */
 #minimapBtn.active{ background:#1a2a3a;border-color:#7ee0ff; }
+/* Carried items, so the bag says something before you open it. updateHUD()
+   writes the count to data-bag; 0 hides the badge rather than showing a "0". */
+#invBtn{ position:relative; }
+#invBtn::after{
+  content:attr(data-bag); position:absolute;top:-4px;right:-4px;
+  min-width:16px;height:16px;padding:0 3px;
+  display:flex;align-items:center;justify-content:center;
+  background:#7ee0ff;color:#06121a;border-radius:8px;
+  font-size:9px;font-weight:900;line-height:1;
+}
+#invBtn:not([data-bag])::after,#invBtn[data-bag="0"]::after{ display:none; }
 #restDots{ display:flex;gap:3px;align-items:center;flex-shrink:0; }
 .rest-dot{
   width:7px;height:7px;border-radius:50%;background:#2ad0b0;
@@ -125,6 +146,7 @@ body{
      sitting on the floor, which is where the thumb reaches. */
   flex-wrap:wrap;align-content:flex-end;
   max-width:calc(100% - 16px);max-height:34vh;overflow-y:auto;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
   scrollbar-width:thin;
 }
 .ability-btn{
@@ -138,10 +160,12 @@ body{
 .ability-cost{ font-size:10px;color:#7ee0ff;font-weight:700; }
 
 /* ── Minimap ── */
-/* Opens just above the 📍 button that opens it, not under the HUD. */
+/* Drops in under the HUD, on the right. It used to float at the bottom, where a
+   wide ability bar could end up beneath it. --hud-h is measured in updateHUD(),
+   so the panel starts below whatever height the bars actually take. */
 #minimapWrap{
-  position:absolute;top:auto;right:calc(8px + env(safe-area-inset-right,0px));
-  bottom:calc(60px + env(safe-area-inset-bottom,0px));z-index:7;display:none;
+  position:absolute;right:calc(8px + env(safe-area-inset-right,0px));
+  top:calc(var(--hud-h, 86px) + 8px);z-index:7;display:none;
   background:rgba(8,12,16,.92);border:1px solid #2a3440;border-radius:10px;
   padding:6px;backdrop-filter:blur(6px);
 }
@@ -292,7 +316,23 @@ body{
 #levelupChoices{ display:flex;flex-direction:column;gap:10px;width:100%;max-width:460px; }
 
 /* ── Inventory screen ── */
-#inventoryScreen{ display:none;padding:22px 18px calc(22px + env(safe-area-inset-bottom)); }
+/* The inventory is the tallest screen in the game (character figure, equipment
+   rack, then every carried item). It was a flex column with no scroll, so the
+   carried list simply ran off the bottom and could not be reached — you could
+   not open an item to consider equipping it. Same treatment #shopScreen already
+   has. The header is sticky so ✕ stays reachable while you scroll. */
+#inventoryScreen{
+  display:none;padding:22px 18px calc(22px + env(safe-area-inset-bottom));
+  overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+}
+#inventoryScreen .inv-header{
+  position:sticky;top:0;z-index:2;flex:0 0 auto;
+  background:rgba(8,11,15,.97);padding:6px 0 8px;
+}
+/* The other screens whose content can outgrow a short phone. */
+#levelupScreen,#victoryScreen,#deathScreen,#eventScreen{
+  overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+}
 .inv-header{ display:flex;justify-content:space-between;align-items:center;width:100%;max-width:480px; }
 .inv-header h2{ font-size:20px;color:#eafff5;margin:0; }
 #charFigure{ display:flex;flex-direction:column;align-items:center;gap:6px; }
@@ -495,7 +535,7 @@ body{
 
 /* ── Debug panel ── */
 #debugPanel{
-  position:absolute;top:52px;left:8px;z-index:30;display:none;
+  position:absolute;top:calc(var(--hud-h, 0px) + 8px);left:8px;z-index:30;display:none;
   background:rgba(10,14,20,.94);border:1px solid #5a3a10;border-radius:10px;
   padding:10px;flex-direction:column;gap:6px;max-width:230px;font-size:11px;
 }

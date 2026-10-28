@@ -361,11 +361,22 @@ placement, affordability and effects. Spawns ambushers through `Delve.spawnMonst
 ### 3.5 Engine — presentation & plumbing
 
 **`js/sfx.js`**
-`Delve.sfx(name)`, `sfxToggleMute`, `sfxSetVolume`, `sfxGetVolume`.
-Synthesizes all sound via Web Audio — **no audio files**. The `AudioContext` is created
-on the first `pointerdown` (browser gesture requirement). Mute is deliberately **not**
-persisted. Default volume `0.55` is hardcoded in two places (`sfx.js` and the `ui.js`
-slider) — keep in sync if you change it.
+`Delve.sfx(name)`, `sfxToggleMute`, `sfxSetVolume`, `sfxGetVolume`, `musicSetVolume`,
+`musicGetVolume`, `sfxStartAmbience`, `sfxStopAmbience`, `sfxSetWard`, `musicWardFor`,
+`musicTracks`.
+Two audio paths:
+- **Effects** are synthesised with Web Audio — no audio files. The `AudioContext` is
+  created on the first `pointerdown` (browser gesture requirement). Default effect volume
+  `0.55` is hardcoded in two places (`sfx.js` and the `ui.js` slider) — keep in sync.
+- **Music** is the only recorded audio: the MP3 beds in `music/`, one array per ward in
+  `MUSIC_TRACKS` (the ward comes from `getWard`, so floors 1–10 → 1, 11–20 → 2, 21–30 → 3,
+  31–40 → 4). One `<audio>` element is reused and **`loop` is never set**: each bed fades
+  out over its last ~2s (driven by `timeupdate`), and `ended` picks the next bed and fades
+  it back in from silence. A ward change cross-fades over 700 ms. Volume is mirrored from
+  `prefs.music` and the global mute — the element sits **outside** the WebAudio graph, so
+  `sfxToggleMute()` and `musicSetVolume()` call `applyMusicVolume()`. A blocked autoplay
+  is retried on the next gesture.
+Mute, both volumes and haptics persist in `underward_audio_v1` (own key, not `Delve.save`).
 
 **`js/log.js`**
 `log`, `clearLog`, `flushLogWindow`, and all `logXxx` shorthands.
@@ -453,13 +464,20 @@ the in-run pause menu dead (§8). It defines no name another file defines, and o
   The top bar is deliberately **three bars only** — health, energy (against the cap, so it
   answers "can I afford this cast?"), and XP toward the next level — plus a status row of
   floor, rest dots, gold and shards. The four buttons (📊 character, 📍 map, ☰ menu,
-  🎒 inventory) are **not** in that row: they live in `#hudActions`, fixed to the
-  bottom-right at 44px. In the row they overflowed a 360px phone and pushed 🎒 past the
-  right edge. `#hudActions` is a child of `#hud` so show/hide is automatic, and
-  `position:fixed` is what anchors it to the bottom edge — which is why `#hud` itself
-  carries no `filter`/`backdrop-filter` (that would become its containing block); the plate
-  is painted by `#hud::before`. `Delve.setMinimapOpen(open)` owns the map panel and the
-  📍 button's lit state. Every combat number (attack, weapon damage, crit,
+  🎒 inventory) are **not** in that row: they live in `#hudActions`, a sibling of `#hud`
+  inside `#app`, absolutely positioned bottom-right at 44px. In the row they overflowed a
+  360px phone and pushed 🎒 past the right edge. Because the cluster is no longer a child
+  of `#hud`, **`Delve.setHudVisible(on)` owns both** — every screen change goes through it,
+  or the buttons would stay visible over the title screen. `#app` is `height:100dvh` (the
+  *visible* viewport), so an element anchored to its bottom cannot land under a phone's
+  toolbar; `Delve.resize()` measures the **canvas** (which sits in `#app`'s content box),
+  not `window.inner*`. `#app` is padded by `--hud-h`, so the board begins below the status
+  strip: that is what keeps a room at the map's top edge from looking uncapped, because its
+  wall row is no longer behind the bars. The minimap panel sits
+  under the HUD at `top:calc(var(--hud-h) + 8px)`, with `--hud-h` measured by a
+  `ResizeObserver` on `#hud`; that is what keeps it clear of the ability bar, which wraps
+  and scrolls inside `max-height:34vh`. `Delve.setMinimapOpen(open)` owns the map panel and
+  the 📍 button's lit state. Every combat number (attack, weapon damage, crit,
   attack speed, damage reduction, dodge, luck, merchant discount) lives in the **character
   sheet** (`#statsOverlay`, opened with 📊), together with your passives, their ranks and
   set progress. It is read standing still, so it uses the full screen, and it is in
@@ -494,7 +512,11 @@ into `render.js` + `render/tiles.js` — and no longer multi-purpose.
 
 **`js/main.js`**
 `canvas`, `ctx`, `ts`, `W`, `H`, `viewW`, `viewH`, `camX`, `camY`, `resize`,
-`computeView`, resize/orientation listeners.
+`computeView`, `syncHudHeight`, `syncBottomInset`, resize/orientation/`visualViewport`
+listeners, and two `ResizeObserver`s: one on `#hud` rewriting `--hud-h` (read by `#app`'s
+top padding, `#minimapWrap` and the debug panel), one on `#abilityBar` rewriting
+`--ui-bottom-px` (read by `#app`'s bottom padding). Both write only on change and then
+re-run `resize()`, so the board re-fits when the strip wraps or abilities appear.
 Runs `resize()` then `showHub()` at load. Last script on the page.
 
 ### 3.6 Page shell & dev tooling

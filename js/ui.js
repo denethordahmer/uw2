@@ -56,6 +56,17 @@ window.Delve = window.Delve || {};
 
    Delve.hideAllScreens = hideAll;
 
+  // One owner for "the run chrome is on screen". The HUD strip and the bottom
+  // action cluster are separate elements (the cluster is a sibling of #hud so it
+  // can be positioned against #app rather than the strip), so they must never be
+  // toggled independently — that is how a button ends up visible over the title
+  // screen. Every screen change goes through here.
+ Delve.setHudVisible = function(on){
+  const hud = $("hud"), act = $("hudActions");
+  if(hud) hud.style.display = on ? "flex" : "none";
+  if(act) act.style.display = on ? "flex" : "none";
+ };
+
   // ── Slot unlock state ────────────────────────────────────────
  Delve.isSlotUnlocked = function(slotKey){
   const def = Delve.CONFIG.SLOTS && Delve.CONFIG.SLOTS[slotKey];
@@ -101,6 +112,15 @@ window.Delve = window.Delve || {};
   setBar("hudXpFill", xp / need);
 
   $("hudFloor").textContent = G.floor;
+  // The bag button carries its own count, so "how full am I" is answered without
+  // opening the inventory. 0 hides the badge (CSS), and the title carries the cap.
+  const bagBtn = $("invBtn");
+  if(bagBtn){
+   const carried = (G.items || []).length;
+   bagBtn.dataset.bag = String(carried);
+   bagBtn.title = "Inventory " + carried + "/" +
+     (Delve.inventoryCap ? Delve.inventoryCap() : (Delve.CONFIG.inventorySlots || 16));
+  }
   $("hudGold").textContent = G.gold;
   $("hudShards").textContent = Delve.save.shards + (Delve.pendingRunShards ? Delve.pendingRunShards() : 0); // banked + unbanked run earnings
   // The 📜 Log pill is visible during a run only — showHub() takes the class off.
@@ -499,7 +519,7 @@ window.Delve = window.Delve || {};
   if(Delve.sfxStopAmbience) Delve.sfxStopAmbience();
   $("levelupScreen").style.display = "none";
   $("hubScreen").style.display = "flex";
-  $("hud").style.display = "none";
+  Delve.setHudVisible(false);
   $("abilityBar").style.display = "none";
   if(Delve.setMinimapOpen) Delve.setMinimapOpen(false);
   const lp = $("logPanel"); if(lp) lp.classList.remove("active");
@@ -508,13 +528,13 @@ window.Delve = window.Delve || {};
  };
  Delve.hideHub = function(){
   $("hubScreen").style.display = "none";
-  $("hud").style.display = "flex";
+  Delve.setHudVisible(true);
   $("levelupScreen").style.display = "none";
  };
 
  Delve.startRun = function(){
   hideAll();
-  $("hud").style.display = "flex";
+  Delve.setHudVisible(true);
   Delve.newRun();
   if(Delve.sfxStartAmbience) Delve.sfxStartAmbience();
   if(Delve.resize) Delve.resize();
@@ -528,7 +548,7 @@ window.Delve = window.Delve || {};
   if(!Delve.restoreRunFromCheckpoint) return false;
   if(!Delve.restoreRunFromCheckpoint()) return false;
   hideAll();
-  $("hud").style.display = "flex";
+  Delve.setHudVisible(true);
   if(Delve.sfxStartAmbience) Delve.sfxStartAmbience();
   if(Delve.resize) Delve.resize();
   Delve.draw();
@@ -744,7 +764,7 @@ window.Delve = window.Delve || {};
 
  function closeShop(){
   $("shopScreen").style.display = "none";
-  $("hud").style.display = "flex";
+  Delve.setHudVisible(true);
   Delve.updateHUD();
   Delve.draw();
  }
@@ -1042,7 +1062,7 @@ window.Delve = window.Delve || {};
 
  $("victoryContinue").addEventListener("click", function(){
   hideAll();
-  $("hud").style.display = "flex";
+  Delve.setHudVisible(true);
   const G = Delve.G;
   G.victoryDone = false;
   G.secondWindUsed = false;

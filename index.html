@@ -46,16 +46,18 @@
       <span class="stat"><span class="sico">💰</span><span id="hudGold">0</span></span>
       <span class="stat"><span class="sico">💎</span><span id="hudShards">0</span></span>
     </div>
-    <!-- Action cluster. Bottom-right, where a thumb reaches, instead of a fourth
-         row of tiny pills crowding the top bar (the 🎒 was being pushed off the
-         right edge on a 360px phone). It lives inside #hud so every show/hide of
-         the HUD takes it along for free; CSS lifts it out of the top strip. -->
-    <div id="hudActions">
-      <button id="statsBtn" title="Character sheet">📊</button>
-      <button id="minimapBtn" title="Map">📍</button>
-      <button id="gearBtn" title="Menu: save, retreat, sound">☰</button>
-      <button id="invBtn" title="Inventory">🎒</button>
-    </div>
+  </div>
+
+  <!-- Action cluster: bottom-right, where a thumb reaches, instead of a fourth
+       row of tiny pills crowding the top bar (the 🎒 was being pushed off the
+       right edge on a 360px phone). A sibling of #hud, positioned against #app,
+       which is the *visible* viewport — so it cannot land under the browser's
+       toolbar. Delve.setHudVisible() shows and hides it with the HUD. -->
+  <div id="hudActions">
+    <button id="statsBtn" title="Character sheet">📊</button>
+    <button id="minimapBtn" title="Map">📍</button>
+    <button id="gearBtn" title="Menu: save, retreat, sound">☰</button>
+    <button id="invBtn" title="Inventory">🎒</button>
   </div>
 
   <!-- Character sheet: everything that used to crowd the top bar -->

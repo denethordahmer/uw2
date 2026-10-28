@@ -158,6 +158,9 @@ const ctx = {
   // Read the element's own style, not a constant, so the minimap toggle (which
   // asks getComputedStyle().display before flipping it) can be tested.
   getComputedStyle:el=>({ display:(el && el.style && el.style.display) || "block" }),
+  // A real phone-shaped viewport, so resize() computes a usable board instead of
+  // falling through to its 1x1 guard.
+  innerWidth:390, innerHeight:844,
   location:{ href:"http://localhost/", reload(){} },
   devicePixelRatio:1, alert(){}, matchMedia:()=>({ matches:false, addListener(){}, addEventListener(){} })
 };
@@ -330,6 +333,25 @@ ok(/hud-floor-lbl/.test(html), "the floor chip is labelled FLOOR, not a map icon
 ok(/rest-pips/.test(html), "the rest pips are labelled as rests");
 ok(html.indexOf("🗺️") < 0, "no map emoji sits beside the floor number");
 ok(registry.get("logPanel").classList.contains("active"), "log pill activated during a run");
+// The bag button carries its own count (CSS draws it from data-bag; 0 hides it).
+ok(registry.get("invBtn").dataset.bag === String((D.G.items || []).length),
+   "the bag button shows how many items are carried");
+ok(/\/\d+$/.test(registry.get("invBtn").title), "the bag title carries the capacity");
+
+// The board's viewport. resize() now measures the canvas (which sits below the
+// HUD) instead of window.inner*, and a NaN or zero there would blank the map.
+D.resize();
+ok(Number.isFinite(D.W) && D.W > 0 && Number.isFinite(D.H) && D.H > 0,
+   "resize leaves a usable viewport (" + D.W + "\u00d7" + D.H + ")");
+
+// Two layout contracts that only the stylesheet can express, pinned so a restyle
+// cannot quietly bring back the two reports behind them: a room at the map's top
+// edge losing its wall behind the HUD, and an inventory with no way to scroll.
+const cssText = fs.readFileSync(path.join(root, "css/game.css"), "utf8");
+ok(/#app\{[^}]*padding-top:var\(--hud-h[^}]*padding-bottom:calc\(var\(--ui-bottom-px/.test(cssText),
+   "the board is inset by the HUD and the bottom controls, so no control covers a tile");
+ok(/#inventoryScreen\{[^}]*overflow-y:auto/.test(cssText),
+   "the inventory scrolls when the carried list is taller than the screen");
 
 // ── 9. Ability bar ──────────────────────────────────────────
 console.log("\n── ability bar ─────────────────────────────────────────");
@@ -426,11 +448,13 @@ D.runInProgress = () => false;
 D.showHub();
 ok(displayOf("hubScreen") === "flex", "showHub shows the hub");
 ok(displayOf("hud") === "none", "showHub hides the HUD");
+ok(displayOf("hudActions") === "none", "showHub hides the bottom action cluster too");
 ok(displayOf("abilityBar") === "none", "showHub hides the ability bar");
 ok(!registry.get("logPanel").classList.contains("active"), "showHub drops the log pill");
 D.hideHub();
 ok(displayOf("hubScreen") === "none", "hideHub hides the hub");
 ok(displayOf("hud") === "flex", "hideHub restores the HUD");
+ok(displayOf("hudActions") === "flex", "hideHub restores the action cluster");
 
 // ── 14. Shop ────────────────────────────────────────────────
 console.log("\n── shop ────────────────────────────────────────────────");
@@ -1056,6 +1080,32 @@ ok(D.G.inventory.length === 1, "it lands in the bag");
 D.G.inventory = [D.makeItem(1, { slot:"head", floor:1 })];
 D.showEndScreen("retreat", { shards:0 });
 ok(registry.get("heirloomBox").style.display === "none", "retreating offers no heirloom");
+
+// -- 26. Music -------------------------------------------------
+console.log("\n-- music -----------------------------------------------");
+const tracks = D.musicTracks();
+ok([1,2,3,4].every(w => Array.isArray(tracks[w]) && tracks[w].length > 0),
+   "every ward has at least one music bed");
+const missingBeds = [];
+Object.keys(tracks).forEach(w => tracks[w].forEach(p => {
+  const f = path.join(root, p);
+  if (!fs.existsSync(f) || fs.statSync(f).size === 0) missingBeds.push(p);
+}));
+ok(missingBeds.length === 0,
+   "every music bed exists on disk" + (missingBeds.length ? " (missing: " + missingBeds.join(", ") + ")" : ""));
+ok(D.musicWardFor(1) === 1 && D.musicWardFor(10) === 1, "floors 1-10 play the first bed");
+ok(D.musicWardFor(11) === 2 && D.musicWardFor(20) === 2, "floors 11-20 play the second bed");
+ok(D.musicWardFor(21) === 3 && D.musicWardFor(30) === 3, "floors 21-30 play the third bed");
+ok(D.musicWardFor(31) === 4 && D.musicWardFor(40) === 4, "floors 31-40 play the fourth bed");
+ok(["sfxStartAmbience","sfxStopAmbience","sfxSetWard"].every(n => typeof D[n] === "function"),
+   "the three ambience entry points exist");
+let musicThrew = false;
+try { D.sfxStartAmbience(); D.sfxSetWard(2); D.sfxStopAmbience(); }
+catch (e) { musicThrew = true; }
+ok(!musicThrew, "start / ward change / stop are safe before any gesture");
+const sfxSrc = fs.readFileSync(path.join(root, "js/sfx.js"), "utf8");
+ok(/\.loop\s*=\s*false/.test(sfxSrc) && /addEventListener\("ended"/.test(sfxSrc),
+   "the bed fades at its tail and restarts on ended (no HTML5 loop)");
 
 console.log("\n" + (fails ? "FAILED " + fails + "/" + checks : "PASSED " + checks + "/" + checks) + " checks");
 process.exit(fails ? 1 : 0);

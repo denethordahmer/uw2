@@ -2,6 +2,156 @@ window.Delve = window.Delve || {};
 (function(){
 "use strict";
 
+ // ── Background music ───────────────────────────────────────
+ // The beds are plain MP3s in music/ — one array per ward, so a second or third
+ // take (biome1-2.mp3 …) is one new string and nothing else. Playback is
+ // deliberately NOT an HTML5 loop: the track fades out over its last ~2s, and on
+ // `ended` a new one is picked and faded back in from silence. Volume mirrors
+ // the music slider and the global mute, so both controls keep working.
+ const MUSIC_TRACKS = {
+  1: ["music/biome1-1.mp3"],
+  2: ["music/biome2-1.mp3"],
+  3: ["music/biome3-1.mp3"],
+  4: ["music/biome4-1.mp3"]
+ };
+ const BGM_FADE_IN_MS = 1200;
+ const BGM_TAIL_MS = 2000;      // the fade-out window at the end of a track
+ const BGM_SWITCH_MS = 700;     // cross-fade when the ward changes
+
+ let bgmEl = null, bgmWard = 0, bgmTrack = null;
+ let bgmFadeTimer = null, bgmFadingOut = false, bgmEnding = false, bgmPending = false;
+
+ // Floors 1-10 → ward 1, 11-20 → 2, and so on, straight from the ward table.
+ function musicWardFor(floor){
+  const ward = (Delve.getWard && Delve.getWard(floor)) || null;
+  const id = ward && ward.id ? Math.round(ward.id) : 1;
+  return MUSIC_TRACKS[id] ? id : 1;
+ }
+ Delve.musicWardFor = musicWardFor;
+
+ function musicTracksFor(ward){
+  return MUSIC_TRACKS[ward] || MUSIC_TRACKS[musicWardFor(1)] || [];
+ }
+ // Read-only copy, for the suite and for ?diag=1 debugging.
+ Delve.musicTracks = function(){
+  const out = {};
+  Object.keys(MUSIC_TRACKS).forEach(function(k){ out[k] = MUSIC_TRACKS[k].slice(); });
+  return out;
+ };
+
+ function musicTargetVolume(){ return prefs.muted ? 0 : prefs.music; }
+
+ function setBgmVolume(v){ if(bgmEl){ try{ bgmEl.volume = clamp01(v); }catch(_e){} } }
+
+ function applyMusicVolume(){
+  // Mid-fade the fade owns the value; otherwise follow the slider/mute at once.
+  if(!bgmEl || bgmFadingOut || bgmEnding) return;
+  setBgmVolume(musicTargetVolume());
+ }
+
+ // Linear fade; the next fade (or stopBgm) cancels it.
+ function fadeBgm(to, ms, done){
+  if(!bgmEl){ if(done) done(); return; }
+  if(bgmFadeTimer){ clearInterval(bgmFadeTimer); bgmFadeTimer = null; }
+  const from = Number(bgmEl.volume) || 0;
+  const dur = Math.max(1, ms || 0);
+  const started = Date.now();
+  if(dur <= 60){ setBgmVolume(to); if(done) done(); return; }
+  bgmFadeTimer = setInterval(function(){
+   const k = Math.min(1, (Date.now() - started) / dur);
+   setBgmVolume(from + (to - from) * k);
+   if(k >= 1){
+    clearInterval(bgmFadeTimer); bgmFadeTimer = null;
+    if(done) done();
+   }
+  }, 50);
+ }
+
+ function pickTrack(ward){
+  const list = musicTracksFor(ward);
+  if(!list.length) return null;
+  if(list.length === 1) return list[0];
+  let next = list[Math.floor(Math.random() * list.length)];
+  if(next === bgmTrack) next = list[(list.indexOf(next) + 1) % list.length];
+  return next;
+ }
+
+ function bgmTick(){
+  const el = bgmEl;
+  if(!el || bgmFadingOut || bgmEnding) return;
+  let d = 0;
+  try { d = el.duration; } catch(_e){ return; }
+  if(!isFinite(d) || d <= 0) return;
+  const left = (d - el.currentTime) * 1000;
+  if(left <= BGM_TAIL_MS && left > 150){
+   bgmEnding = true;
+   fadeBgm(0, left);                 // ~2s of tail, then silence at the very end
+  }
+ }
+
+ function bgmEnded(){
+  bgmEnding = false;
+  if(bgmFadingOut) return;
+  bgmTrack = null;                   // force a fresh pick: never the same twice in a row
+  playBgm(pickTrack(bgmWard), BGM_FADE_IN_MS);
+ }
+
+ function ensureBgm(){
+  if(bgmEl) return bgmEl;
+  if(typeof window.Audio !== "function") return null;
+  let el = null;
+  try { el = new window.Audio(); } catch(_e){ return null; }
+  if(!el || typeof el.play !== "function" || typeof el.addEventListener !== "function") return null;
+  try {
+   el.preload = "auto";
+   el.loop = false;                  // the loop is ours, not the element's
+   el.volume = 0;
+   el.addEventListener("timeupdate", bgmTick);
+   el.addEventListener("ended", bgmEnded);
+  } catch(_e){ return null; }
+  bgmEl = el;
+  return bgmEl;
+ }
+
+ function playBgm(src, fadeMs){
+  if(!src) return;
+  const el = ensureBgm();
+  if(!el) return;
+  bgmFadingOut = false; bgmEnding = false;
+  if(bgmTrack !== src){
+   bgmTrack = src;
+   try { el.src = src; } catch(_e){ bgmTrack = null; return; }
+  }
+  try { el.currentTime = 0; } catch(_e){}
+  setBgmVolume(0);
+  let p = null;
+  try { p = el.play(); } catch(_e){ bgmPending = true; return; }
+  if(p && typeof p.then === "function"){
+   p.then(function(){
+    bgmPending = false;
+    fadeBgm(musicTargetVolume(), fadeMs || BGM_FADE_IN_MS);
+   }).catch(function(){
+    // Autoplay blocked (no gesture yet): retried from the next pointerdown.
+    bgmPending = true;
+   });
+  } else {
+   fadeBgm(musicTargetVolume(), fadeMs || BGM_FADE_IN_MS);
+  }
+ }
+
+ function stopBgm(ms, then){
+  bgmEnding = false;
+  if(!bgmEl || bgmEl.paused){ if(then) then(); return; }
+  bgmFadingOut = true;
+  fadeBgm(0, ms, function(){
+   try { if(bgmEl) bgmEl.pause(); } catch(_e){}
+   bgmFadingOut = false;
+   if(then) then();
+  });
+ }
+
+
+
  // ── Persistent audio prefs (own key, outside Delve.save) ──
  const PREFS_KEY = "underward_audio_v1";
  const DEFAULT_PREFS = { muted:false, sfx:0.55, music:0.30, haptics:true };
@@ -534,6 +684,7 @@ window.Delve = window.Delve || {};
  Delve.sfxToggleMute = function(){
   prefs.muted = !prefs.muted;
   if(master) master.gain.value = prefs.muted ? 0 : 1;
+  applyMusicVolume();
   savePrefs();
   return prefs.muted;
  };
@@ -546,20 +697,40 @@ window.Delve = window.Delve || {};
  Delve.musicSetVolume = function(v){
   prefs.music = clamp01(v);
   if(musicBus) musicBus.gain.value = prefs.music;
+  applyMusicVolume();
   savePrefs();
  };
  Delve.musicGetVolume = function(){ return prefs.music; };
  Delve.sfxSetHaptics = function(b){ prefs.haptics = !!b; savePrefs(); return prefs.haptics; };
  Delve.sfxGetHaptics = function(){ return !!prefs.haptics; };
 
- // Background music/ambience intentionally disabled for now.
- // These stubs keep existing call sites safe.
- Delve.sfxStartAmbience = function(){};
- Delve.sfxStopAmbience = function(){};
- Delve.sfxSetWard = function(){};
+ // Music transport. startRun/resumeRun start it, showHub/showTitle/endRun stop
+ // it, descend changes ward. Safe to call before a gesture: playback then waits
+ // for the next pointerdown (see unlock).
+ Delve.sfxStartAmbience = function(){
+  if(!bgmWard) bgmWard = musicWardFor((Delve.G && Delve.G.floor) || 1);
+  if(bgmEl && !bgmEl.paused){ applyMusicVolume(); return; }
+  playBgm(bgmTrack || pickTrack(bgmWard), BGM_FADE_IN_MS);
+ };
+
+ Delve.sfxStopAmbience = function(ms){
+  stopBgm(ms === undefined ? 800 : ms);
+ };
+
+ Delve.sfxSetWard = function(id){
+  const n = Math.round(Number(id) || 0);
+  const ward = MUSIC_TRACKS[n] ? n : musicWardFor(1);
+  if(ward === bgmWard && bgmEl && !bgmEl.paused){ applyMusicVolume(); return; }
+  bgmWard = ward;
+  stopBgm(BGM_SWITCH_MS, function(){
+   bgmTrack = null;
+   playBgm(pickTrack(bgmWard), BGM_FADE_IN_MS);
+  });
+ };
 
  // ── Gesture unlock + lifecycle ──────────────────────────────
  function unlock(){
+  if(bgmPending){ bgmPending = false; playBgm(bgmTrack || pickTrack(bgmWard), BGM_FADE_IN_MS); }
   const c = getCtx();
   if(c && c.state === "running"){
    document.removeEventListener("pointerdown", unlock);

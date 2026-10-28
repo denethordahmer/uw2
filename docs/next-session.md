@@ -3,22 +3,41 @@
 Read this first. It records owner decisions and measured facts so nothing has to be
 re-discovered. `docs/architecture.md` remains the reference for how the code works.
 
-## State
+## State (verified at handoff)
 
-- HEAD was `e3d5baf`. Working tree has the **events / ambushes / heirloom** build
-  (uncommitted): 2 new files (`js/content/con-events.js`, `js/encounters.js`) and 16
-  modified files.
-- `node test_items.js` → **PASSED 254/254**, `loaded 42 scripts`, **PASSED 84/84**, exit 0.
-  `node tools/check-order.js` is green (42 scripts, manifest = index.html).
-- `test.html` is the browser suite and has not been run since the change; the owner is
-  testing the build on the phone now.
-- **HUD layout changed (latest).** The four buttons (📊 📍 ☰ 🎒) left the top row for
-  `#hudActions`, fixed bottom-right at 44px, because the status row overflowed a 360px
-  phone and painted 🎒 off-screen. The top strip is status only (FLOOR, rests, 💰, 💎).
-  `#hud` no longer carries the blur (it moved to `#hud::before`) so the fixed cluster can
-  anchor to the bottom. 📜 pill is bottom-left, ability bar `bottom:58px`, minimap panel
-  opens above its button, `Delve.setMinimapOpen(open)` owns the panel + the lit state.
-  `test_ui` 258/258, `test_items` 254/254 + 84/84.
+**Green gate:** `node test_items.js` → **PASSED 274/274**, `loaded 42 scripts`,
+**PASSED 84/84**, exit 0. `node test_ui.js` → **274/274**. `node tools/check-order.js`
+→ green (42 scripts, manifest = index.html). Every `.js` passes `node --check`.
+
+**Working tree is uncommitted.** HEAD is `e3d5baf`. Built since then, all tested:
+
+1. **Floor events, ambushes, heirloom** — new files `js/content/con-events.js` (data)
+   and `js/encounters.js` (rules); `eventScreen` overlay in `uiBlocked()` + `hideAll()`.
+2. **HUD actions moved** — 📊 📍 ☰ 🎒 live in `#hudActions`, a sibling of `#hud` inside
+   `#app`, absolute bottom-right at 44px. `Delve.setHudVisible(on)` owns the HUD **and**
+   the cluster; never toggle `#hud` directly. Top strip is status only (FLOOR, rests,
+   💰, 💎). 🎒 carries an item-count badge; 📍 lights while the map is open
+   (`Delve.setMinimapOpen`).
+3. **Board inset** — `#app` is padded by `--hud-h` (top) and `--ui-bottom-px` (bottom),
+   measured in `main.js` (`syncHudHeight`, `syncBottomInset`) and kept live by two
+   `ResizeObserver`s; `Delve.resize()` measures the **canvas**, not `window.inner*`.
+   This stops a top-edge room's wall row hiding behind the status strip, and stops the
+   bottom buttons covering the last row. Do not hard-code either inset.
+4. **Scrolling screens** — `#inventoryScreen` (plus level-up, victory, death, event)
+   have `overflow-y:auto`; the inventory header is sticky so ✕ stays reachable.
+5. **Background music** — four beds in `music/` (biome1-1 … biome4-1.mp3), played by
+   `sfx.js` via `MUSIC_TRACKS` (one array per ward, ward from `getWard`: 1–10 → 1 …
+   31–40 → 4). No HTML5 `loop`: 2s tail fade-out, then `ended` picks the next bed and
+   fades in; 700 ms cross-fade on ward change. Mute and the music slider are mirrored
+   onto the `<audio>` element (it sits outside the WebAudio graph).
+
+**To ship, the owner must upload:** the whole tree, **plus `music/`** (currently
+untracked), and the updated `.github/workflows/syntax-check.yml` (copies in
+`/sdcard/underward-workflows/`, with a README explaining the two changes: `music/**`
+path trigger + a "Music beds are present" step). `unzip.yml` needed no change.
+
+**`test.html` (browser suite) has not been run** since these changes — the phone run is
+the outstanding confirmation, together with whatever the owner reports back.
 
 ## Owner decisions (do not drift from these)
 
@@ -37,9 +56,10 @@ re-discovered. `docs/architecture.md` remains the reference for how the code wor
 2. **Monsters moving once they see the player** (Pixel Dungeon style) is the **last**
    stage of polish. Everything below ships first. Do not start it early; it touches
    `enemiesTurn`, `ambientMob`, pathing and the checkpoint.
-3. **Priorities, in owner's order:** (a) item drops, (b) background music, (c) finish the
-   seamless floor/wall look for **biomes 3 and 4** (Frosted Vault, Bone Ossuary) — the
-   owner believes 1 and 2 are done.
+3. **Priorities, in owner's order:** (a) item drops — **next task**, (b) ~~music~~ (done,
+   see State), (c) finish the seamless floor/wall look for **biomes 3 and 4** (Frosted
+   Vault, Bone Ossuary) — the owner believes 1 and 2 are done. Monsters-on-sight comes
+   after all of that.
 4. Selling gear must stay **not especially lucrative**. The goal is that the player *sees
    enough equipment to have choices*, not that hoarding is a money strategy.
 
@@ -68,12 +88,18 @@ re-discovered. `docs/architecture.md` remains the reference for how the code wor
   course** painted inside each tile, which gives a square rhythm. There is no per-biome
   wall style flag yet; add one (e.g. `wallStyle:"ice"|"bone"`).
 
-**Music** (`js/sfx.js`):
-- `sfxStartAmbience`, `sfxStopAmbience`, `sfxSetWard` are **empty stubs** (lines ~557–559).
-  `prefs.music`, `musicBus`, both sliders and `sfxSetWard` call sites already exist.
-  Audio is gesture-unlocked; no audio files are used anywhere (all WebAudio synthesis).
+**Music** (`js/sfx.js`) — implemented, so this is reference not a to-do:
+- `MUSIC_TRACKS` = one array per ward; `musicWardFor(floor)` maps floors to wards through
+  `getWard`. One reused `<audio>` element, `loop` explicitly false, 2s `BGM_TAIL_MS`
+  fade-out on `timeupdate`, restart + fade-in on `ended`, `BGM_SWITCH_MS` = 700 cross-fade
+  on ward change, `BGM_FADE_IN_MS` = 1200.
+- The element is **outside** the WebAudio graph: `sfxToggleMute()` and
+  `musicSetVolume()` call `applyMusicVolume()`. A blocked autoplay sets `bgmPending` and
+  is retried in `unlock()`.
+- Effects are still fully synthesised (no files). Adding a second bed is one string in
+  the ward's array; the CI step will then require that file.
 
-## Procedure A — item drops (first task)
+## Procedure A — item drops (NEXT TASK)
 
 Do not simply double the number. In order:
 
@@ -96,16 +122,6 @@ Do not simply double the number. In order:
    capacity in the same pass.
 7. **Verify:** simulate 10 floors per ward (items seen, bag-full events, sell total), then
    a phone run counting *useful upgrades* per floor, not raw drops.
-
-## Procedure B — music
-
-- Keep it file-free: one procedural loop per ward on `musicBus`, built from the existing
-  oscillator/noise helpers in `sfx.js`.
-- `sfxSetWard(id)` is already called on descend; use it to cross-fade the ward's loop.
-- Suggested palette: ward 1 low drone + slow drips; ward 2 breathy noise + low pulse;
-  ward 3 high glassy pad + wind; ward 4 dry bone clicks + deep toll. 8–16 bars, slow.
-- Respect `prefs.music` (the slider already writes it), mute, and the gesture unlock.
-- No new ids are needed; both sliders exist.
 
 ## Procedure C — biomes 3 and 4, seamless floor and wall
 

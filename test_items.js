@@ -71,7 +71,9 @@ function fakeClassList(){
   };
 }
 const canvas = (w,h) => ({ width:w||24, height:h||24, style:{}, classList:fakeClassList(), getContext:()=>ctx2d(), toDataURL:()=>"", addEventListener(){} });
-const el = () => ({ style:{}, classList:fakeClassList(), appendChild(){}, insertBefore(){}, addEventListener(){}, removeEventListener(){}, querySelector:()=>null, getContext:()=>ctx2d(), textContent:"", innerHTML:"", children:[], parentNode:{ insertBefore(){} }, width:100, height:100, getBoundingClientRect:()=>({left:0,top:0,width:100,height:100}) });
+// `dataset` too: updateHUD writes the bag count to #invBtn.dataset.bag. Real
+// elements always have one, so the stub has to as well.
+const el = () => ({ style:{}, dataset:{}, classList:fakeClassList(), appendChild(){}, insertBefore(){}, addEventListener(){}, removeEventListener(){}, querySelector:()=>null, getContext:()=>ctx2d(), textContent:"", innerHTML:"", children:[], parentNode:{ insertBefore(){} }, width:100, height:100, getBoundingClientRect:()=>({left:0,top:0,width:100,height:100}) });
 
 const ctx = { console, setTimeout, clearTimeout, setInterval:()=>0, clearInterval(){}, Date, Math, JSON, requestAnimationFrame:()=>0 };
 ctx.window = ctx;

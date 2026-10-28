@@ -11,6 +11,33 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Added — background music, one bed per ward
+
+- **The music is real now.** `music/biome1-1.mp3` … `biome4-1.mp3` are in the repo (the
+  four files the owner uploaded), and `sfx.js` plays them: floors 1–10 use biome 1, 11–20
+  biome 2, 21–30 biome 3, 31–40 biome 4 — taken from `getWard`, so the mapping needs no
+  floor list of its own.
+- **Arrays, not a single file.** `MUSIC_TRACKS` holds an array per ward and each loop picks
+  one at random, never repeating the track that just played. Dropping in
+  `biome1-2.mp3` later is one string; the CI check (below) will then require that file too.
+- **No HTML5 `loop`.** The element's `loop` is explicitly `false`. A `timeupdate` handler
+  starts a **2-second fade-out** at the end of the track; on `ended` the next bed is picked
+  and faded **in** from silence over 1.2 s. A ward change cross-fades over 700 ms.
+- **Mute and the slider still work.** The element sits outside the WebAudio graph, so the
+  music volume is mirrored from `prefs.music` and the global mute:
+  `sfxToggleMute()` and `musicSetVolume()` both call `applyMusicVolume()`. Autoplay blocked
+  before the first gesture is retried on the next `pointerdown`.
+- **CI:** `music/**` now triggers the workflow, and a new "Music beds are present" step
+  reads every `.mp3` path out of `MUSIC_TRACKS` and fails if one is missing or empty — a
+  renamed upload would otherwise only show up as silence on the phone. The zip/unzip
+  workflow needed no change (its `tar` copy has no file-type filter). Copies of both
+  workflow files, with a short upload note, are in
+  `/sdcard/underward-workflows/` for manual upload.
+- **Verified:** `test_ui` 265 → 274 (a bed for every ward, every bed present and non-empty,
+  the four floor→ward mappings, the three entry points, start/ward-change/stop safe with no
+  audio implementation, and `.loop = false` + restart-on-`ended` pinned), `test_items`
+  274/274 and 84/84.
+
 ### Added — floor events, ambushes, and an heirloom
 
 - **Floor events.** Roughly 45% of non-boss floors now hide one prop on plain floor:
@@ -43,6 +70,30 @@ than narrating their own past.
   hook, and the whole heirloom cycle (offer on death, store, claim, consume, no offer on
   retreat). `test_ui` 220 → 254.
 
+### Fixed — top-edge rooms, and an inventory that could not scroll
+
+- **A room touching the map's top edge looked uncapped.** The grid was already sealed
+  (`levels.js` forces the outer ring to wall and fills interior void holes), so the wall
+  was there — it was behind the status strip. The camera clamps to row 0 at the top, which
+  put the wall row *under* the HUD, and a room with no visible stone above it read as open
+  sky. The board now owns only the space between the chrome: `#app` is padded by
+  `--hud-h` (measured from the real HUD) and by `--ui-bottom-px` (measured from the bag row
+  and the ability bar), the canvas is the only child in normal flow, and `Delve.resize()`
+  measures the **canvas** instead of `window.inner*`. Two `ResizeObserver`s rewrite those
+  two variables when the strip wraps or abilities appear, then re-fit the board.
+- **The player could stand behind the new bottom-right buttons.** Same cause, same fix: the
+  reserved bottom band is `max(52px, 58px + ability-bar height)`, so no control covers a
+  tile — the last row of the map ends above them.
+- **The inventory could not scroll.** It is the tallest screen (character figure, equipment
+  rack, then every carried item), and it was a flex column with no `overflow` — the carried
+  list ran off the bottom, so items could not be opened to consider equipping them. Now
+  `overflow-y:auto` with a sticky header (✕ stays reachable). `#levelupScreen`,
+  `#victoryScreen`, `#deathScreen` and `#eventScreen` got the same treatment, since each can
+  outgrow a short phone.
+- **Verified:** `test_ui` 262 → 265 (a finite, non-zero viewport after `resize()`, `#app`
+  inset by both measured variables, `#inventoryScreen` scrolling), `test_items` 265/265 and
+  84/84, `check-order` green.
+
 ### Fixed — the 🎒 was off the edge of the screen (HUD actions moved to the bottom)
 
 - **The bug.** `#hudMeta` was a single non-wrapping flex row in which every child was
@@ -50,14 +101,26 @@ than narrating their own past.
   rest chip were added, the row measured roughly 450px of fixed content while a phone
   offers 344–396px, so the tail of the row — ⚙ and 🎒 — was painted past the right edge and
   clipped by `body{overflow:hidden}`. The inventory was unreachable.
-- **The action cluster.** 📊 📍 ☰ 🎒 now sit in `#hudActions`, fixed to the **bottom-right**
-  at 44×44px, where a thumb reaches without regripping. It stays a child of `#hud`, so
-  every existing show/hide of the HUD hides it too, and `position:fixed` is what lifts it
-  out of the top strip. That in turn required moving the strip's plate, background and
-  `backdrop-filter` onto `#hud::before` — a filter would otherwise make `#hud` the
-  containing block for the fixed child.
+- **The action cluster.** 📊 📍 ☰ 🎒 now sit in `#hudActions`, in the **bottom-right** at
+  44×44px, where a thumb reaches without regripping. It is a sibling of `#hud` inside
+  `#app`, positioned against the app box rather than the top strip. Because it is no longer
+  a child, `Delve.setHudVisible(on)` now owns both elements and every screen change goes
+  through it (`startRun`, `resumeRun`, `showHub`, `hideHub`, `showTitle`, `closeShop`, the
+  victory continue) — otherwise the cluster could stay on the title screen.
 - **Top row is status only** — FLOOR, rests, 💰, 💎 — and `#hudMeta` gained `flex-wrap`, so
   a narrow phone can never push a chip off-screen again. Approximate width: 450px → 302px.
+- **The bottom edge is the visible viewport, not the layout viewport.** `#app` now sets
+  `height:100dvh` (with a `100vh` fallback), `Delve.resize()` measures that box instead of
+  `window.innerHeight`, and a `visualViewport` resize listener re-fits when a phone's URL
+  bar collapses. Before this, the board and everything anchored to the bottom edge could
+  sit under the toolbar.
+- **Nothing floats over a control any more.** The minimap panel moved from a bottom-right
+  float to just under the HUD (`top:calc(var(--hud-h) + 8px)`, where `--hud-h` is measured
+  by a `ResizeObserver` on `#hud`), so a wide ability bar can never sit beneath it. The
+  ability bar itself keeps wrapping and **scrolls** inside `max-height:34vh` — more
+  abilities than fit are reachable by scrolling, as before.
+- **The bag button shows its load** (`#invBtn::after`, `content:attr(data-bag)`, hidden at
+  0) and its title carries `n/cap`, written in `updateHUD`.
 - **`#statsBtn` was never styled.** It was left out of the `#invBtn, #minimapBtn, #gearBtn`
   selectors when the character sheet was added, so 📊 rendered as a raw UA button that
   matched nothing beside it. All four buttons now share one rule.
@@ -66,15 +129,15 @@ than narrating their own past.
   glass and the notch padding was reserved at the bottom. Now
   `calc(4px + inset-top) / 8px+inset-right / 6px / 8px+inset-left`.
 - **Bottom edge re-shuffled** so nothing overlaps: the 📜 pill moved to the bottom-left, the
-  ability bar to `bottom:58px` (clear of both the pill and the 44px cluster), and the
-  minimap panel now opens *above* the 📍 button instead of under the HUD.
+  ability bar to `bottom:58px` (clear of both the pill and the 44px cluster).
 - **The map button lights while its panel is up** (`#minimapBtn.active`), via a new
   `Delve.setMinimapOpen(open)` that both `showHub()` and `showTitle()` use, so the button's
   state cannot drift from the panel. A tap that opened a dark panel over a dark tile used to
   read as "the button did nothing".
-- **Verified:** `test_ui` 254 → 258 (lit state on/off, no action button back in the status
-  row, the four buttons inside `#hudActions`), `test_items` 254/254 and 84/84, exit 0. The
-  `test_items` DOM stub gained `classList.toggle`, without which `ui.js` no longer loaded.
+- **Verified:** `test_ui` 254 → 262 (lit state on/off, no action button back in the status
+  row, the four buttons inside `#hudActions`, the cluster hidden with the HUD, the bag
+  count and its title), `test_items` 262/262 and 84/84, exit 0. The `test_items` DOM stub
+  gained `classList.toggle` and `dataset`, without which `ui.js` no longer loaded.
 
 ### Changed — the HUD is three bars; the stats moved into a character sheet
 

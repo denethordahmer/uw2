@@ -123,7 +123,8 @@ window.Delve = window.Delve || {};
  Delve.showTitle = function(){
   if(Delve.hideAllScreens) Delve.hideAllScreens();
   $("levelupScreen").style.display = "none";
-  $("hud").style.display = "none";
+  if(Delve.setHudVisible) Delve.setHudVisible(false);
+  else $("hud").style.display = "none";
   $("abilityBar").style.display = "none";
   if(Delve.setMinimapOpen) Delve.setMinimapOpen(false);
   else $("minimapWrap").style.display = "none";
