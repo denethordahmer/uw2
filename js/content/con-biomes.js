@@ -36,8 +36,9 @@ window.Delve = window.Delve || {};
     ],
     // Floor growth (js/growth/core.js placeGrowth): an overgrown forest floor needs
     // more than the default — more rooms grow, bigger patches, biased toward
-    // wall bases so moss and roots climb the stone. BIOMES[1].growthPal supplies
-    // the yellow-green gradient; without this block placeGrowth bails entirely.
+    // wall bases so the mycelium climbs the stone. BIOMES[1].growthVeinPal supplies
+    // the IVORY gradient (not the yellow-green it used to); without this block
+    // placeGrowth bails entirely.
     growth:{ roomChance:0.88, largeArea:36, largeChance:0.60, bigChance:0.30,
            cornerBias:0.55, wallBias:0.42,
            sizeMin:0.55, sizeMax:1.10, bigSizeMin:1.30, bigSizeMax:2.10 },
@@ -60,11 +61,17 @@ window.Delve = window.Delve || {};
     } },
 
   { id:3, name:"The Frosted Vault", floors:[21,30], biome:2,
-    // Organic patches (layer1 port) — snow drifts; pale ice sheets come from
-    // wall-fed puddles (js/puddles.js), tinted by patchWater below.
-    patches:[
-      { type:"grass", seed:0.45, nGen:3, amount:0.08 }
-    ],
+    // No grass-style patches: the old snow drifts stamped a rounded white tile +
+    // little blades on whole tiles, which read as a repeated grid. The seamless
+    // "ice" floor (BIOMES[2].floorStyle) carries the surface instead; pale ice
+    // sheets come from wall-fed puddles (js/puddles.js), tinted by patchWater.
+    patches:[],
+    // Frost growth (js/growth/frost.js): hoarfrost ferns, angular ice dendrites
+    // that leave the walls and creep across the floor. Same per-room roll and
+    // linked-wall rule as the other wards' growth.
+    growth:{ roomChance:0.82, largeArea:36, largeChance:0.55, bigChance:0.28,
+           cornerBias:0.55, wallBias:0.42,
+           sizeMin:0.50, sizeMax:1.00, bigSizeMin:1.20, bigSizeMax:1.90 },
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
@@ -173,6 +180,26 @@ window.Delve = window.Delve || {};
     "M..MM..M........", "MD.M..MM........", "MDDM..M.........", "MDDDMDD........." ]
  ];
 
+ // Wall frost (js/growth/frost.js): the Frosted Vault's own climb, so biome 3
+ // does not borrow the Ruins' leafy stems or the Blackvein's threads. Straight
+ // crystalline struts leave the base and fork at sharp angles, each ending in a
+ // pale point. Same 16x16 grain and D/M/L letters as C.WALL_MOSS, so the shared
+ // wall pass recolours it from the biome's gradient.
+ C.WALL_FROST = [
+  [ ".......L........", ".......M........", "......LML.......", ".......M........",
+    ".......M........", "......MMM.......", ".......M........", ".....M.M.M......",
+    "......MMM.......", ".......M........", "......MMM.......", ".......M........",
+    "......MMM.......", ".....MMDMM......", "......MDM.......", "....MMDDDMM....." ],
+  [ "..L.....L.......", "..M.....M..L....", "...M...M...M....", "...M...M..MM....",
+    "....M.M..M......", "....MMM.M.......", ".....MMM........", "......M.........",
+    ".....MMM........", "....M.M.M.......", ".....MMM........", "......M.........",
+    ".....MMM........", "....MMDMM.......", ".....MDM........", "...MMDDDMM......" ],
+  [ "....L...L...L...", "....M...M...M...", "....M...M...M...", "...MM..MM..MM...",
+    "....M...M...M...", "....MM.MM.MM....", ".....MMMMM......", "......MMM.......",
+    ".......M........", "......MMM.......", ".....M.M.M......", "......MMM.......",
+    ".......M........", "......MDM.......", ".....MMDMM......", "...MMDDDDDMM...." ]
+ ];
+
  C.BIOMES = [
   { name:"Upper Ruins",
     wall:"#64707c", wallEdge:"#8d99a6", wallBrick:"#3a4248", mortar:"#0b0f14",
@@ -218,7 +245,15 @@ window.Delve = window.Delve || {};
     growthStyle:"mycelium",
     // Veins read paler than moss: damp white-green threads with dark roots, so
     // the strands separate from the brown soil instead of sinking into it.
-    growthVeinPal:["#2b3520","#4a5a28","#77883a","#a9bb63","#dfe9a8"],
+    // IVORY, not green (owner: the first pass read as biome 1's moss). Real
+    // mycelium is colourless cream under the soil, so the gradient runs from a
+    // dark root in the dirt to near-white tips — no hue that overlaps the
+    // Ruins' green moss or the Blackvein's yellow-green thorns.
+    growthVeinPal:["#3a3227","#6f6449","#a89b75","#ddd2ae","#f6efd8"],
+    // The dirt floor's own filaments (js/render/tiles.js dirtPixel) read this,
+    // so the soil threads and the growth agree. They used to borrow b.moss and
+    // were therefore green as well.
+    growthThread:"#ece4c6",
     clutter:"blackvein",
     // Ground-cover sprite (js/ground.js): blood moss creeping over the floor.
     groundCover:"ground_moss" },
@@ -226,6 +261,17 @@ window.Delve = window.Delve || {};
     wall:"#3a4a5e", wallEdge:"#7a9ac0", wallBrick:"#1a2436", mortar:"#0a1018",
     floor:"#2a3644", floor2:"#232e3c", moss:"#7ec8e0",
     water:"#1a3a5e", torch:"#a8e8ff", light:"rgba(180,220,255,0.07)",
+    // Seamless floor (owner pick): "ice" bakes a continuous glacial-crystal
+    // sheet — broad pale-blue pans, polygonal depth fractures and sparse
+    // rune-light seams — across the 3x3-tile torus, so no tile grid reads.
+    floorStyle:"ice",
+    // Wall look: vertical fracture lines instead of the masonry brick course.
+    wallStyle:"ice",
+    // Its own growth form (js/growth/frost.js): hoarfrost ferns, not the Ruins'
+    // moss nor the Blackvein's mycelium.
+    growthStyle:"frost",
+    // Dark frozen root → pale icy tip, in the Vault's blue-white.
+    growthFrostPal:["#1e3448","#2f5266","#4a7a94","#7fc0d8","#d3eaf4"],
     clutter:"frost",
     // Ground-cover sprite (js/ground.js): frozen puddles in the vault.
     groundCover:"ground_ice",

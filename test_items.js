@@ -393,6 +393,19 @@ ok(C.BIOMES[0].growthStyle === "moss" && C.BIOMES[1].growthStyle === "mycelium",
 ok(C.BIOMES[1].growthVeinPal && C.BIOMES[1].growthVeinPal.length >= 3 &&
    C.BIOMES[1].growthVeinPal.join() !== C.BIOMES[1].growthPal.join(),
    "the Blackvein has its own vein palette");
+// The owner's note: the first mycelium pass read as biome 1's moss. The palette
+// is now IVORY — no shade may be green-dominant, and the floor's own filaments
+// must use the same colour instead of borrowing b.moss.
+const hexRGB = function(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; };
+const greenish = (C.BIOMES[1].growthVeinPal || []).filter(function(h){
+  const c = hexRGB(h);
+  return (c[1] - c[0]) > 10;            // green above red = a green tint
+});
+ok(greenish.length === 0, "the mycelium palette is ivory, not green" +
+   (greenish.length ? " (green-dominant: " + greenish.join(",") + ")" : ""));
+ok(!!C.BIOMES[1].growthThread, "the Blackvein names its own floor-filament colour");
+ok((C.BIOMES[1].growthThread || "") !== C.BIOMES[1].moss,
+   "and it is not the moss colour the threads used to borrow");
 ok(Array.isArray(C.WALL_MYCELIUM) && C.WALL_MYCELIUM.length >= 2 &&
    C.WALL_MYCELIUM.every(function(d){ return d.length === 16 && d.every(r => r.length === 16); }),
    "the mycelium wall climbs are 16x16 art, like C.WALL_MOSS");
@@ -467,6 +480,82 @@ ok((bare.growth.floor || []).length === 0 && (bare.growth.walls || []).length ==
    "no growth block, no growth");
 C.WARDS[0].growth = savedWards;
 
+// ── the Frosted Vault: seamless ice floor + hoarfrost growth ──
+const vault = C.BIOMES[2];
+ok(vault.floorStyle === "ice", "biome 3 uses the seamless ice floor");
+ok(vault.wallStyle === "ice", "biome 3's walls use the ice fracture style");
+ok(vault.growthStyle === "frost" && !!D.growthStyles.frost, "biome 3 grows the frost form");
+ok(Array.isArray(C.WALL_FROST) && C.WALL_FROST.length >= 2 &&
+   C.WALL_FROST.every(function(d){ return d.length === 16 && d.every(r => r.length === 16); }),
+   "the frost wall climbs are 16x16 art");
+(function(){
+  const w3 = C.WARDS.filter(function(w){ return w.id === 3; })[0];
+  ok(!!w3 && !!w3.growth, "ward 3 has a growth block");
+  ok(!!w3 && Array.isArray(w3.patches) && w3.patches.length === 0,
+     "ward 3 grows no snow-patch tiles (that repeated white tile is gone)");
+})();
+
+// The floor itself: drive the real painter and capture the texture it blits.
+function floorTexture(biome, ts){
+  let tex = null;
+  const stub = {
+    save(){}, restore(){}, fillRect(){}, beginPath(){}, roundRect(){}, fill(){},
+    arc(){}, ellipse(){}, moveTo(){}, lineTo(){}, stroke(){}, closePath(){},
+    quadraticCurveTo(){}, arcTo(){}, translate(){}, rotate(){},
+    createRadialGradient:()=>({ addColorStop(){} }),
+    createLinearGradient:()=>({ addColorStop(){} }),
+    drawImage(img){ if(img && img._img && img.width === 48) tex = img; }
+  };
+  D.tiles._drawFloorTile(stub, 0, 0, ts || 32, 3, 3, biome);
+  return tex;
+}
+const iceTex = floorTexture(C.BIOMES[2]);
+ok(!!iceTex, "the ice floor bakes a 48x48 torus texture");
+if(iceTex){
+  const d = iceTex._img.data;
+  let sum = 0, dark = 0, n = 0;
+  for(let i = 0; i < d.length; i += 4){
+    const v = (d[i] + d[i+1] + d[i+2]) / 3;
+    sum += v; n++;
+    if(v < 100) dark++;
+  }
+  const mean = sum / n;
+  ok(mean > 115, "the ice floor reads pale, not dark stone (mean " + mean.toFixed(0) + ")");
+  ok(mean < 210, "but not blown-out white (mean " + mean.toFixed(0) + ")");
+  ok(dark / n > 0.01 && dark / n < 0.35,
+     "the fractures are thin dark seams (" + (100 * dark / n).toFixed(1) + "% dark)");
+  // and it is not the masonry: the ruins' texture must differ
+  const bondTex = floorTexture(C.BIOMES[0]);
+  let differs = false;
+  if(bondTex){
+    const e = bondTex._img.data;
+    for(let i = 0; i < d.length; i += 4){
+      if(Math.abs(d[i] - e[i]) > 8){ differs = true; break; }
+    }
+  }
+  ok(differs, "the ice floor is its own surface, not the ruins' masonry");
+}
+
+// Frost growth on a floor.
+const frostG = runGrowth(C.WARDS[2]);
+ok((frostG.growth.floor || []).length > 0, "the frost form places colonies on a floor");
+ok(!frostG.growth.error, "frost placement reported no error" +
+   (frostG.growth.error ? " (" + frostG.growth.error + ")" : ""));
+const frostImgs = bakeAll("frost", frostG, 2);
+ok(frostImgs.length === frostG.growth.floor.length && frostImgs.every(c => c && c._img),
+   "every frost colony bakes a canvas");
+const frostSplit = paintSplit(frostG, frostImgs);
+ok(frostSplit.on > 30, "the frost dendrites paint (" + frostSplit.on + " fine px)");
+ok(frostSplit.off === 0, "frost never paints off plain floor (" + frostSplit.off + ")");
+const fst = D.growthStyles.frost;
+const fpal = fst.palette ? fst.palette(C.BIOMES[2]) : C.BIOMES[2].growthPal;
+ok(C.BIOMES[2].growthFrostPal && C.BIOMES[2].growthFrostPal.join() === fpal.join(),
+   "frost uses the Vault's own palette");
+const fsp = frostG.growth.floor[0];
+const fb1 = fst.bake(fsp, fpal, D.growthUtil), fb2 = fst.bake(fsp, fpal, D.growthUtil);
+ok(!!fb1 && !!fb2 && Buffer.compare(Buffer.from(fb1._img.data), Buffer.from(fb2._img.data)) === 0,
+   "frost baking is deterministic per spot");
+
 // Integration: a real generated floor, not a hand-built grid, must end up with
 // growth in G.growth and bake without throwing (levels.js calls placeGrowth).
 let integrationOk = true, integrationMsg = "";
@@ -484,6 +573,15 @@ try {
   if(f15.error){ integrationOk = false; integrationMsg = "floor 15: " + f15.error; }
   const vbaked = (f15.floor || []).length ? bakeAll("mycelium", D.G, 1) : [];
   if(vbaked.some(c => !c)) { integrationOk = false; integrationMsg = "a vein bake returned null"; }
+  // and ward 3: ice floor + hoarfrost ferns
+  D.G.floor = 25;
+  D.genFloor();
+  const f25 = D.G.growth || {};
+  if(f25.error){ integrationOk = false; integrationMsg = "floor 25: " + f25.error; }
+  const fbaked = (f25.floor || []).length ? bakeAll("frost", D.G, 2) : [];
+  if(fbaked.some(c => !c)) { integrationOk = false; integrationMsg = "a frost bake returned null"; }
+  const tex = floorTexture(D.CONFIG.BIOMES[2]);
+  if(!tex) { integrationOk = false; integrationMsg = "the ice floor drew no texture"; }
 } catch(e){
   integrationOk = false;
   integrationMsg = e.message;

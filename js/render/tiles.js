@@ -35,6 +35,11 @@ window.Delve = window.Delve || {};
    // organic-patch colours (levels.js patches): a ward can restyle its grass
    // and water overlays as pure data — snow instead of moss, ice instead of water
    patchGrass: b.patchGrass || b.moss || "#3f6d55",
+   // The pale filaments running through an organic floor (the dirt style's
+   // mycelium threads) get their own colour. They used to borrow b.moss, which
+   // made biome 2's floor threads green — the same mistake that made its growth
+   // read as biome 1's moss.
+   growthThread: b.growthThread || b.moss || "#c4d096",
    patchWater: b.patchWater || b.water || "#1e3a4a",
    // Seamless floor + linked growth (js/growth/). floorStyle "runningbond" = the
    // baked 3x3 torus masonry pattern instead of per-tile slabs; growthLinked = the
@@ -182,7 +187,7 @@ window.Delve = window.Delve || {};
   // periodic noise only, for biomes whose floor is earth rather than masonry.
   // A biome opts in with floorStyle:"<name>"; anything unknown keeps the old
   // per-tile slab look.
-  const BOND_STYLES = { runningbond:true, dirt:true };
+  const BOND_STYLES = { runningbond:true, dirt:true, ice:true };
 
   // Exact 32-bit position hash for texture baking. Delve.hash3 (state.js) loses
   // precision on large float products and skews low for small integer inputs —
@@ -232,6 +237,54 @@ window.Delve = window.Delve || {};
    if(Math.abs(m - 0.5) < 0.011) base = mixRGB(base, thread || [196, 208, 150], 0.34);
    return base;
   }
+  // Glacial crystal floor (The Frosted Vault): continuous pale-blue ice panes,
+  // no lattice and no per-tile rectangle, so the floor reads as one sheet no
+  // matter how it tiles. Broad pans + finer clumping carry the tone (like the
+  // dirt field), polygonal depth fractures give the "cracked glass" read, and a
+  // few pale rune-seams glow near the cracks — the rune-lit ice-palace floor
+  // the owner picked, kept coarse enough that the 3x3 torus never shows.
+  function icePixel(px, py, S, floorA, floorB, glow){
+   const n1 = periodicNoise(px, py, 4, S, 1601);   // the big panes
+   const n2 = periodicNoise(px, py, 9, S, 1603);   // surface undulation
+   const grit = texHash(px, py, 1607) - 0.5;
+   const pale = [150, 190, 218];                   // glacial white-blue
+   const deep = mixRGB(mixRGB(floorA, floorB, 0.5), [96, 132, 170], 0.62);  // biome-tinted blue
+   // The sheet itself: mostly pale ice drifting between white-blue and blue,
+   // with a glassy sheen where the pane is thin. An ice-palace floor reads
+   // LIGHT; the dark stone tones only belong in the seams.
+   const t = n1 * 0.65 + n2 * 0.35;
+   let base = mixRGB(pale, deep, 0.18 + t * 0.42);
+   base = mixRGB(base, [255, 255, 255], Math.max(0, 0.35 - t) * 0.20);
+   base = mixRGB(base, [0, 0, 0], Math.max(0, grit) * 0.07);
+   // A network of long seams: three noise fields at different periods, so the
+   // cracks CROSS like cracked glass instead of running parallel. Each seam is
+   // dark with a pale refracted highlight just outside it.
+   // The band is ~half a pixel wide per field (a field of N periods across S
+   // pixels changes by about N/S per pixel), which is what makes the seam a
+   // continuous hairline instead of a dotted one.
+   // Domain warp: the seams are sampled at a coordinate nudged by two slow
+   // noise fields, so they wander like real fractures instead of running dead
+   // straight (straight lines would tile as stripes, which is its own grid).
+   const wx = (periodicNoise(px, py, 5, S, 1641) - 0.5) * 11;
+   const wy = (periodicNoise(px, py, 5, S, 1643) - 0.5) * 11;
+   const fields = [[3, 1621], [6, 1623]];
+   let seam = 0, sheen = 0;
+   for(let i = 0; i < fields.length; i++){
+    const band = 0.55 * fields[i][0] / S;
+    const v = Math.abs(periodicNoise(px + wx, py + wy, fields[i][0], S, fields[i][1]) - 0.5);
+    if(v < band) seam = Math.max(seam, 1 - v / band);
+    else if(v < band * 1.9) sheen = Math.max(sheen, 1 - (v - band) / (band * 0.9));
+   }
+   if(seam > 0) base = mixRGB(base, [34, 52, 74], 0.30 + seam * 0.45);
+   else if(sheen > 0) base = mixRGB(base, [235, 248, 255], sheen * 0.35);
+   // Rune-light: rare pale glyph seams glowing up through the ice.
+   const r = periodicNoise(px, py, 6, S, 1631);
+   if(r > 0.80 && texHash(px, py, 1633) > 0.72){
+    base = mixRGB(base, glow, 0.28 + (r - 0.80) * 1.5);
+   }
+   return base;
+  }
+
   function bondTexture(b){
    const style = BOND_STYLES[b.floorStyle] ? b.floorStyle : "runningbond";
    const key = style + "|" + b.floor + "|" + b.floor2;
@@ -249,13 +302,18 @@ window.Delve = window.Delve || {};
    // soil; every other style uses the interlocking masonry courses below.
    const COL_W = 8, ROW_H = 16;
    const isDirt = style === "dirt";
-   const thread = b.moss ? rgbOf(b.moss) : [196, 208, 150];
+   const isIce = style === "ice";
+   const thread = b.growthThread ? rgbOf(b.growthThread) : (b.moss ? rgbOf(b.moss) : [196, 208, 150]);
+   const iceGlow = b.moss ? rgbOf(b.moss) : [126, 200, 224];
    for(let py = 0; py < S; py++){
     for(let px = 0; px < S; px++){
      let col3;
      if(isDirt){
       // no seams anywhere — smooth earth with pale mycelium threads
       col3 = dirtPixel(px, py, S, floorA, floorB, thread);
+     } else if(isIce){
+      // no seams anywhere — continuous glacial sheet with fractures + rune-light
+      col3 = icePixel(px, py, S, floorA, floorB, iceGlow);
      } else {
      const col = (px / COL_W) | 0;              // 0..5 across the torus
      const lx = px % COL_W;
@@ -313,11 +371,11 @@ window.Delve = window.Delve || {};
    // and then stamped as a flat fillRect across the whole tile, so each tile
    // becomes a hard-edged rectangle of a single alpha — neighbouring tiles get
    // different alphas and the boundary reads as a square grid. That rectangle is
-   // exactly what this style exists to avoid. The dirt field already carries its
-   // own multi-octave variation (broad patches, clumping, dry flecks, mycelium),
-   // so the texture does its own shading and there is no per-tile rectangle to
-   // see. Masonry keeps the overlay, byte for byte, so ward 1 is untouched.
-   if(b.floorStyle !== "dirt"){
+   // exactly what this style exists to avoid. The dirt field (and the ice field
+   // now) already carries its own multi-octave variation, so the texture does its
+   // own shading and there is no per-tile rectangle to see. Masonry keeps the
+   // overlay, byte for byte, so ward 1 is untouched.
+   if(b.floorStyle !== "dirt" && b.floorStyle !== "ice"){
     const t = floorTone(gx, gy);
     ctx.save();
     ctx.globalAlpha = 0.05 + Math.abs(t - 0.5) * 0.22;
@@ -494,6 +552,30 @@ window.Delve = window.Delve || {};
   if(mood===2){ ctx.fillStyle="rgba(60,90,60,0.22)"; ctx.fillRect(sx,sy,ts,ts); }
   if(mood===3){ const grad=ctx.createLinearGradient(sx+ts*0.5,sy,sx+ts*0.5,sy+ts); grad.addColorStop(0,"rgba(70,40,20,0.40)"); grad.addColorStop(0.6,"rgba(50,30,15,0.14)"); grad.addColorStop(1,"rgba(0,0,0,0)"); ctx.fillStyle=grad; ctx.fillRect(sx+ts*0.25,sy,ts*0.5,ts); }
   if(ts>=20){
+   if(b.wallStyle === "ice"){
+    // Ice-palace wall: vertical fracture lines instead of a brick course. The
+    // crack columns are smooth functions of position, so they keep running
+    // across neighbouring tiles exactly like the masonry courses did — a wall
+    // mass reads as one cracked ice sheet, not a stack of stones.
+    const fx1 = x0 + (x1 - x0) * (0.30 + Math.sin(gx * 1.9 + gy * 0.6) * 0.06);
+    const fx2 = x0 + (x1 - x0) * (0.68 + Math.cos(gx * 1.3 + gy * 2.1) * 0.06);
+    const jag = function(x){
+     let yy = y0 + 1, dx = x;
+     ctx.moveTo(dx, yy);
+     while(yy < y1 - 1){
+      yy = Math.min(y1 - 1, yy + ts * 0.11);
+      dx = x + Math.sin((yy / ts) * 3.1 + gx * 1.9 + gy * 0.7) * ts * 0.035;
+      ctx.lineTo(dx, yy);
+     }
+    };
+    ctx.strokeStyle = b.wallBrick; ctx.lineWidth = 1;
+    ctx.globalAlpha = mood===1 ? 0.55 : 0.36;
+    ctx.beginPath(); jag(fx1); jag(fx2); ctx.stroke();
+    // bright hoar-frost edge caught along the lit side of the first crack
+    ctx.strokeStyle = b.wallEdge; ctx.globalAlpha = mood===1 ? 0.50 : 0.30;
+    ctx.beginPath(); jag(fx1 - ts * 0.03); ctx.stroke();
+    ctx.globalAlpha = 1;
+   } else {
    // sagging course line + jittered verticals: masonry, not a grid
    ctx.strokeStyle=b.wallBrick; ctx.lineWidth=1; ctx.globalAlpha=mood===1?0.55:0.38;
    ctx.beginPath();
@@ -517,6 +599,7 @@ window.Delve = window.Delve || {};
     const by0 = upper? y0+2 : midY+2, by1 = upper? midY-1 : y1-2;
     ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(bx0,by0,bx1-bx0,by1-by0);
     ctx.fillStyle=b.wallBrick; ctx.fillRect(bx0+(bx1-bx0)*0.3, by0-1, (bx1-bx0)*0.25, 2);
+   }
    }
   }
   // the biome's own growth creeping over the top edge: lichen in the

@@ -6,9 +6,9 @@ re-discovered. `docs/architecture.md` remains the reference for how the code wor
 ## State (verified at handoff)
 
 **Green gate:** `node test_items.js` → **PASSED 281/281** from `test_ui.js`, then
-`loaded 44 scripts` and **PASSED 116/116** from `test_items.js` (it runs `test_ui.js`
+`loaded 45 scripts` and **PASSED 134/134** from `test_items.js` (it runs `test_ui.js`
 first), exit 0. `node tools/check-order.js`
-→ green (42 scripts, manifest = index.html). Every `.js` passes `node --check`.
+→ green (45 scripts, manifest = index.html). Every `.js` passes `node --check`.
 
 **Working tree is uncommitted.** HEAD is `e3d5baf`. Built since then, all tested:
 
@@ -37,10 +37,17 @@ first), exit 0. `node tools/check-order.js`
    `js/growth/{core,moss,mycelium}.js`: core owns rooms/anchors/bake cache/wall
    climbs and the two draw seams, and a biome NAMES its form with
    `BIOMES[n].growthStyle` (`Delve.registerGrowthStyle`). Biome 1 = `moss` (the old
-   code moved, bakes pixel-identical), biome 2 = `mycelium` (thin branching veins with
+   code moved, bakes pixel-identical), biome 2 = `mycelium` (IVORY webbing — fans, cross-links and a mat; never green, with
    `growthVeinPal` and `C.WALL_MYCELIUM` climb art). Biomes 3–4 name nothing yet, so
    they grow nothing — that is Procedure C's job, and it is now a new file each.
-7. **Background music** — four beds in `music/` (biome1-1 … biome4-1.mp3), played by
+7. **Biome 3 overhauled (latest).** Owner picked *rune-lit glacial crystal* for the floor
+   and *hoarfrost ferns* for the growth. `BOND_STYLES.ice` bakes a seamless pale sheet
+   (panes + domain-warped fractures + rare rune seams) and, like dirt, skips the per-tile
+   tone overlay; `wallStyle:"ice"` swaps the brick course for vertical fracture lines;
+   ward 3's `patches` is empty so the repeated white snow tile is gone; `js/growth/frost.js`
+   registers the "frost" form with `growthFrostPal` and `C.WALL_FROST`. Biomes 1–2 are
+   untouched (masonry/dirt and moss/mycelium byte for byte).
+8. **Background music** — four beds in `music/` (biome1-1 … biome4-1.mp3), played by
    `sfx.js` via `MUSIC_TRACKS` (one array per ward, ward from `getWard`: 1–10 → 1 …
    31–40 → 4). No HTML5 `loop`: 2s tail fade-out, then `ended` picks the next bed and
    fades in; 700 ms cross-fade on ward change. Mute and the music slider are mirrored
@@ -138,27 +145,27 @@ Do not simply double the number. In order:
 7. **Verify:** simulate 10 floors per ward (items seen, bag-full events, sell total), then
    a phone run counting *useful upgrades* per floor, not raw drops.
 
-## Procedure C — biomes 3 and 4, seamless floor and wall
+## Procedure C — biome 4, seamless floor and wall (biome 3 is done)
 
-**Growth half is ready:** `js/growth/frost.js` and `js/growth/bone.js` each register a
-form (`frost`: creeping ice ferns; `bone`: dry cracks and dust fans), add the name to
-`BIOMES[2].growthStyle` / `BIOMES[3].growthStyle` plus a `growth` block on wards 3–4,
-and register them in `js/manifest.js` + `index.html`. No edit to `core.js` should be
+Biome 3 shipped as the pattern to copy: pick the floor + growth with the owner first, then
+`BOND_STYLES.<style>` in `js/render/tiles.js` (+ skip `floorTone` if the field is organic),
+`floorStyle`/`wallStyle`/`growthStyle` on the biome, a `growth` block on the ward, and one
+new file under `js/growth/` registering its form. No edit to `js/growth/core.js` should be
 needed — if one is, the seam is wrong; fix the seam, not the form.
 
-1. Add two baked torus styles to `bondTexture`'s dispatch: **"ice"** (large cracked ice
-   sheets, no lattice, pale seams that wander) and **"bone"** (packed bone-dust / rubble
-   flagging with no square joints). Reuse the existing 3×3 torus so edges continue.
-2. Set `floorStyle:"ice"` on `BIOMES[2]` and `floorStyle:"bone"` on `BIOMES[3]`, and add
-   both to `BOND_STYLES`. Verify at 2× zoom on floors 21 and 31 that no tile edge reads.
-3. **Walls:** add a per-biome `wallStyle` flag. Replace the per-tile brick course with a
-   continuous course texture for these two biomes (ice: vertical fracture lines that cross
-   tile edges; bone: stacked long bones / banded dust). Keep the existing exposure, inset,
-   wobble, rounded corners, torch sheen and drop shadows — only the interior pattern
-   changes.
-4. Do not touch biomes 1–2: ward 1's floor is explicitly locked ("byte for byte") and
-   ward 2's dirt field is deliberate.
-5. Check `test.html` §4/§5 still pass (clutter family and boss sprite checks).
+What is left for the Bone Ossuary (biome 4, ward 4, floors 31–40):
+
+1. **Floor:** a `"bone"` torus style — packed bone-dust / rubble flagging with no square
+   joints (owner has not picked the exact look yet; ask first, as with the Vault).
+2. **Walls:** `wallStyle:"bone"` — stacked long bones / banded dust instead of the brick
+   course, keeping the existing exposure, inset, wobble, corners and shadows.
+3. **Growth:** its own form (e.g. `js/growth/bone.js`: dry cracks and dust fans) with a
+   palette and climb art, plus a `growth` block on ward 4 (it has none today).
+4. Ward 4 still has a bone-dust grass patch (`patches` amount 0.22) — decide with the owner
+   whether that repeated-tile look survives, the way it did not in the Vault.
+5. Do not touch biomes 1–2 or 3: ward 1's floor is locked ("byte for byte"), ward 2's dirt
+   field is deliberate, and ward 3's ice was just signed off.
+6. Check `test.html` §4/§5 still pass (clutter family and boss sprite checks).
 
 ## Deferred — monsters that move on sight (last)
 

@@ -11,6 +11,56 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Changed — the Blackvein's mycelium is ivory webbing, not green
+
+- **The owner's note:** *it currently looks the same colour as moss from biome 1*.
+  Correct, and there were two causes. The palette was olive/yellow-green
+  (`#2b3520 … #dfe9a8`), a shade away from the Ruins' moss; and the shape was a
+  handful of near-parallel strands, which is what a moss patch looks like.
+- **Ivory palette.** `BIOMES[1].growthVeinPal` is now
+  `#3a3227 → #6f6449 → #a89b75 → #ddd2ae → #f6efd8` — a dark root under the soil
+  running to near-white tips, the way real mycelium is colourless cream. No shade is
+  green-dominant, and a test now asserts exactly that so it cannot drift back.
+- **The floor's own filaments were green too.** The dirt style's mycelium threads borrowed
+  `b.moss`, so they were yellow-green by default. They now read
+  `BIOMES[1].growthThread` (`#ece4c6`), so soil threads and growth agree.
+- **Webbing instead of a spray.** A colony is now 3–5 primary filaments fanning out of the
+  anchor, each forking 2–3 times, plus **cross-links** between filaments near the base —
+  straight 1-px bridges at lower alpha. A soft dithered cream mat sits at the wall base
+  (about 1.5 tiles across) and the fringes stay open threads, which is what makes it read
+  as a cobweb colony rather than a stain. Measured: ~7% of the colony canvas painted, with
+  roughly a third of that in the mat.
+
+### Changed — the Frosted Vault: a seamless ice floor, ice walls, hoarfrost growth
+
+- **The owner's report:** clearly segmented floor tiles, a white snow tile repeated over
+  and over, and small white marks scattered on tiles. All three were real: biome 3 had no
+  `floorStyle` (so every tile drew its own rounded slab), the snow was a
+  grass-style patch stamped whole-tile with its blades, and the marks were the frost weed.
+- **Seamless "ice" floor (owner's pick: rune-lit glacial crystal).** A new
+  `BOND_STYLES.ice` bakes a continuous glacial sheet into the same 16-px/tile 3x3
+  torus that biomes 1 and 2 use: large pale panes, a network of wandering dark fractures
+  (domain-warped so they never run dead straight) with a pale refracted sheen, and rare
+  blue rune-light seams. Like the dirt field it **skips** the per-tile `floorTone` overlay,
+  which is the last thing that could have re-introduced a square per tile.
+- **The repeated snow tile is gone.** Ward 3's `patches` is now empty, so no GRASS
+  tiles (white rounded square + blades) are painted there at all; pale ice sheets still
+  come from the wall-fed puddles.
+- **Ice walls.** New `wallStyle:"ice"` replaces the masonry brick course with
+  vertical fracture lines whose positions are smooth functions of the tile, so a wall mass
+  reads as one cracked ice sheet instead of a stack of stones, with a hoar-frost highlight
+  down the lit side of each crack. Any biome without `wallStyle` keeps its old walls
+  byte for byte.
+- **Hoarfrost growth (owner's pick: crystalline frost branches).** `js/growth/frost.js` is
+  the Vault's own form: 2-3 fronds fan out of a wall base or corner as runs of straight
+  1-px struts joined by discrete turns, forking at crystal angles up to three deep and
+  ending in points. It has its own blue-white palette (`growthFrostPal`) and its own
+  climb art (`C.WALL_FROST`). Biome 3 now names `growthStyle:"frost"` and ward 3
+  carries a `growth` block, so floors 21-30 grow frost where they grew nothing before.
+- **Checked, not guessed:** the baked floor is pale (mean brightness ~152, only ~14% of
+  pixels dark enough to be a seam), a real generated floor 25 grows and bakes frost, and
+  every growth form still paints only on plain floor.
+
 ### Changed — growth is one form per biome, and biome 2 finally has its own
 
 - **The owner's report:** *biome 2 uses the same moss as biome 1*. It did — one

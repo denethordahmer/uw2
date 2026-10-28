@@ -62,6 +62,7 @@ window.Delve = window.Delve || {};
   "js/growth/core.js",       // growth framework: placement, bake cache, wall climbs
   "js/growth/moss.js",       // form "moss"      — the Upper Ruins' lobed patches
   "js/growth/mycelium.js",   // form "mycelium"  — the Blackvein's branching veins
+  "js/growth/frost.js",      // form "frost"     — the Frosted Vault's hoarfrost ferns
   "js/puddles.js",
 
   // ── systems ────────────────────────────────────────────────

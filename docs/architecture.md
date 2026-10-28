@@ -278,13 +278,13 @@ called from the end of both `genFloor` and `genBossFloor`. Everything is read at
 so the file has no load-order position of its own — it sits after `levels.js` only to group
 generation code.
 
-**`js/growth/core.js`, `js/growth/moss.js`, `js/growth/mycelium.js`**
+**`js/growth/core.js` + one file per form: `moss.js`, `mycelium.js`, `frost.js`**
 The wards' organic growth, as an **open set of forms — one per biome**. A biome names its form
 with `BIOMES[n].growthStyle`; the form registers itself through
 `Delve.registerGrowthStyle(id, { place, bake, palette?, wallDesigns? })`, so adding a biome's
 own growth is a new file under `js/growth/` plus that one string — no branch in the framework.
-Registered today: `"moss"` (the Upper Ruins' lobed patches) and `"mycelium"` (the Blackvein's
-branching veins).
+Registered today: `"moss"` (the Upper Ruins' lobed patches), `"mycelium"` (the Blackvein's
+branching veins) and `"frost"` (the Frosted Vault's angular hoarfrost dendrites).
 - **core.js** owns the shared rules and both public draw seams: `Delve.placeGrowth` (end of
   `genFloor`/`genBossFloor`), `Delve.drawGrowthFloor` (after `drawGroundCover`),
   `Delve.drawGrowthWalls` (after the wall pass). It finds the rooms (flood fill of
@@ -301,13 +301,22 @@ branching veins).
   shades of the biome's `growthPal`; dark root at the wall, bright tips facing open floor;
   the rim is nibbled fine-pixel by fine-pixel, so no edge is ever a clean curve. Ward 1's
   art is unchanged by the split (same anchors, same seeds, pixel-identical bakes).
-- **mycelium.js** — veins, not a carpet: a colony is 1–9 thin strands that leave the wall or
-  corner, wander, fork up to three deep and taper to single-pixel tips, sometimes curling
-  into a fairy ring. Each colony rolls its heading, curl, branching rate, width and reach, so
-  shapes vary widely on purpose; the strands are stamped pixel by pixel (no canvas strokes)
-  and clip to plain FLOOR. The tile set the strands cover is recorded at placement, so the
-  walls they reach get climbs (the linked rule). It has its own palette
-  (`BIOMES[1].growthVeinPal`) and its own climb art (`C.WALL_MYCELIUM`).
+- **mycelium.js** — ivory WEBBING: 3–5 primary filaments fan out of the wall base or corner,
+  each forking 2–3 times, plus cross-links between filaments near the base (straight 1-px
+  bridges at lower alpha) and a soft dithered cream mat roughly 1.5 tiles across at the
+  anchor — fringes stay open threads. Everything is stamped pixel by pixel (no canvas
+  strokes) and clips to plain FLOOR. The tile set the threads cross is recorded at placement,
+  so the walls they reach get climbs (the linked rule). **It is deliberately not green:** the
+  palette (`BIOMES[1].growthVeinPal`) runs from a dark root to near-white tips, because the
+  first pass used the biome's yellow-green and read as biome 1's moss (the owner's note), and
+  a test asserts no shade is green-dominant. Its climb art is `C.WALL_MYCELIUM`. The dirt
+  floor's own filaments use `BIOMES[1].growthThread` for the same reason — they used to
+  borrow `b.moss` and were green too.
+- **frost.js** — crystalline, not organic: 2–3 fronds fan out of the anchor at crystal
+  angles, each a run of straight 1-px struts joined by discrete turns, forking at 0.85–1.3 rad
+  up to three deep and ending in a bar-backed point. It stamps hard-edged pixels (no dither
+  blur), has its own blue-white palette (`BIOMES[2].growthFrostPal`) and its own climb art
+  (`C.WALL_FROST`).
 - **Shared rules.** Every form paints **only plain FLOOR** — walls, doors, water, stairs,
   chests and props cut it. Growth never enters the grid, never blocks, never shows on the
   minimap and never enters the run snapshot: a floor re-rolls its growth on every generation
@@ -412,7 +421,15 @@ Two destinations: a rolling strip (`#combatLog`) and a modal (`#logWindowContent
 `texHash`, `drawFloorTile`, `drawWeed`, `drawDoorTile`, `drawGrassPatch`, `drawStairs`,
 `arenaTorches` and the seamless-floor texture bakers.
 The tile atlas: the offscreen per-tile cache, every per-tile painter and the 48×48 torus
-texture bakers (Phase 3). Split out of `render.js` by verbatim move — the moved body is
+texture bakers (Phase 3). **Floor styles** (`BOND_STYLES`, chosen by `BIOMES[n].floorStyle`):
+`runningbond` (the Upper Ruins' interlocking masonry), `dirt` (the Blackvein's continuous
+soil with mycelium threads) and `ice` (the Frosted Vault's glacial crystal — pale panes,
+wandering depth fractures and sparse rune-light). Each bakes into the same 16-px/tile 3×3
+torus so the pattern continues across tile edges for any room size; the two organic fields
+also **skip** the per-tile `floorTone` overlay, because a per-tile rectangle of one alpha is
+exactly the square grid the seamless styles exist to remove. **Wall style**
+(`BIOMES[n].wallStyle`): absent = the masonry brick course; `"ice"` replaces it with
+position-based vertical fracture lines that keep running across neighbouring tiles. Split out of `render.js` by verbatim move — the moved body is
 byte-identical to the lines it replaced, and `render.js` destructures it back into the same
 local names, so no call site changed.
 Depends only on `Delve.hash2`/`hash3`, `Delve.rgbOf`/`mixRGB`/`blendHex`, `Delve.getWard`,
@@ -715,37 +732,38 @@ copy of the list. **If you add, remove or reorder a script, edit the manifest an
  9  js/content/con-progression.js
  10 js/save.js
  11 js/attrs.js
- 12 js/itemgen.js                      ← item construction: quality budget, stats, affixes
- 13 js/items.js                        ← item runtime: price, sell, pickup, equip, shop
+ 12 js/itemgen.js                       ← item construction: quality budget, stats, affixes
+ 13 js/items.js                         ← item runtime: price, sell, pickup, equip, shop
  14 js/sprites.js
- 15 js/content/con-bosssprites.js      ← ordering exception (needs sprites.js)
- 16 js/content/con-itemsprites.js      ← same constraint (needs sprites.js)
- 17 js/content/con-worldart.js         ← same constraint (needs sprites.js)
- 18 js/content/con-monstersprites.js   ← same constraint (needs sprites.js)
+ 15 js/content/con-bosssprites.js       ← ordering exception (needs sprites.js)
+ 16 js/content/con-itemsprites.js       ← same constraint (needs sprites.js)
+ 17 js/content/con-worldart.js          ← same constraint (needs sprites.js)
+ 18 js/content/con-monstersprites.js    ← same constraint (needs sprites.js)
  19 js/state.js
- 20 js/gen/bsp.js                      ← floor-plan geometry
- 21 js/gen/bossarena.js                ← boss floors: arena layout + dressing
+ 20 js/gen/bsp.js                       ← floor-plan geometry
+ 21 js/gen/bossarena.js                 ← boss floors: arena layout + dressing
  22 js/levels.js
- 23 js/ground.js                       ← no load-dependency; grouped with generation
- 24 js/growth/core.js                 ← growth framework: rooms, anchors, bake cache, climbs
- 25 js/growth/moss.js                 ← form "moss": lobed patches (needs core)
- 26 js/growth/mycelium.js             ← form "mycelium": veins (needs core)
- 27 js/puddles.js                      ← no load-dependency; grouped with generation
- 28 js/traits.js
- 29 js/combat.js
- 30 js/movement.js                     ← follows combat.js
- 31 js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
- 32 js/effects.js
- 33 js/sfx.js
- 34 js/log.js
- 35 js/render/tiles.js                 ← tile atlas; render.js destructures Delve.tiles
- 36 js/render.js
- 37 js/pathfind.js
- 38 js/input.js
- 39 js/ui.js
- 40 js/menu.js
- 41 js/progression.js
- 42 js/main.js
+ 23 js/ground.js                        ← no load-dependency; grouped with generation
+ 24 js/growth/core.js                   ← growth framework: rooms, anchors, bake cache, climbs
+ 25 js/growth/moss.js                   ← form "moss": lobed patches (needs core)
+ 26 js/growth/mycelium.js               ← form "mycelium": veins (needs core)
+ 27 js/growth/frost.js                  ← form "frost": hoarfrost ferns (needs core)
+ 28 js/puddles.js                       ← no load-dependency; grouped with generation
+ 29 js/traits.js
+ 30 js/combat.js
+ 31 js/movement.js                      ← follows combat.js
+ 32 js/rewards.js                       ← follows combat.js (uses Delve.rowFor)
+ 33 js/effects.js
+ 34 js/sfx.js
+ 35 js/log.js
+ 36 js/render/tiles.js                  ← tile atlas; render.js destructures Delve.tiles
+ 37 js/render.js
+ 38 js/pathfind.js
+ 39 js/input.js
+ 40 js/ui.js
+ 41 js/menu.js
+ 42 js/progression.js
+ 43 js/main.js
 ```
 
 ### Hard constraints (violate = silent breakage)

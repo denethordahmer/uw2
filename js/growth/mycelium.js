@@ -1,19 +1,18 @@
 window.Delve = window.Delve || {};
 (function(){
-  // ── js/growth/mycelium.js : the Blackvein's veins ──────────────
-  // Biome 2's own growth form (the owner's call: wet forest floors sprout veins,
-  // not the Ruins' lobes). A colony is a handful of THIN branching strands that
-  // crawl out of a wall base or a corner, wander, fork 2-3 deep and thin toward
-  // their tips — mycelium threads, not a carpet. Its shapes vary widely on
-  // purpose: each colony rolls a heading, a curl, a branching rate, a width and
-  // a reach, and roughly one in six instead curls all the way round into a
-  // fairy ring.
+  // ── js/growth/mycelium.js : ivory mycelium WEBBING (The Blackvein) ──
+  // Biome 2's own growth form. The owner's note on the first pass was exact: it
+  // read as more of biome 1's moss, because its palette was still yellow-green
+  // and its shape was a handful of parallel strands. Both are fixed here —
+  // mycelium is now IVORY: dense pale cream threads that fan out of a wall base
+  // and cross-link into cobweb mats, the way real fungal mycelium runs under
+  // soil. Nothing about it is green, so it cannot be mistaken for the Ruins'
+  // moss, nor for the Blackvein's thorn/vine clutter.
   //
-  // Everything is stamped pixel by pixel at 16 fine pixels per tile (no canvas
-  // strokes), so the strands stay crisp at any zoom, and only plain FLOOR
-  // takes paint. The strands' tile positions are recorded while placing, which
-  // is how a wall learns it has mycelium climbing it (the linked rule) without
-  // baking anything at generation time.
+  // The framework (rooms, anchors, bake cache, wall climbs) is js/growth/core.js;
+  // this file only decides what the growth looks like. Shape data is generated in
+  // TILE units at placement (so the tiles it crosses can link walls without
+  // baking anything), then stamped pixel by pixel at 16 fine px/tile at draw.
 
   const PX = 16;
   const T = function(){ return Delve.T; };
@@ -29,57 +28,82 @@ window.Delve = window.Delve || {};
     return lo + Math.random() * Math.max(0, hi - lo);
   }
 
-  // Grow the strands in tile units. Returns [{ pts:[[x,y,t,w]…], ring:bool }]
-  // with x/y in TILE units (so a spot can be reasoned about without a canvas).
-  function growStrands(G, spot, rnd){
-    const strands = [];
-    const ring = rnd() < 0.18;
-    const reachPx = spot.reach * PX;               // how far a strand travels
-    const curl = ring ? (2 * Math.PI * (0.7 + rnd() * 0.3)) : 0;
-    const jitter = ring ? 0.06 : 0.16 + rnd() * 0.22;
-    const branchP = (0.012 + rnd() * 0.030) * 3;   // forks per step, capped by size below
-    const width0 = 0.55 + rnd() * 0.35;            // fine px: a thread, not a smear
-    const origin = [spot.x + 0.5, spot.y + 0.5];
-    const queue = [{ x: origin[0], y: origin[1], ang: Math.atan2(spot.dirY, spot.dirX),
-                     steps: Math.round(reachPx * (0.85 + rnd() * 0.45)), depth: 0 }];
-    let guard = 0;
-    while(queue.length && guard++ < 9){
-      const q = queue.shift();
-      const pts = [];
-      let ang = q.ang, x = q.x, y = q.y;
-      for(let s = 0; s < q.steps; s++){
-        const t = q.steps <= 1 ? 1 : s / (q.steps - 1);
-        ang += ring ? (curl / q.steps) : (rnd() - 0.5) * jitter;
-        // pull gently back toward the colony's heading: veins creep OUT
-        if(!ring){
-          const want = Math.atan2(spot.dirY, spot.dirX);
-          let d = want - ang;
-          while(d > Math.PI) d -= Math.PI * 2;
-          while(d < -Math.PI) d += Math.PI * 2;
-          ang += d * 0.05;
-        }
-        x += Math.cos(ang) / PX;
-        y += Math.sin(ang) / PX;
-        // only where the floor is walkable plain stone
-        const tx = Math.floor(x), ty = Math.floor(y);
-        const row = G.grid[ty];
-        if(!row || row[tx] !== T().FLOOR) break;
-        const w = Math.max(0.52, width0 * (1 - t * 0.35));
-        pts.push([x, y, t, w]);
-        if(q.depth < 3 && s > 11 && s < q.steps - 4 && rnd() < branchP * 4){
-          const side = rnd() < 0.5 ? -1 : 1;
-          queue.push({ x: x, y: y, ang: ang + side * (0.75 + rnd() * 0.75),
-                       steps: Math.max(6, Math.round((q.steps - s) * (0.45 + rnd() * 0.35))),
-                       depth: q.depth + 1 });
-        }
-      }
-      if(pts.length > 2) strands.push({ pts: pts, ring: ring && q.depth === 0 });
+  // Walk one thread: a 1-px crawl that wanders (no rings, no blobs — webbing is
+  // straight-ish filaments that fork). Returns the point list in tile units.
+  function walk(G, x0, y0, ang0, steps, rnd, curl){
+    const pts = [];
+    let ang = ang0, x = x0, y = y0;
+    for(let s = 0; s < steps; s++){
+      const t = steps <= 1 ? 1 : s / (steps - 1);
+      ang += (rnd() - 0.5) * curl;
+      x += Math.cos(ang) / PX;
+      y += Math.sin(ang) / PX;
+      const tx = Math.floor(x), ty = Math.floor(y);
+      const row = G.grid[ty];
+      if(!row || row[tx] !== T().FLOOR) break;   // never off plain floor
+      pts.push([x, y, t]);
     }
-    return strands;
+    return pts;
   }
 
-  // Place one colony: anchor, strands, the blit frame, and the wall links its
-  // strands earn by touching stone.
+  // A whole colony: 3-5 primary filaments fanning out of the anchor, each forking
+  // 2-3 times, then CROSS-LINKS between filaments near the base. The links are
+  // what turn a spray of threads into webbing.
+  function growWeb(G, spot, rnd){
+    const threads = [];
+    const reachPx = spot.reach * PX;
+    const heading = Math.atan2(spot.dirY, spot.dirX);
+    const curl = 0.10 + rnd() * 0.16;
+    const nMain = 3 + Math.floor(rnd() * 3);          // 3-5 primary filaments
+    const fan = 1.15 + rnd() * 0.55;                  // how wide the fan opens
+    for(let i = 0; i < nMain; i++){
+      const a = heading + ((i / (nMain - 1)) - 0.5) * fan;
+      threads.push(walk(G, spot.x + 0.5, spot.y + 0.5, a,
+                        Math.round(reachPx * (0.70 + rnd() * 0.55)), rnd, curl));
+    }
+    // forks: children leave an existing thread at a wide angle, shorter each time
+    const base = threads.slice();
+    for(let i = 0; i < base.length; i++){
+      const pts = base[i];
+      if(pts.length < 8) continue;
+      const nFork = 1 + Math.floor(rnd() * 2.4);
+      for(let f = 0; f < nFork; f++){
+        const at = 3 + Math.floor(rnd() * (pts.length - 6));
+        const p = pts[at];
+        const ang = Math.atan2(p[1] - pts[Math.max(0, at - 1)][1], p[0] - pts[Math.max(0, at - 1)][0])
+                  + (rnd() < 0.5 ? -1 : 1) * (0.5 + rnd() * 0.55);
+        const child = walk(G, p[0], p[1], ang,
+                           Math.max(5, Math.round((pts.length - at) * (0.55 + rnd() * 0.45))), rnd, curl * 1.2);
+        if(child.length > 3) threads.push(child);
+      }
+    }
+    // cross-links: join points on DIFFERENT threads when they pass close by, but
+    // only inside the mat radius — the fringes stay open filaments.
+    const links = [];
+    const pool = [];
+    for(let i = 0; i < threads.length; i++){
+      const pts = threads[i];
+      for(let k = 0; k < pts.length; k += 2){
+        if(Math.hypot(pts[k][0] - (spot.x + 0.5), pts[k][1] - (spot.y + 0.5)) <= spot.reach * 0.75){
+          pool.push({ x: pts[k][0], y: pts[k][1], th: i, k: k });
+        }
+      }
+    }
+    const want = Math.min(26, Math.round(spot.reach * spot.reach * 5));
+    for(let attempt = 0; attempt < 220 && links.length < want; attempt++){
+      const a = pool[(rnd() * pool.length) | 0];
+      const b = pool[(rnd() * pool.length) | 0];
+      if(!a || !b || a.th === b.th) continue;
+      if(Math.abs(a.k - b.k) < 3) continue;
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if(d < 0.18 || d > 0.85) continue;
+      links.push([[a.x, a.y], [b.x, b.y]]);
+    }
+    return { threads: threads.filter(p => p.length > 2), links: links };
+  }
+
+  // Place one colony: anchor, web, blit frame, and the wall links its threads
+  // earn by reaching stone.
   function addColony(G, tiles, mc, U, spots, climbs, big){
     const pick = U.pickAnchor(G, tiles, mc);
     if(!pick) return;
@@ -89,36 +113,35 @@ window.Delve = window.Delve || {};
       style: "mycelium",
       x: pick.x, y: pick.y,
       dirX: pick.dx, dirY: pick.dy,
-      reach: reachRoll(mc, big) * 2.2,      // strands travel further than a blob's radius
+      reach: reachRoll(mc, big) * 2.2,      // threads reach further than a blob's radius
       seed: seed,
       walls: pick.sides.map(function(s){
         return { x: pick.x + s.dx, y: pick.y + s.dy, dx: s.dx, dy: s.dy };
       })
     };
-    spot.paths = growStrands(G, spot, rnd);
-    if(!spot.paths.length) return;
+    const web = growWeb(G, spot, rnd);
+    if(!web.threads.length) return;
+    spot.paths = web.threads;              // the same field name every form uses
+    spot.links = web.links;
 
-    // frame the strands: centre + half-extent in tiles, plus the tile set they
-    // cover (which is what links walls)
     let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
     const touched = {};
-    spot.paths.forEach(function(st){
-      st.pts.forEach(function(p){
-        if(p[0] < minX) minX = p[0];
-        if(p[0] > maxX) maxX = p[0];
-        if(p[1] < minY) minY = p[1];
-        if(p[1] > maxY) maxY = p[1];
-        touched[Math.floor(p[0]) + "," + Math.floor(p[1])] = 1;
-      });
-    });
+    const note = function(x, y){
+      if(x < minX) minX = x;
+      if(x > maxX) maxX = x;
+      if(y < minY) minY = y;
+      if(y > maxY) maxY = y;
+      touched[Math.floor(x) + "," + Math.floor(y)] = 1;
+    };
+    spot.paths.forEach(function(st){ st.forEach(function(p){ note(p[0], p[1]); }); });
+    (spot.links || []).forEach(function(l){ note(l[0][0], l[0][1]); note(l[1][0], l[1][1]); });
     spot.cx = (minX + maxX) / 2;
     spot.cy = (minY + maxY) / 2;
     spot.r = Math.max(maxX - minX, maxY - minY) / 2 + 0.6;
     spot.minX = minX; spot.maxX = maxX; spot.minY = minY; spot.maxY = maxY;
-
     spots.push(spot);
 
-    // linked walls: a strand that reaches stone sends a climb up it, at most 2
+    // linked walls: threads that reach stone send a climb up it, at most 2
     const keys = Object.keys(touched);
     let linked = 0;
     for(let i = 0; i < keys.length && linked < 2; i++){
@@ -130,16 +153,14 @@ window.Delve = window.Delve || {};
         linked++;
       }
     }
-    // the anchor's own wall (if any) is always worth a climb: that is where the
-    // colony is rooted
     for(let i = 0; i < spot.walls.length && linked < 3; i++) climbs.push(spot.walls[i]);
   }
 
+
   Delve.registerGrowthStyle("mycelium", {
-    // Pale, damp threads read better than the moss green against brown soil.
+    // Ivory, not green: a dark root under the soil running to near-white tips.
     palette: function(bm){ return bm.growthVeinPal || bm.growthPal; },
-    // Veins want to be seen: a large room often carries a second, smaller
-    // colony rather than one giant patch.
+
     place: function(G, mc, pal, U){
       const spots = [], climbs = [];
       U.regions(G).forEach(function(tiles){
@@ -157,75 +178,80 @@ window.Delve = window.Delve || {};
     bake: function(spot, pal, U){
       const G = Delve.G;
       if(!G || !G.grid || !spot.paths || !spot.paths.length) return null;
-      const pad = 6;                            // fine px of margin around the strands
-      // whole-pixel half-extent: the canvas is then exactly S px wide, centred
-      // on (cx, cy), so pixel i covers [i, i+1) and its centre is ox + i + 0.5 —
-      // the same frame the moss form uses, and the one core blits with.
-      const half = Math.max(8, Math.ceil(Math.max((spot.maxX - spot.minX) * PX, (spot.maxY - spot.minY) * PX) / 2 + pad));
+      const pad = 6;
+      const half = Math.max(8, Math.ceil(Math.max(
+        (spot.maxX - spot.minX) * PX, (spot.maxY - spot.minY) * PX) / 2 + pad));
       const S = half * 2;
       const b = U.newBake(S);
       const d = b.d;
       const shadesRGB = U.shades(Math.min(2.4, spot.reach), pal);
       const nShades = shadesRGB.length;
-      // fine-px origin of the canvas within the map (px i covers [i, i+1), so
-      // its CENTRE is ox + i + 0.5 — the same convention the moss form uses)
       const ox = spot.cx * PX - half, oy = spot.cy * PX - half;
+      const ax = (spot.x + 0.5) * PX - ox, ay = (spot.y + 0.5) * PX - oy;
 
-      function put(px, py, si){
+      function put(px, py, si, alpha){
         const i = Math.round(px), j = Math.round(py);
         if(i < 0 || j < 0 || i >= S || j >= S) return;
         const tx = Math.floor((ox + i + 0.5) / PX), ty = Math.floor((oy + j + 0.5) / PX);
         const row = G.grid[ty];
-        if(!row || row[tx] !== T().FLOOR) return;   // never over the furniture
+        if(!row || row[tx] !== T().FLOOR) return;     // never over the furniture
         const col = shadesRGB[Math.max(0, Math.min(nShades - 1, si))];
         const o = (j * S + i) * 4;
-        d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 235;
+        const a = alpha === undefined ? 235 : alpha;
+        // keep the brightest of the two if a pixel is painted twice
+        if(d[o + 3] > a) return;
+        d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = a;
       }
 
-      // stamp a round brush; the shade comes from the point's own progress
-      function stamp(px, py, rad, si, salt){
-        const r2 = rad * rad;
-        const lo = Math.floor(-rad), hi = Math.ceil(rad);
-        for(let j = lo; j <= hi; j++){
-          for(let i = lo; i <= hi; i++){
-            if(i * i + j * j > r2) continue;
-            // dithered shade: grain, not a flat line
-            let s = si;
-            const h = Delve.hash3(i + 64, j + 64, salt);
-            if(h < 0.18) s = s + 1;
-            else if(h > 0.88) s = s - 1;
-            put(px + i, py + j, s);
-          }
+      // the mat: a soft, dithered cream haze right at the wall base, so the web
+      // looks rooted in a colony rather than sprayed on. Low alpha on purpose —
+      // it must read as growth under the soil, not a white circle.
+      const matR = spot.reach * 0.34 * PX;
+      for(let j = -matR; j <= matR; j++){
+        for(let i = -matR; i <= matR; i++){
+          const dd = Math.hypot(i, j) / matR;
+          if(dd > 1) continue;
+          if(Delve.hash3(((i + 64) | 0), ((j + 64) | 0), spot.seed & 511) > 0.13 - dd * 0.09) continue;
+          put(ax + i, ay + j, dd < 0.55 ? 2 : 1, 74);
         }
       }
-
-      spot.paths.forEach(function(st){
-        const pts = st.pts;
+      // filaments: one fine pixel each, with a plus every few steps for fuzz
+      spot.paths.forEach(function(pts){
         for(let k = 0; k < pts.length; k++){
           const p = pts[k];
           const px = p[0] * PX - ox, py = p[1] * PX - oy;
           const si = Math.round(p[2] * (nShades - 1));
-          stamp(px, py, p[3], si, spot.seed & 1023);
-          // nodes: a fork or a ring point carries a fatter bead
-          if(k % 7 === 0 && Delve.hash3(k, 3, spot.seed & 255) < 0.5){
-            stamp(px, py, p[3] + 0.9, si + 1, spot.seed & 511);
+          put(px, py, si, 232);
+          if(k % 6 === 3 && Delve.hash3(k, 5, spot.seed & 255) < 0.5){
+            put(px + 1, py, si, 190); put(px - 1, py, si, 190);
+            put(px, py + 1, si, 190); put(px, py - 1, si, 190);
           }
         }
-        // spore dots near the tips, brightest shade, one pixel each
+        // a couple of bright specks past the tip — the growing frontier
         const tip = pts[pts.length - 1];
-        if(Delve.hash3(pts.length, 7, spot.seed & 255) < 0.75){
-          const tx = tip[0] * PX - ox, ty = tip[1] * PX - oy;
-          for(let s = 0; s < 3; s++){
-            const a = Delve.hash3(s, pts.length, spot.seed & 127) * Math.PI * 2;
-            const rr = 1.2 + Delve.hash3(s, 9, spot.seed & 63) * 2.2;
-            put(tx + Math.cos(a) * rr, ty + Math.sin(a) * rr, nShades - 1);
-          }
+        const tx2 = tip[0] * PX - ox, ty2 = tip[1] * PX - oy;
+        for(let s = 0; s < 2; s++){
+          const a = Delve.hash3(s, pts.length, spot.seed & 127) * Math.PI * 2;
+          const rr = 1.1 + Delve.hash3(s, 9, spot.seed & 63) * 1.9;
+          put(tx2 + Math.cos(a) * rr, ty2 + Math.sin(a) * rr, nShades - 1, 210);
+        }
+      });
+      // cross-links: straight 1-px bridges, dimmer than the filaments, so the
+      // mat reads as a web and the open fringes still read as threads
+      (spot.links || []).forEach(function(l){
+        const x0 = l[0][0] * PX - ox, y0 = l[0][1] * PX - oy;
+        const x1 = l[1][0] * PX - ox, y1 = l[1][1] * PX - oy;
+        const steps = Math.max(2, Math.round(Math.hypot(x1 - x0, y1 - y0)));
+        for(let s = 0; s <= steps; s++){
+          const f = s / steps;
+          put(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, 2, 150);
         }
       });
       return U.commitBake(b);
     },
 
-    // Threads climbing stone, not the Ruins' leafy stems.
+    // Ivory threads climbing the stone, not leafy stems.
     wallDesigns: function(C){ return C.WALL_MYCELIUM || C.WALL_MOSS || []; }
   });
 })();
+
