@@ -418,7 +418,8 @@ Two destinations: a rolling strip (`#combatLog`) and a modal (`#logWindowContent
 **`js/render/tiles.js`**
 `Delve.tiles` = `biome`, `tileAt`, `ensureCache`, `isTorchTile`, `blitTile`, `drawClutter`,
 `drawWallTile`, `drawWallShadows`, `drawWallTorch`, `tickTorch`; internal `floorTone`,
-`texHash`, `drawFloorTile`, `drawWeed`, `drawDoorTile`, `drawGrassPatch`, `drawStairs`,
+`texHash`, `worldNoise`, `drawFloorTile`, `drawWeed`, `drawDoorTile`, `drawGrassPatch`,
+`drawStairs`,
 `arenaTorches` and the seamless-floor texture bakers.
 The tile atlas: the offscreen per-tile cache, every per-tile painter and the 48×48 torus
 texture bakers (Phase 3). **Floor styles** (`BOND_STYLES`, chosen by `BIOMES[n].floorStyle`):
@@ -429,7 +430,13 @@ torus so the pattern continues across tile edges for any room size; the two orga
 also **skip** the per-tile `floorTone` overlay, because a per-tile rectangle of one alpha is
 exactly the square grid the seamless styles exist to remove. **Wall style**
 (`BIOMES[n].wallStyle`): absent = the masonry brick course; `"ice"` replaces it with
-position-based vertical fracture lines that keep running across neighbouring tiles. Split out of `render.js` by verbatim move — the moved body is
+position-based vertical fracture lines that keep running across neighbouring tiles.
+**Organic patches** (a ward's `patches` block turns floor into `GRASS` tiles;
+`drawGrassPatch` inks them) are a **world-space noise mask** at fine-pixel grain, sampled
+through `worldNoise` rather than per tile: the mask wanders across tile edges, so a patch
+reads as one soft mat of growth and no rounded square is ever stamped on a tile. This is a
+hard rule for the same reason the seamless floors exist — a per-tile rectangle *is* a grid,
+and the owner has called it out three times. Split out of `render.js` by verbatim move — the moved body is
 byte-identical to the lines it replaced, and `render.js` destructures it back into the same
 local names, so no call site changed.
 Depends only on `Delve.hash2`/`hash3`, `Delve.rgbOf`/`mixRGB`/`blendHex`, `Delve.getWard`,

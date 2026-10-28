@@ -258,7 +258,12 @@ window.Delve = window.Delve || {};
     // Ground-cover sprite (js/ground.js): blood moss creeping over the floor.
     groundCover:"ground_moss" },
   { name:"The Frosted Vault",
-    wall:"#3a4a5e", wallEdge:"#7a9ac0", wallBrick:"#1a2436", mortar:"#0a1018",
+    // DEEP VIOLET walls (owner's call). The pale ice floor and the old blue-grey
+    // walls sat at nearly the same lightness, so the whole ward read as one
+    // surface and the frost growth had nothing to stand against. Violet is a
+    // different hue AND far darker (wall ~62 luminance vs floor ~143), so the
+    // room's shape and the white frost climbs both read instantly.
+    wall:"#3b2a55", wallEdge:"#9b7cd6", wallBrick:"#1d1233", mortar:"#0a0714",
     floor:"#2a3644", floor2:"#232e3c", moss:"#7ec8e0",
     water:"#1a3a5e", torch:"#a8e8ff", light:"rgba(180,220,255,0.07)",
     // Seamless floor (owner pick): "ice" bakes a continuous glacial-crystal

@@ -534,6 +534,13 @@ if(iceTex){
     }
   }
   ok(differs, "the ice floor is its own surface, not the ruins' masonry");
+  // Walls must SEPARATE from the floor: the owner could not tell them apart
+  // when both were pale blue, which hid the frost growth climbing them.
+  const wl = hexRGB(C.BIOMES[2].wall);
+  const wallLum = (wl[0] + wl[1] + wl[2]) / 3;
+  ok(mean - wallLum > 40, "biome 3 walls are much darker than its ice floor (" +
+     wallLum.toFixed(0) + " vs " + mean.toFixed(0) + ")");
+  ok(wl[0] > wl[1], "and a different hue: violet walls (red above green) over a blue floor");
 }
 
 // Frost growth on a floor.
@@ -555,6 +562,33 @@ const fsp = frostG.growth.floor[0];
 const fb1 = fst.bake(fsp, fpal, D.growthUtil), fb2 = fst.bake(fsp, fpal, D.growthUtil);
 ok(!!fb1 && !!fb2 && Buffer.compare(Buffer.from(fb1._img.data), Buffer.from(fb2._img.data)) === 0,
    "frost baking is deterministic per spot");
+
+// ── the grass-patch painter must not put a square on the floor ──
+// Owner's report: green square tiles all over the Blackvein's floor. The old
+// painter stamped a rounded rect over 92% of every patch tile, i.e. a literal
+// grid of squares. It is now a world-space noise mask at fine-pixel grain.
+console.log("\n-- floor patches -------------------------------------");
+(function(){
+  const calls = [];
+  const rec = {
+    save(){}, restore(){}, beginPath(){}, moveTo(){}, lineTo(){}, stroke(){},
+    fill(){}, quadraticCurveTo(){}, roundRect(){}, closePath(){}, arc(){}, ellipse(){},
+    createRadialGradient:()=>({ addColorStop(){} }),
+    createLinearGradient:()=>({ addColorStop(){} }),
+    fillStyle:"", strokeStyle:"", globalAlpha:1, lineWidth:1, lineCap:"",
+    fillRect(x, y, w, h){ calls.push({ x:x, y:y, w:w, h:h, a:this.globalAlpha }); }
+  };
+  const bm = D.tiles.biome(C.BIOMES[1] || C.BIOMES[0]);
+  D.tiles._drawGrassPatch(rec, 0, 0, 32, 4, 4, bm);
+  ok(calls.length > 40, "the patch is painted per fine pixel, not as one tile-sized rect (" +
+     calls.length + " fills)");
+  const biggest = calls.reduce(function(m, c){ return Math.max(m, c.w * c.h); }, 0);
+  ok(biggest < 32 * 32 * 0.5, "no single fill covers half a tile (" + Math.round(biggest) + " px2)");
+  const alphas = {};
+  calls.forEach(function(c){ alphas[c.a.toFixed(2)] = 1; });
+  ok(Object.keys(alphas).length >= 2,
+     "the patch edge fades (distinct alphas: " + Object.keys(alphas).length + ")");
+})();
 
 // Integration: a real generated floor, not a hand-built grid, must end up with
 // growth in G.growth and bake without throwing (levels.js calls placeGrowth).

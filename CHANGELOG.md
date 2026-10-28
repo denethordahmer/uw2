@@ -11,6 +11,43 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Changed — the Frosted Vault's walls are deep violet
+
+- **The owner's report:** the walls sat at nearly the same shade as the floor, so the whole
+  ward read as one surface and the new frost growth had nothing to stand against.
+- **Violet, and much darker.** The Vault's wall palette moves from blue-grey to deep violet:
+  `wall #3b2a55`, `wallEdge #9b7cd6` (the lit crest),
+  `wallBrick #1d1233` (the fracture lines) and `mortar #0a0714`.
+  Wall luminance is now ~62 against the ice floor's measured ~143 — an 80-level gap, plus a
+  different hue (violet has red above green; the ice floor is blue). Room shape, the ice
+  fractures in the walls, and the white `C.WALL_FROST` climbs all separate now.
+- **Measured, not assumed:** the frost dendrites were checked against the ice floor's
+  luminance — 43% of their painted pixels read darker, 57% lighter, and **0%** land within
+  ±15 levels of the floor, so they show on their own without touching their palette.
+- Two tests now pin the separation: the wall must be >40 luminance darker than the floor,
+  and must be a different hue (violet walls over a blue floor).
+
+### Fixed — the green square tiles on the Blackvein's floor (for good, every biome)
+
+- **The owner's report:** *identical squares of green* on floors 11-20, on a floor that is
+  supposed to be smooth. Exactly right, and it was not the puddles (those were still the
+  smooth purple blobs): it was the ward's **patch layer**. A ward's `patches` block
+  turns some floor into `GRASS` tiles, and `drawGrassPatch` painted a **rounded
+  rectangle over 92% of every one of those tiles**, plus three blades in the middle. One
+  visible square per patch tile — a literal grid, which is the one thing the seamless floors
+  exist to prevent. It had been there all along in biome 2; I removed it for biome 3's snow
+  and left it standing here.
+- **The painter is now a world-space mask.** `drawGrassPatch` samples a new
+  `worldNoise` in **world fine-pixel coordinates** (16 px/tile grain), so the patch
+  boundary is one continuous noise field that wanders across tile edges. No per-tile
+  rectangle, no inset, no blades stamped dead centre; the fringe fades through a gradient of
+  alphas instead of ending on a line, and the tufts only appear where the mask is on.
+- **It fixes every biome at once**, not just this one: the Bone Ossuary's bone-dust patches
+  (22% of its floor) were square for the same reason.
+- **Pinned by tests:** a GRASS tile must issue more than 40 paints (a per-tile rect is 1),
+  no single paint may cover half a tile, and the patch must use more than one alpha — three
+  checks that would each have failed on the old painter.
+
 ### Changed — the Blackvein's mycelium is ivory webbing, not green
 
 - **The owner's note:** *it currently looks the same colour as moss from biome 1*.

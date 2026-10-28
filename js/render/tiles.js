@@ -697,24 +697,58 @@ window.Delve = window.Delve || {};
   ctx.restore();
  }
 
+ // Continuous value noise in WORLD fine-pixel coordinates (not per tile), so a
+ // patch boundary wanders across tile edges instead of being redrawn per tile.
+ function worldNoise(wx, wy, cell, salt){
+  const fx = wx / cell, fy = wy / cell;
+  const x0 = Math.floor(fx), y0 = Math.floor(fy);
+  const tx = fx - x0, ty = fy - y0;
+  const sx2 = tx * tx * (3 - 2 * tx), sy2 = ty * ty * (3 - 2 * ty);
+  const top = texHash(x0, y0, salt) + (texHash(x0 + 1, y0, salt) - texHash(x0, y0, salt)) * sx2;
+  const bot = texHash(x0, y0 + 1, salt) + (texHash(x0 + 1, y0 + 1, salt) - texHash(x0, y0 + 1, salt)) * sx2;
+  return top + (bot - top) * sy2;
+ }
+
  function drawGrassPatch(ctx, sx, sy, ts, gx, gy, b){
   ctx.save();
-  // turf tint over the floor slab
-  ctx.globalAlpha = 0.55;
+  // NO PER-TILE RECTANGLE. The old painter stamped a rounded square across 92%
+  // of every patch tile, so a "patch" of turf was literally a grid of green
+  // squares — the same failure the seamless floors exist to avoid. The mask is
+  // now a continuous noise field in WORLD pixel space (fine-pixel grain), so one
+  // patch spreads over several tiles with a ragged, wandering edge and no tile
+  // boundary can be read anywhere.
+  const PXG = 16;                      // fine pixels per tile (Batch 22 grain)
+  const step = ts / PXG;
+  const cell = 5;                      // noise cell in fine px: ~3 cells a tile
+  const mask = function(wx, wy){
+   return worldNoise(wx, wy, cell, 4603) * 0.72 + worldNoise(wx, wy, cell * 2.5, 4607) * 0.28;
+  };
   ctx.fillStyle = b.patchGrass;
-  ctx.beginPath(); ctx.roundRect(sx + ts*0.04, sy + ts*0.04, ts*0.92, ts*0.92, ts*0.18); ctx.fill();
+  for(let j = 0; j < PXG; j++){
+   for(let i = 0; i < PXG; i++){
+    const n = mask(gx * PXG + i, gy * PXG + j);
+    if(n < 0.52) continue;
+    // fringe fades out instead of ending on a hard line
+    ctx.globalAlpha = Math.min(0.62, (n - 0.52) * 3.4);
+    ctx.fillRect(sx + i * step, sy + j * step, step + 0.5, step + 0.5);
+   }
+  }
   ctx.globalAlpha = 1;
-  // blades
-  const blades = 3 + Math.floor(hash3(gx, gy, 431) * 4);
+  // tufts: only where the patch actually is, and small — grass in the mat, not
+  // three blades stamped in the middle of a tile
+  const tufts = 2 + Math.floor(hash3(gx, gy, 431) * 3);
   ctx.strokeStyle = b.patchGrass; ctx.lineCap = "round";
-  for(let i = 0; i < blades; i++){
-   const bx = sx + ts * (0.15 + hash3(gx, gy, 433 + i) * 0.7);
-   const by = sy + ts * (0.30 + hash3(gx, gy, 443 + i) * 0.5);
-   const hgt = ts * (0.10 + hash3(gx, gy, 453 + i) * 0.14);
-   ctx.lineWidth = Math.max(1, ts * 0.035);
+  for(let k = 0; k < tufts; k++){
+   const fx = Math.floor(hash3(gx, gy, 433 + k) * PXG);
+   const fy = Math.floor(hash3(gx, gy, 443 + k) * PXG);
+   if(mask(gx * PXG + fx, gy * PXG + fy) < 0.55) continue;
+   const bx = sx + (fx + 0.5) * step, by = sy + (fy + 0.5) * step;
+   const hgt = ts * (0.06 + hash3(gx, gy, 453 + k) * 0.07);
+   ctx.lineWidth = Math.max(1, ts * 0.028);
    ctx.beginPath();
    ctx.moveTo(bx, by);
-   ctx.quadraticCurveTo(bx + ts*0.03, by - hgt*0.6, bx + ts*(hash3(gx, gy, 463 + i) - 0.5)*0.12, by - hgt);
+   ctx.quadraticCurveTo(bx + ts * 0.02, by - hgt * 0.6,
+     bx + (hash3(gx, gy, 463 + k) - 0.5) * ts * 0.06, by - hgt);
    ctx.stroke();
   }
   ctx.restore();
