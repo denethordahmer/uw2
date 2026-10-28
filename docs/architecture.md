@@ -284,7 +284,8 @@ with `BIOMES[n].growthStyle`; the form registers itself through
 `Delve.registerGrowthStyle(id, { place, bake, palette?, wallDesigns? })`, so adding a biome's
 own growth is a new file under `js/growth/` plus that one string — no branch in the framework.
 Registered today: `"moss"` (the Upper Ruins' lobed patches), `"mycelium"` (the Blackvein's
-branching veins) and `"frost"` (the Frosted Vault's angular hoarfrost dendrites).
+ivory webbing), `"frost"` (the Frosted Vault's angular hoarfrost dendrites) and
+`"disturbed"` (the Bone Ossuary's dug earth and bones).
 - **core.js** owns the shared rules and both public draw seams: `Delve.placeGrowth` (end of
   `genFloor`/`genBossFloor`), `Delve.drawGrowthFloor` (after `drawGroundCover`),
   `Delve.drawGrowthWalls` (after the wall pass). It finds the rooms (flood fill of
@@ -317,6 +318,15 @@ branching veins) and `"frost"` (the Frosted Vault's angular hoarfrost dendrites)
   up to three deep and ending in a bar-backed point. It stamps hard-edged pixels (no dither
   blur), has its own blue-white palette (`BIOMES[2].growthFrostPal`) and its own climb art
   (`C.WALL_FROST`).
+- **disturbed.js** — floor-only by design and the one form that returns **no wall climbs**:
+  a zone is a wobbled blob of turned earth (lighter than the packed loam, with a thin rim of
+  pushed-out soil and a pale grit scatter) carrying 3–7 bones from a kit of **eight shapes**
+  (`shapes` on the style; skull, ribcage, femur, long bone, pelvis, vertebra, fingers,
+  clavicle). Each bone rolls its own `rot` — one of **four 90-degree directions** — plus its
+  own scale, offset and seed, so no two zones match. Bones are procedural primitives (capsules
+  and discs) rasterised in three passes — shadow silhouette, body, lit edge — with sockets cut
+  back out in the earth tone. Placement runs on open floor: ward 4's growth block sets
+  `cornerBias:0, wallBias:0`, because digging is not a wall behaviour.
 - **Shared rules.** Every form paints **only plain FLOOR** — walls, doors, water, stairs,
   chests and props cut it. Growth never enters the grid, never blocks, never shows on the
   minimap and never enters the run snapshot: a floor re-rolls its growth on every generation
@@ -424,8 +434,10 @@ Two destinations: a rolling strip (`#combatLog`) and a modal (`#logWindowContent
 The tile atlas: the offscreen per-tile cache, every per-tile painter and the 48×48 torus
 texture bakers (Phase 3). **Floor styles** (`BOND_STYLES`, chosen by `BIOMES[n].floorStyle`):
 `runningbond` (the Upper Ruins' interlocking masonry), `dirt` (the Blackvein's continuous
-soil with mycelium threads) and `ice` (the Frosted Vault's glacial crystal — pale panes,
-wandering depth fractures and sparse rune-light). Each bakes into the same 16-px/tile 3×3
+soil with mycelium threads), `ice` (the Frosted Vault's glacial crystal — pale panes,
+wandering depth fractures and sparse rune-light) and `loam` (the Bone Ossuary's dark turned
+earth with pale bone grit: two soil octaves, damp clods, a sparse grit field in
+`BIOMES[n].gritColour`). Each bakes into the same 16-px/tile 3×3
 torus so the pattern continues across tile edges for any room size; the two organic fields
 also **skip** the per-tile `floorTone` overlay, because a per-tile rectangle of one alpha is
 exactly the square grid the seamless styles exist to remove. **Wall style**
@@ -755,22 +767,23 @@ copy of the list. **If you add, remove or reorder a script, edit the manifest an
  25 js/growth/moss.js                   ← form "moss": lobed patches (needs core)
  26 js/growth/mycelium.js               ← form "mycelium": veins (needs core)
  27 js/growth/frost.js                  ← form "frost": hoarfrost ferns (needs core)
- 28 js/puddles.js                       ← no load-dependency; grouped with generation
- 29 js/traits.js
- 30 js/combat.js
- 31 js/movement.js                      ← follows combat.js
- 32 js/rewards.js                       ← follows combat.js (uses Delve.rowFor)
- 33 js/effects.js
- 34 js/sfx.js
- 35 js/log.js
- 36 js/render/tiles.js                  ← tile atlas; render.js destructures Delve.tiles
- 37 js/render.js
- 38 js/pathfind.js
- 39 js/input.js
- 40 js/ui.js
- 41 js/menu.js
- 42 js/progression.js
- 43 js/main.js
+ 28 js/growth/disturbed.js              ← form "disturbed": dug earth + bones (floor only)
+ 29 js/puddles.js                       ← no load-dependency; grouped with generation
+ 30 js/traits.js
+ 31 js/combat.js
+ 32 js/movement.js                      ← follows combat.js
+ 33 js/rewards.js                       ← follows combat.js (uses Delve.rowFor)
+ 34 js/effects.js
+ 35 js/sfx.js
+ 36 js/log.js
+ 37 js/render/tiles.js                  ← tile atlas; render.js destructures Delve.tiles
+ 38 js/render.js
+ 39 js/pathfind.js
+ 40 js/input.js
+ 41 js/ui.js
+ 42 js/menu.js
+ 43 js/progression.js
+ 44 js/main.js
 ```
 
 ### Hard constraints (violate = silent breakage)

@@ -590,6 +590,89 @@ console.log("\n-- floor patches -------------------------------------");
      "the patch edge fades (distinct alphas: " + Object.keys(alphas).length + ")");
 })();
 
+// ── the Bone Ossuary: loam floor + dug zones with bones ──
+const oss = C.BIOMES[3];
+ok(oss.floorStyle === "loam", "biome 4 uses the seamless loam floor");
+ok(oss.growthStyle === "disturbed" && !!D.growthStyles.disturbed,
+   "biome 4 grows the disturbed-earth form");
+ok(!oss.wallStyle, "biome 4 keeps the masonry walls (only the Vault overrode them)");
+(function(){
+  const w4 = C.WARDS.filter(function(w){ return w.id === 4; })[0];
+  ok(!!w4 && Array.isArray(w4.patches) && w4.patches.length === 0,
+     "ward 4 grows no patch tiles (the pale bone-dust squares are gone)");
+  ok(!!w4 && !!w4.growth && w4.growth.cornerBias === 0 && w4.growth.wallBias === 0,
+     "ward 4's zones open on plain floor, not at walls");
+})();
+ok((D.growthStyles.disturbed.shapes || []).length === 8,
+   "the bone kit holds 8 shapes (" + (D.growthStyles.disturbed.shapes || []).length + ")");
+
+// The loam floor: dark, seamless, with pale grit.
+const loamTex = floorTexture(C.BIOMES[3]);
+ok(!!loamTex, "the loam floor bakes a 48x48 torus texture");
+if(loamTex){
+  const d = loamTex._img.data;
+  let sum = 0, n = 0, grit = 0;
+  for(let i = 0; i < d.length; i += 4){
+    const L = (d[i] + d[i+1] + d[i+2]) / 3;
+    sum += L; n++;
+    if(L > 120) grit++;
+  }
+  const loamMean = sum / n;
+  ok(loamMean < 70, "the loam floor is dark (mean " + loamMean.toFixed(0) + ")");
+  ok(grit / n > 0.005 && grit / n < 0.12,
+     "with pale bone grit scattered through it (" + (100 * grit / n).toFixed(1) + "%)");
+}
+
+// The dug zones: floor only, no wall climbs, bones with four rotations.
+const digG = runGrowth(C.WARDS[3]);
+ok((digG.growth.floor || []).length > 0, "the disturbed form places dug zones on a floor");
+ok((digG.growth.walls || []).length === 0, "a dug zone NEVER grows up a wall (owner rule)");
+ok(!digG.growth.error, "disturbed placement reported no error" +
+   (digG.growth.error ? " (" + digG.growth.error + ")" : ""));
+const digImgs = bakeAll("disturbed", digG, 3);
+ok(digImgs.length === digG.growth.floor.length && digImgs.every(c => c && c._img),
+   "every dug zone bakes a canvas");
+const digSplit = paintSplit(digG, digImgs);
+ok(digSplit.on > 100, "the dug zones paint (" + digSplit.on + " fine px)");
+ok(digSplit.off === 0, "dug zones never paint off plain floor (" + digSplit.off + ")");
+const dz = digG.growth.floor[0];
+ok(Array.isArray(dz.bones) && dz.bones.every(function(b){
+  return D.growthStyles.disturbed.shapes.indexOf(b.shape) >= 0 &&
+         b.rot >= 0 && b.rot <= 3;
+}), "every bone is a known shape with a 0-3 rotation (" + dz.bones.length + " bones)");
+ok(dz.bones.length >= (C.WARDS[3].growth.bonesMin || 3) &&
+   dz.bones.length <= (C.WARDS[3].growth.bonesMax || 7),
+   "zone bone count stays inside the ward's range");
+
+// four rotations must actually produce four different pictures
+(function(){
+  const dst = D.growthStyles.disturbed;
+  const dpal = dst.palette ? dst.palette(C.BIOMES[3]) : C.BIOMES[3].growthDigPal;
+  const shot = function(rot){
+    // inside a room of the test grid (5,4) — a bone on wall tiles would be
+    // clipped away and every rotation would look identical for the wrong reason
+    const sp = { style:"disturbed", x:5, y:4, dirX:0, dirY:0, reach:1.2, seed:4242,
+      bones:[{ shape:"skull", x:5.5, y:4.5, rot:rot, scale:1, seed:99 }],
+      grit:[], cx:5.5, cy:4.5, r:1.8, minX:3.7, maxX:7.3, minY:2.7, maxY:6.3 };
+    const c = dst.bake(sp, dpal, D.growthUtil);
+    return c && c._img ? Buffer.from(c._img.data).toString("base64") : null;
+  };
+  const rots = [0, 1, 2, 3].map(shot);
+  const uniq = {};
+  rots.forEach(function(r){ if(r) uniq[r] = 1; });
+  ok(!!rots[0] && Object.keys(uniq).length === 4,
+     "the four rotations give four distinct bone placements");
+})();
+
+// Determinism
+(function(){
+  const dst = D.growthStyles.disturbed;
+  const dpal = dst.palette ? dst.palette(C.BIOMES[3]) : C.BIOMES[3].growthDigPal;
+  const a1 = dst.bake(dz, dpal, D.growthUtil), a2 = dst.bake(dz, dpal, D.growthUtil);
+  ok(!!a1 && !!a2 && Buffer.compare(Buffer.from(a1._img.data), Buffer.from(a2._img.data)) === 0,
+     "dug-zone baking is deterministic per zone");
+})();
+
 // Integration: a real generated floor, not a hand-built grid, must end up with
 // growth in G.growth and bake without throwing (levels.js calls placeGrowth).
 let integrationOk = true, integrationMsg = "";
@@ -616,6 +699,16 @@ try {
   if(fbaked.some(c => !c)) { integrationOk = false; integrationMsg = "a frost bake returned null"; }
   const tex = floorTexture(D.CONFIG.BIOMES[2]);
   if(!tex) { integrationOk = false; integrationMsg = "the ice floor drew no texture"; }
+  // and ward 4: loam floor + dug zones
+  D.G.floor = 35;
+  D.genFloor();
+  const f35 = D.G.growth || {};
+  if(f35.error){ integrationOk = false; integrationMsg = "floor 35: " + f35.error; }
+  if((f35.walls || []).length){ integrationOk = false; integrationMsg = "floor 35 grew wall climbs"; }
+  const dbaked = (f35.floor || []).length ? bakeAll("disturbed", D.G, 3) : [];
+  if(dbaked.some(c => !c)){ integrationOk = false; integrationMsg = "a dug-zone bake returned null"; }
+  const ltex = floorTexture(D.CONFIG.BIOMES[3]);
+  if(!ltex){ integrationOk = false; integrationMsg = "the loam floor drew no texture"; }
 } catch(e){
   integrationOk = false;
   integrationMsg = e.message;

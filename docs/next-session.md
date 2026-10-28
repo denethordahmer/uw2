@@ -6,9 +6,9 @@ re-discovered. `docs/architecture.md` remains the reference for how the code wor
 ## State (verified at handoff)
 
 **Green gate:** `node test_items.js` → **PASSED 281/281** from `test_ui.js`, then
-`loaded 45 scripts` and **PASSED 134/134** from `test_items.js` (it runs `test_ui.js`
+`loaded 46 scripts` and **PASSED 161/161** from `test_items.js` (it runs `test_ui.js`
 first), exit 0. `node tools/check-order.js`
-→ green (45 scripts, manifest = index.html). Every `.js` passes `node --check`.
+→ green (46 scripts, manifest = index.html). Every `.js` passes `node --check`.
 
 **Working tree is uncommitted.** HEAD is `e3d5baf`. Built since then, all tested:
 
@@ -47,7 +47,13 @@ first), exit 0. `node tools/check-order.js`
    ward 3's `patches` is empty so the repeated white snow tile is gone; `js/growth/frost.js`
    registers the "frost" form with `growthFrostPal` and `C.WALL_FROST`. Biomes 1–2 are
    untouched (masonry/dirt and moss/mycelium byte for byte).
-8. **Background music** — four beds in `music/` (biome1-1 … biome4-1.mp3), played by
+8. **Biome 4 overhauled (latest).** Owner picked *dark loam* for the floor and a *large messy
+   bone kit* for the growth. `BOND_STYLES.loam` bakes near-black-brown turned earth with pale
+   grit (skips `floorTone` like dirt/ice); ward 4's bone-dust `patches` are gone;
+   `js/growth/disturbed.js` registers the `disturbed` form — dug zones with 3–7 bones from a
+   kit of 8 procedural shapes, each with a 90° rotation, and **no wall climbs at all**. All
+   four biomes now have their own seamless floor, and biomes 1–3 are untouched by this pass.
+9. **Background music** — four beds in `music/` (biome1-1 … biome4-1.mp3), played by
    `sfx.js` via `MUSIC_TRACKS` (one array per ward, ward from `getWard`: 1–10 → 1 …
    31–40 → 4). No HTML5 `loop`: 2s tail fade-out, then `ended` picks the next bed and
    fades in; 700 ms cross-fade on ward change. Mute and the music slider are mirrored
@@ -145,27 +151,27 @@ Do not simply double the number. In order:
 7. **Verify:** simulate 10 floors per ward (items seen, bag-full events, sell total), then
    a phone run counting *useful upgrades* per floor, not raw drops.
 
-## Procedure C — biome 4, seamless floor and wall (biome 3 is done)
+## Procedure C — DONE (all four biomes)
 
-Biome 3 shipped as the pattern to copy: pick the floor + growth with the owner first, then
+Every biome now has its own seamless floor, its own growth form and (where it needed one) its
+own wall treatment:
+
+| biome | floor | growth | walls |
+|---|---|---|---|
+| 1 Upper Ruins | `runningbond` masonry | `moss` lobed patches | linked moss climbs |
+| 2 Blackvein | `dirt` + ivory threads | `mycelium` ivory webbing | linked thread climbs |
+| 3 Frosted Vault | `ice` rune-lit crystal | `frost` hoarfrost ferns | `wallStyle:"ice"` + climbs |
+| 4 Bone Ossuary | `loam` dark turned earth | `disturbed` dug zones + 8-shape bone kit | masonry, no growth climbs |
+
+The recipe for a new biome is unchanged: pick the look with the owner first, then
 `BOND_STYLES.<style>` in `js/render/tiles.js` (+ skip `floorTone` if the field is organic),
 `floorStyle`/`wallStyle`/`growthStyle` on the biome, a `growth` block on the ward, and one
-new file under `js/growth/` registering its form. No edit to `js/growth/core.js` should be
-needed — if one is, the seam is wrong; fix the seam, not the form.
+new file under `js/growth/` registering its form. **No edit to `js/growth/core.js` should be
+needed** — if one is, the seam is wrong; fix the seam, not the form.
 
-What is left for the Bone Ossuary (biome 4, ward 4, floors 31–40):
-
-1. **Floor:** a `"bone"` torus style — packed bone-dust / rubble flagging with no square
-   joints (owner has not picked the exact look yet; ask first, as with the Vault).
-2. **Walls:** `wallStyle:"bone"` — stacked long bones / banded dust instead of the brick
-   course, keeping the existing exposure, inset, wobble, corners and shadows.
-3. **Growth:** its own form (e.g. `js/growth/bone.js`: dry cracks and dust fans) with a
-   palette and climb art, plus a `growth` block on ward 4 (it has none today).
-4. Ward 4 still has a bone-dust grass patch (`patches` amount 0.22) — decide with the owner
-   whether that repeated-tile look survives, the way it did not in the Vault.
-5. Do not touch biomes 1–2 or 3: ward 1's floor is locked ("byte for byte"), ward 2's dirt
-   field is deliberate, and ward 3's ice was just signed off.
-6. Check `test.html` §4/§5 still pass (clutter family and boss sprite checks).
+Rules bought in this pass, do not regress them: no per-tile corners on a floor, no per-tile
+rectangle in a patch layer, walls must separate from the floor by lightness AND hue, and a
+growth form that is not supposed to climb returns an empty wall list.
 
 ## Deferred — monsters that move on sight (last)
 

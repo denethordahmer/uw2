@@ -11,6 +11,29 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Changed — the Bone Ossuary: dark loam floor, and dug earth with bones
+
+- **Floor: dark loam (owner pick).** New `BOND_STYLES.loam` bakes continuous
+  near-black-brown turned earth with pale bone grit into the same 16-px/tile 3×3 torus as the
+  other wards — two soil octaves for patches, a third field for damp clods, a sparse grit
+  field coloured by `BIOMES[3].gritColour` (the walls' own bone tone, so floor and
+  stone belong together). Like dirt and ice it **skips** the per-tile `floorTone` overlay.
+  Measured: mean luminance ~36, grit flecks up to ~156 — dark soil that still reads as soil.
+- **Ward 4's bone-dust patch tiles are gone** (`patches:[]`). They were 22% of the
+  floor painted as pale squares; the seamless loam carries the surface now.
+- **Growth replacement: dug zones.** New `js/growth/disturbed.js` registers the
+  `disturbed` form: a wobbled blob of turned earth *lighter* than the packed loam, with a thin
+  rim of pushed-out soil, a pale grit scatter, and 3–7 bones poking through.
+- **A kit of 8 bone shapes, four directions each.** Skull, ribcage, femur, long bone,
+  pelvis, vertebra, fingers and clavicle are procedural primitives (capsules + discs)
+  rasterised in three passes — shadow silhouette, body, lit edge — with eye sockets and the
+  pelvis gap cut back out in the earth tone. Every bone rolls its own 90° rotation, scale,
+  offset and seed, so zones never repeat. The kit is exposed as
+  `Delve.growthStyles.disturbed.shapes` so a test can count it.
+- **It never climbs a wall.** The form returns an empty wall list by construction, and ward
+  4's growth block sets `cornerBias:0, wallBias:0` so zones open on plain floor —
+  the owner's brief was dug floor, not growth on stone. Pinned by a test.
+
 ### Changed — the Frosted Vault's walls are deep violet
 
 - **The owner's report:** the walls sat at nearly the same shade as the floor, so the whole

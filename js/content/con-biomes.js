@@ -90,9 +90,19 @@ window.Delve = window.Delve || {};
   { id:4, name:"The Bone Ossuary", floors:[31,40], biome:3,
     // Organic patches (layer1 port) — bone-dust drifts; murky pools come from
     // wall-fed puddles (js/puddles.js), tinted by patchWater below.
-    patches:[
-      { type:"grass", seed:0.50, nGen:3, amount:0.22 }
-    ],
+    // No patch tiles any more: 22% of the floor was bone-dust GRASS, which read
+    // as a grid of pale squares. The seamless "loam" floor carries the surface
+    // now, and the dug zones below carry the bones.
+    patches:[],
+    // Dug zones (js/growth/disturbed.js): portions of the FLOOR look disturbed,
+    // with bones poking through. Deliberately NOT wall-biased — cornerBias and
+    // wallBias are 0, so zones open on plain floor — and the form returns no
+    // wall climbs at all. sizeMin/Max are the zone radius in tiles;
+    // bonesMin/Max are how many bones a zone may carry.
+    growth:{ roomChance:0.80, largeArea:40, largeChance:0.55, bigChance:0.32,
+           cornerBias:0, wallBias:0,
+           sizeMin:0.60, sizeMax:1.05, bigSizeMin:1.20, bigSizeMax:1.80,
+           bonesMin:3, bonesMax:7 },
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
@@ -285,8 +295,23 @@ window.Delve = window.Delve || {};
     patchWater:"#8fd0e8", patchGrass:"#dceefc" },
   { name:"The Bone Ossuary",
     wall:"#cfc0a0", wallEdge:"#e8dcc0", wallBrick:"#8a7658", mortar:"#1a140c",
-    floor:"#8a7455", floor2:"#786447", moss:"#7a2a24",
+    // DARK LOAM floor (owner pick): near-black-brown turned earth, so the pale
+    // bone walls frame it instead of blending into it.
+    floor:"#2b2117", floor2:"#1e1610", moss:"#7a2a24",
     water:"#4a1a18", torch:"#f0d888", light:"rgba(220,200,160,0.06)",
+    // Seamless floor: "loam" bakes continuous turned earth with pale bone grit
+    // into the 16-px/tile 3x3 torus — no lattice, no per-tile rectangle.
+    floorStyle:"loam",
+    // The grit uses the walls' own bone tone, so floor and stone belong together.
+    gritColour:"#cfc0a0",
+    // Its own growth form (js/growth/disturbed.js): dug earth + a bone kit,
+    // floor only — it never climbs a wall.
+    growthStyle:"disturbed",
+    // Dark earth to pale bone: [earth dark, earth mid, bone shade, bone mid,
+    // bone light]. The zone body and its bones share this one ladder.
+    // Turned earth is LIGHTER than packed loam, so a dug zone reads on a
+    // near-black floor; the bones sit above that again.
+    growthDigPal:["#3a2d1e","#57432c","#7a6a50","#bda986","#efe4c8"],
     // Pale and bright on purpose: an ossuary lit by tallow, not a dark tomb.
     clutter:"ossuary",
     // Ground-cover sprite (js/ground.js): scattered bone fragments.

@@ -63,6 +63,7 @@ window.Delve = window.Delve || {};
   "js/growth/moss.js",       // form "moss"      — the Upper Ruins' lobed patches
   "js/growth/mycelium.js",   // form "mycelium"  — the Blackvein's branching veins
   "js/growth/frost.js",      // form "frost"     — the Frosted Vault's hoarfrost ferns
+  "js/growth/disturbed.js",  // form "disturbed" — the Bone Ossuary's dug earth + bones
   "js/puddles.js",
 
   // ── systems ────────────────────────────────────────────────

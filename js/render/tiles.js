@@ -187,7 +187,7 @@ window.Delve = window.Delve || {};
   // periodic noise only, for biomes whose floor is earth rather than masonry.
   // A biome opts in with floorStyle:"<name>"; anything unknown keeps the old
   // per-tile slab look.
-  const BOND_STYLES = { runningbond:true, dirt:true, ice:true };
+  const BOND_STYLES = { runningbond:true, dirt:true, ice:true, loam:true };
 
   // Exact 32-bit position hash for texture baking. Delve.hash3 (state.js) loses
   // precision on large float products and skews low for small integer inputs —
@@ -285,6 +285,31 @@ window.Delve = window.Delve || {};
    return base;
   }
 
+  // Graveyard loam (The Bone Ossuary): near-black-brown turned earth with pale
+  // bone grit scattered through it. Continuous, with no lattice and no per-tile
+  // rectangle, so the floor is one surface for any room size — the same rule the
+  // other three wards follow. Two soil octaves give broad patches and clods, a
+  // third field lays the grit, and the walls' own bone tone supplies the colour
+  // so the grit and the walls belong to each other.
+  function loamPixel(px, py, S, floorA, floorB, grit){
+   const n1 = periodicNoise(px, py, 5, S, 1701);    // broad turned-soil patches
+   const n2 = periodicNoise(px, py, 13, S, 1703);   // finer clumping
+   const grain = texHash(px, py, 1707) - 0.5;
+   let t = n1 * 0.55 + n2 * 0.30 + grain * 0.15;
+   t = Math.max(0, Math.min(1, t));
+   let base = mixRGB(floorB, floorA, t * 1.15);
+   // lift the soil a touch so the clods read as earth, not as a black void
+   base = mixRGB(base, [64, 50, 35], 0.34);
+   // damp clods — darker lumps so the earth is not a flat wash
+   const clod = periodicNoise(px, py, 21, S, 1709);
+   if(clod > 0.70) base = mixRGB(base, [10, 8, 6], (clod - 0.70) * 1.7);
+   // pale bone grit: a sparse fine scatter, brighter where it is denser
+   const g1 = periodicNoise(px, py, 24, S, 1711);
+   const gh = texHash(px, py, 1713);
+   if(g1 > 0.84 && gh > 0.62) base = mixRGB(base, grit, 0.80);
+   else if(g1 > 0.76 && gh > 0.86) base = mixRGB(base, grit, 0.30);
+   return base;
+  }
   function bondTexture(b){
    const style = BOND_STYLES[b.floorStyle] ? b.floorStyle : "runningbond";
    const key = style + "|" + b.floor + "|" + b.floor2;
@@ -303,7 +328,9 @@ window.Delve = window.Delve || {};
    const COL_W = 8, ROW_H = 16;
    const isDirt = style === "dirt";
    const isIce = style === "ice";
+   const isLoam = style === "loam";
    const thread = b.growthThread ? rgbOf(b.growthThread) : (b.moss ? rgbOf(b.moss) : [196, 208, 150]);
+   const grit = b.gritColour ? rgbOf(b.gritColour) : [207, 192, 160];
    const iceGlow = b.moss ? rgbOf(b.moss) : [126, 200, 224];
    for(let py = 0; py < S; py++){
     for(let px = 0; px < S; px++){
@@ -314,6 +341,9 @@ window.Delve = window.Delve || {};
      } else if(isIce){
       // no seams anywhere — continuous glacial sheet with fractures + rune-light
       col3 = icePixel(px, py, S, floorA, floorB, iceGlow);
+     } else if(isLoam){
+      // no seams anywhere — continuous turned earth with bone grit
+      col3 = loamPixel(px, py, S, floorA, floorB, grit);
      } else {
      const col = (px / COL_W) | 0;              // 0..5 across the torus
      const lx = px % COL_W;
@@ -375,7 +405,7 @@ window.Delve = window.Delve || {};
    // now) already carries its own multi-octave variation, so the texture does its
    // own shading and there is no per-tile rectangle to see. Masonry keeps the
    // overlay, byte for byte, so ward 1 is untouched.
-   if(b.floorStyle !== "dirt" && b.floorStyle !== "ice"){
+   if(b.floorStyle !== "dirt" && b.floorStyle !== "ice" && b.floorStyle !== "loam"){
     const t = floorTone(gx, gy);
     ctx.save();
     ctx.globalAlpha = 0.05 + Math.abs(t - 0.5) * 0.22;
