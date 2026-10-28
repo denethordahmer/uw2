@@ -171,17 +171,18 @@ window.Delve = window.Delve || {};
  if(possible.length){
  const it = Object.assign({}, possible[Math.floor(Math.random()*possible.length)]);
  delete it.x; delete it.y;
+ it.isNew = true;
  Delve.G.inventory.push(it);
  Delve.flash("Quartermaster: " + it.name);
  }
  }
  if(s.nodes && s.nodes.provisioner){
  let pot = Delve.potionDefs ? Delve.potionDefs[Math.floor(Math.random()*Delve.potionDefs.length)] : null;
- if(pot){ const stored = Object.assign({}, pot); delete stored.x; delete stored.y; Delve.G.inventory.push(stored); Delve.flash("Provisioner: " + stored.name); }
+ if(pot){ const stored = Object.assign({}, pot); delete stored.x; delete stored.y; stored.isNew = true; Delve.G.inventory.push(stored); Delve.flash("Provisioner: " + stored.name); }
  }
  if(s.nodes && s.nodes.master_provisioner){
  let pot = Delve.potionDefs ? Delve.potionDefs[Math.floor(Math.random()*Delve.potionDefs.length)] : null;
- if(pot){ const stored = Object.assign({}, pot); delete stored.x; delete stored.y; Delve.G.inventory.push(stored); Delve.flash("Master Provisioner: " + stored.name); }
+ if(pot){ const stored = Object.assign({}, pot); delete stored.x; delete stored.y; stored.isNew = true; Delve.G.inventory.push(stored); Delve.flash("Master Provisioner: " + stored.name); }
  Delve.G.gold = (Delve.G.gold || 0) + 25; // Master Provisioner: +25g (desc said so, was missing)
  }
 

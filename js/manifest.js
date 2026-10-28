@@ -59,7 +59,9 @@ window.Delve = window.Delve || {};
   "js/gen/bossarena.js",     // boss floors: three-part arena layout + dressing
   "js/levels.js",
   "js/ground.js",
-  "js/growth.js",
+  "js/growth/core.js",       // growth framework: placement, bake cache, wall climbs
+  "js/growth/moss.js",       // form "moss"      — the Upper Ruins' lobed patches
+  "js/growth/mycelium.js",   // form "mycelium"  — the Blackvein's branching veins
   "js/puddles.js",
 
   // ── systems ────────────────────────────────────────────────

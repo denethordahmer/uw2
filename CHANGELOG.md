@@ -11,6 +11,53 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Changed — growth is one form per biome, and biome 2 finally has its own
+
+- **The owner's report:** *biome 2 uses the same moss as biome 1*. It did — one
+  hard-coded blob served every ward, with only the palette changed.
+- **One file per form.** `js/growth.js` is now `js/growth/core.js` (the
+  framework: rooms, anchor bias, bake cache, wall climbs, both draw seams) plus
+  `js/growth/moss.js` and `js/growth/mycelium.js`. A biome names its
+  form with `BIOMES[n].growthStyle` and the form registers itself through
+  `Delve.registerGrowthStyle`, so a new biome's growth is a new file and one
+  string — no branch inside the framework. A biome with no registered form grows
+  nothing, and the browser suite now says so instead of letting it pass silently.
+- **Ward 1 is untouched.** The moss form is the old code moved, not rewritten: the
+  same anchors, the same seeds and pixel-identical bakes (verified by running the old
+  file and the new one under one seeded RNG and comparing every image byte).
+- **Biome 2 grows mycelium veins.** A colony is 1–9 thin strands that leave a wall or
+  corner, wander, fork up to three deep and taper to single-pixel tips; roughly one in
+  six curls into a fairy ring. Each colony rolls its heading, curl, branching rate,
+  width and reach, so shapes vary deliberately. Strands are stamped pixel by pixel at
+  16 px/tile, clip to plain floor, and the tiles they cross decide which walls get a
+  climb. It has its own paler palette (`growthVeinPal`) and its own climb art
+  (`C.WALL_MYCELIUM`) instead of the Ruins' leafy stems.
+- **Same rules for every form:** only plain FLOOR takes paint, growth never enters the
+  grid or the run snapshot, a floor re-rolls it on generation, and a wall only climbs
+  where a floor colony touches it.
+
+### Fixed — the bag badge counted loot on the floor, so it never went away
+
+- **It was counting the wrong array.** `updateHUD()` built the badge from
+  `G.items.length` — that is loot lying on the **floor**, not the bag
+  (`G.inventory`). So a single drop anywhere on the level put a permanent
+  "1" on the button, and equipping the item you had just picked up changed nothing.
+  Exactly what the owner saw.
+- **The badge now means "new in the bag".** Every path that puts an item in
+  `G.inventory` sets `it.isNew = true` (`pickupItem`, the
+  floor item card, the heirloom, the hub's Quartermaster and both Provisioner nodes).
+  `updateHUD()` shows `Delve.unseenCount()`; opening the inventory
+  calls `Delve.markBagSeen()`, and equipping an item clears its own flag, so
+  the number cannot stick. 0 hides it (CSS, unchanged).
+- **The title keeps the real bag.** The tooltip is now `Inventory 3/16 — 2 new`,
+  so capacity is still one hover (long-press) away.
+- **The flag is UI state, not data.** `save.js`'s `cleanItems` strips
+  `isNew` on the way in and out, so a resumed run cannot come back with a
+  stale dot.
+- **A dead test is live again.** `test_items.js` guarded the v3 to v4 sanitise
+  check behind `D.__testSanitizeRun`, which nothing ever defined — the two
+  checks silently never ran. `save.js` now exposes the hook.
+
 ### Added — background music, one bed per ward
 
 - **The music is real now.** `music/biome1-1.mp3` … `biome4-1.mp3` are in the repo (the

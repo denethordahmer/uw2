@@ -5,8 +5,9 @@ re-discovered. `docs/architecture.md` remains the reference for how the code wor
 
 ## State (verified at handoff)
 
-**Green gate:** `node test_items.js` → **PASSED 274/274**, `loaded 42 scripts`,
-**PASSED 84/84**, exit 0. `node test_ui.js` → **274/274**. `node tools/check-order.js`
+**Green gate:** `node test_items.js` → **PASSED 281/281** from `test_ui.js`, then
+`loaded 44 scripts` and **PASSED 116/116** from `test_items.js` (it runs `test_ui.js`
+first), exit 0. `node tools/check-order.js`
 → green (42 scripts, manifest = index.html). Every `.js` passes `node --check`.
 
 **Working tree is uncommitted.** HEAD is `e3d5baf`. Built since then, all tested:
@@ -16,7 +17,7 @@ re-discovered. `docs/architecture.md` remains the reference for how the code wor
 2. **HUD actions moved** — 📊 📍 ☰ 🎒 live in `#hudActions`, a sibling of `#hud` inside
    `#app`, absolute bottom-right at 44px. `Delve.setHudVisible(on)` owns the HUD **and**
    the cluster; never toggle `#hud` directly. Top strip is status only (FLOOR, rests,
-   💰, 💎). 🎒 carries an item-count badge; 📍 lights while the map is open
+   💰, 💎). 🎒 carries an unseen-items badge (see 5); 📍 lights while the map is open
    (`Delve.setMinimapOpen`).
 3. **Board inset** — `#app` is padded by `--hud-h` (top) and `--ui-bottom-px` (bottom),
    measured in `main.js` (`syncHudHeight`, `syncBottomInset`) and kept live by two
@@ -25,7 +26,21 @@ re-discovered. `docs/architecture.md` remains the reference for how the code wor
    bottom buttons covering the last row. Do not hard-code either inset.
 4. **Scrolling screens** — `#inventoryScreen` (plus level-up, victory, death, event)
    have `overflow-y:auto`; the inventory header is sticky so ✕ stays reachable.
-5. **Background music** — four beds in `music/` (biome1-1 … biome4-1.mp3), played by
+5. **🎒 badge fixed (owner's phone report).** It counted `G.items` — loot on the
+   **floor** — so one drop anywhere left a "1" on the button all floor and equipping
+   the drop changed nothing. Now `it.isNew` is set on every bag insert and `updateHUD()`
+   shows `Delve.unseenCount()`; `openInventory` calls `markBagSeen()`, `equipItem`
+   clears its own item, `save.js`'s `cleanItems` strips the flag. Title = `carried/cap
+   — N new`. `__testSanitizeRun` is now actually exported, so two checks that had never
+   run do.
+6. **Growth is one form per biome (latest).** `js/growth.js` became
+   `js/growth/{core,moss,mycelium}.js`: core owns rooms/anchors/bake cache/wall
+   climbs and the two draw seams, and a biome NAMES its form with
+   `BIOMES[n].growthStyle` (`Delve.registerGrowthStyle`). Biome 1 = `moss` (the old
+   code moved, bakes pixel-identical), biome 2 = `mycelium` (thin branching veins with
+   `growthVeinPal` and `C.WALL_MYCELIUM` climb art). Biomes 3–4 name nothing yet, so
+   they grow nothing — that is Procedure C's job, and it is now a new file each.
+7. **Background music** — four beds in `music/` (biome1-1 … biome4-1.mp3), played by
    `sfx.js` via `MUSIC_TRACKS` (one array per ward, ward from `getWard`: 1–10 → 1 …
    31–40 → 4). No HTML5 `loop`: 2s tail fade-out, then `ended` picks the next bed and
    fades in; 700 ms cross-fade on ward change. Mute and the music slider are mirrored
@@ -124,6 +139,12 @@ Do not simply double the number. In order:
    a phone run counting *useful upgrades* per floor, not raw drops.
 
 ## Procedure C — biomes 3 and 4, seamless floor and wall
+
+**Growth half is ready:** `js/growth/frost.js` and `js/growth/bone.js` each register a
+form (`frost`: creeping ice ferns; `bone`: dry cracks and dust fans), add the name to
+`BIOMES[2].growthStyle` / `BIOMES[3].growthStyle` plus a `growth` block on wards 3–4,
+and register them in `js/manifest.js` + `index.html`. No edit to `core.js` should be
+needed — if one is, the seam is wrong; fix the seam, not the form.
 
 1. Add two baked torus styles to `bondTexture`'s dispatch: **"ice"** (large cracked ice
    sheets, no lattice, pale seams that wander) and **"bone"** (packed bone-dust / rubble

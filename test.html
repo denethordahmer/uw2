@@ -477,6 +477,13 @@ try {
       badBiomes.push(nm + " — clutter '" + bm.clutter + "' (expected one of " + CLUTTER_SETS.join("/") + ")");
     if (bm.groundCover && !(d.SPR && d.SPR.world && d.SPR.world[bm.groundCover]))
       badBiomes.push(nm + " — groundCover names '" + bm.groundCover + "', which has no sprite in SPR.world");
+    // Growth is one form per biome (js/growth/). A biome that names a style
+    // nothing registered silently grows nothing at all.
+    var ward = (cfg.WARDS || []).filter(function(w){ return w.biome === bi; })[0];
+    if (ward && ward.growth && !(bm.growthStyle && d.growthStyles && d.growthStyles[bm.growthStyle]))
+      badBiomes.push(nm + " — grows, but growthStyle '" + bm.growthStyle + "' is not a registered form");
+    if (bm.growthStyle && !(d.growthStyles && d.growthStyles[bm.growthStyle]))
+      badBiomes.push(nm + " — growthStyle '" + bm.growthStyle + "' has no form in js/growth/");
   });
 
   // ── Arena dressing integrity ───────────────────────────────────

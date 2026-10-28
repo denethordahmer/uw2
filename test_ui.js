@@ -333,10 +333,32 @@ ok(/hud-floor-lbl/.test(html), "the floor chip is labelled FLOOR, not a map icon
 ok(/rest-pips/.test(html), "the rest pips are labelled as rests");
 ok(html.indexOf("🗺️") < 0, "no map emoji sits beside the floor number");
 ok(registry.get("logPanel").classList.contains("active"), "log pill activated during a run");
-// The bag button carries its own count (CSS draws it from data-bag; 0 hides it).
-ok(registry.get("invBtn").dataset.bag === String((D.G.items || []).length),
-   "the bag button shows how many items are carried");
-ok(/\/\d+$/.test(registry.get("invBtn").title), "the bag title carries the capacity");
+// The bag badge means "new in the BAG" (isNew in items.js), not "loot on the
+// floor". Counting G.items kept a "1" on the button all floor long and left it
+// there after the drop had been equipped and put on.
+D.G.items = [{ id:"floorloot", slot:"weapon", tier:2, x:4, y:4 }];
+D.G.inventory = [];
+D.updateHUD();
+ok(registry.get("invBtn").dataset.bag === "0",
+   "loot lying on the floor does not light the bag badge");
+D.pickupItem(D.makeItem(2, { slot:"weapon", floor:3 }));
+D.updateHUD();
+ok(registry.get("invBtn").dataset.bag === "1", "a picked-up item lights the badge (1)");
+ok(registry.get("invBtn").title.indexOf(D.G.inventory.length + "/" + D.inventoryCap()) >= 0,
+   "the title carries the real bag (" + registry.get("invBtn").title + ")");
+D.equipItem(D.G.inventory[0]);
+D.updateHUD();
+ok(registry.get("invBtn").dataset.bag === "0", "equipping the new item clears the badge");
+ok(D.unseenCount() === 0, "and unseenCount agrees");
+D.G.inventory = [];
+D.pickupItem(D.makeItem(1, { slot:"body", floor:2 }));
+D.updateHUD();
+ok(registry.get("invBtn").dataset.bag === "1", "the next pickup lights it again");
+D.openInventory();
+ok(registry.get("invBtn").dataset.bag === "0", "opening the inventory clears the badge");
+ok(D.unseenCount() === 0, "nothing stays flagged after the bag is opened");
+ok(/\/\d+(\/\d+)?$/.test(registry.get("invBtn").title.replace(" — 0 new", "")),
+   "the bag title still carries the capacity");
 
 // The board's viewport. resize() now measures the canvas (which sits below the
 // HUD) instead of window.inner*, and a NaN or zero there would blank the map.

@@ -479,7 +479,7 @@ const DEATH_LIFE = 460;
   }
   // biome ground cover, flat on the floor before any prop sits over it
   Delve.drawGroundCover(ctx,camX,camY,vw,vh,ts);
-  // ward growth patches (js/growth.js) — organic spots on top of the floor pattern
+  // ward growth patches (js/growth/*.js) — organic spots on top of the floor pattern
   Delve.drawGrowthFloor(ctx,camX,camY,vw,vh,ts);
   // floor props first, so wall edges and their shadows fall over the bases
   drawDecor(ctx,camX,camY,vw,vh,ts,"floor");
@@ -514,7 +514,7 @@ const DEATH_LIFE = 460;
     ctx.save(); ctx.globalAlpha=pulse*0.55; ctx.fillStyle="#7ee0ff"; ctx.beginPath(); ctx.arc(sx+ts*0.5,sy+ts*0.5,ts*0.15,0,Math.PI*2); ctx.fill(); ctx.restore();
    }
   }
-  // wall growth climbs (js/growth.js) — only on walls a floor patch grows against
+  // wall growth climbs (js/growth/*.js) — only on walls a floor patch grows against
   Delve.drawGrowthWalls(ctx,camX,camY,vw,vh,ts);
   // hanging props, over the wall art. Drawn before the entities below, so a boss
   // or monster standing in front of a banner still covers it.

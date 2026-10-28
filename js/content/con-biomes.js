@@ -11,7 +11,7 @@ window.Delve = window.Delve || {};
     // nGen = smoothing passes, amount = max fraction of floor claimed.
     // Water is no longer a CA patch: it is wall-anchored puddles (js/puddles.js).
     patches:[],
-    // Floor growth (js/growth.js placeGrowth): sporadic organic patches, rolled per
+    // Floor growth (js/growth/core.js placeGrowth): sporadic organic patches, rolled per
     // room. roomChance = odds a room grows any; largeArea/largeChance/bigChance
     // = a large room may instead grow one big patch or two normal ones;
     // cornerBias + wallBias = where the anchor lands (the remainder is open
@@ -34,7 +34,7 @@ window.Delve = window.Delve || {};
     patches:[
       { type:"grass", seed:0.45, nGen:3, amount:0.06 }
     ],
-    // Floor growth (js/growth.js placeGrowth): an overgrown forest floor needs
+    // Floor growth (js/growth/core.js placeGrowth): an overgrown forest floor needs
     // more than the default — more rooms grow, bigger patches, biased toward
     // wall bases so moss and roots climb the stone. BIOMES[1].growthPal supplies
     // the yellow-green gradient; without this block placeGrowth bails entirely.
@@ -121,17 +121,17 @@ window.Delve = window.Delve || {};
   4: { pillar:"prop_pillarBone",   banner:"prop_shroudOssuary", wallBit:"prop_nicheOssuary", rubble:"prop_rubbleOssuary", bone:"prop_pileOssuary", cluster:"prop_tombOssuary" }
  };
 
- // ── Pixel-grain art data (Batch 22 heritage; moss now lives in js/growth.js) ───────────
+ // ── Pixel-grain art data (Batch 22 heritage; moss now lives in js/growth/) ───────────
  // The old MOSS_DESIGNS chunk library was dead data — nothing read it — and
  // the moss it described was the flat green the owner hated. Deleted: moss
- // is now grown as real organic patches by js/growth.js, shaped at 16 fine
+ // is now grown as real organic patches by js/growth/, shaped at 16 fine
  // pixels per tile and dressed in the biome's growthPal gradient (BIOMES[0]).
  // (the MOSS_DESIGNS array that used to sit here is gone — see above)
 
  // Wall moss growth: 4 hand-designed climbs, 16x16 fine pixels, drawn with the
  // BASE (thick, dark) on the row nearest the floor and a stem that meanders up
  // and branches 2-3 ways toward the top. D = dark, M = mid, L = light tip.
- // js/growth.js drawGrowthWalls recolours these from the biome's growthPal and turns
+ // js/growth/core.js drawGrowthWalls recolours these from the biome's growthPal and turns
  // each to face the floor tile its patch grows from — walls only ever grow
  // moss where a floor patch sits against them (the owner's linked rule).
  C.WALL_MOSS = [
@@ -153,6 +153,26 @@ window.Delve = window.Delve || {};
     "...MMDDD........", "..MMDDDDM.......", ".MMDDDDDDMMM....", "MMDDDDDDDDDMM..." ]
  ];
 
+ // Wall mycelium (js/growth/mycelium.js): the Blackvein's own climb, so biome 2
+ // does not borrow the Ruins' leafy stems. Thin threads leave the dark base and
+ // meander up, each ending in a pale bracket cap; a second family splits into
+ // two threads that rejoin. Same 16x16 grain and the same D/M/L letters, so the
+ // shared wall pass recolours it from the biome's gradient.
+ C.WALL_MYCELIUM = [
+  [ ".......L........", "......L.........", "......M.........", ".....M..L.......",
+    ".....M.L........", "....MM.M........", "....M..M........", "...MM..M........",
+    "...M..MM........", "..MM..M.........", "..M..MM.........", "..M..M..........",
+    ".MM.MM..........", ".M..M...........", ".MD.MD..........", "MMDDMDD........." ],
+  [ "..L.........L...", "..M.........M...", "...M.......M....", "...M.......M....",
+    "....M.....M.....", "....M....MM.....", ".....M...M......", ".....MM.MM......",
+    "......MMM.......", ".......M........", ".......M........", "......MM........",
+    "......M.........", ".....MM.........", ".....M..........", "....MMDD........" ],
+  [ "....L...L...L...", "....M...M...M...", "...MM...M...M...", "...M...MM..M....",
+    "...M...M..MM....", "..MM..MM..M.....", "..M...M..MM.....", "..M..MM..M......",
+    ".MM..M..MM......", ".M..MM..M.......", ".M..M..MM.......", "MM..M..M........",
+    "M..MM..M........", "MD.M..MM........", "MDDM..M.........", "MDDDMDD........." ]
+ ];
+
  C.BIOMES = [
   { name:"Upper Ruins",
     wall:"#64707c", wallEdge:"#8d99a6", wallBrick:"#3a4248", mortar:"#0b0f14",
@@ -165,12 +185,15 @@ window.Delve = window.Delve || {};
     // as one continuous paved surface.
     floorStyle:"runningbond",
     // Linked wall growth: this biome's walls grow moss only where a floor patch
-    // touches them (js/growth.js drawGrowthWalls), instead of the old flat trim.
+    // touches them (js/growth/core.js drawGrowthWalls), instead of the old flat trim.
     growthLinked:true,
     // The moss gradient, dark root → bright growing tip (the owner's
-    // brighter-green pick). js/growth.js spreads a patch's shades across it:
+    // brighter-green pick). js/growth/ spreads a patch's shades across it:
     // small patches take a couple, big ones nearly all.
     growthPal:["#2b5340","#356d4a","#4f8f63","#74b584","#97d3a3"],
+    // The form (js/growth/moss.js). A biome names its own; the shared rules
+    // (anchor bias, per-room rolls, linked walls) live in js/growth/core.js.
+    growthStyle:"moss",
     // Decoration family for floor tiles (render.js drawClutter/drawWeed):
     // "ruins" | "blackvein" | "frost". A ward must name one, or its floors
     // would fall back to the ruins look.
@@ -185,10 +208,17 @@ window.Delve = window.Delve || {};
     // of masonry. No lattice means no tile grid can read at all, and the brown
     // earth sits under the existing thorn/vine clutter and moss ground cover.
     floorStyle:"dirt",
-    // Wall growth climbs from floor patches like ward 1's moss (js/growth.js).
+    // Wall growth climbs from floor patches like ward 1's moss (js/growth/core.js).
     growthLinked:true,
     // Dark root → bright growing tip, in the Blackvein's yellow-green.
     growthPal:["#2a3a18","#3d5222","#5a7a2e","#7a9a3a","#9dbd52"],
+    // Its own form (js/growth/mycelium.js): thin branching veins that creep out
+    // of the soil, fork 2-3 deep and sometimes curl into a fairy ring — not the
+    // Ruins' lobed patches. The owner asked for this by name.
+    growthStyle:"mycelium",
+    // Veins read paler than moss: damp white-green threads with dark roots, so
+    // the strands separate from the brown soil instead of sinking into it.
+    growthVeinPal:["#2b3520","#4a5a28","#77883a","#a9bb63","#dfe9a8"],
     clutter:"blackvein",
     // Ground-cover sprite (js/ground.js): blood moss creeping over the floor.
     groundCover:"ground_moss" },

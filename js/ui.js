@@ -112,14 +112,17 @@ window.Delve = window.Delve || {};
   setBar("hudXpFill", xp / need);
 
   $("hudFloor").textContent = G.floor;
-  // The bag button carries its own count, so "how full am I" is answered without
-  // opening the inventory. 0 hides the badge (CSS), and the title carries the cap.
+  // The badge answers "is there something in the bag I have not looked at?".
+  // It counts G.inventory items flagged isNew (see items.js), NOT the loot lying
+  // on the floor: counting the floor is what left a stale "1" up after equipping
+  // the drop. 0 hides the badge (CSS); the title always carries the real bag.
   const bagBtn = $("invBtn");
   if(bagBtn){
-   const carried = (G.items || []).length;
-   bagBtn.dataset.bag = String(carried);
-   bagBtn.title = "Inventory " + carried + "/" +
-     (Delve.inventoryCap ? Delve.inventoryCap() : (Delve.CONFIG.inventorySlots || 16));
+   const carried = (G.inventory || []).length;
+   const unseen = Delve.unseenCount ? Delve.unseenCount() : 0;
+   const cap = Delve.inventoryCap ? Delve.inventoryCap() : (Delve.CONFIG.inventorySlots || 16);
+   bagBtn.dataset.bag = String(unseen);
+   bagBtn.title = "Inventory " + carried + "/" + cap + (unseen ? " — " + unseen + " new" : "");
   }
   $("hudGold").textContent = G.gold;
   $("hudShards").textContent = Delve.save.shards + (Delve.pendingRunShards ? Delve.pendingRunShards() : 0); // banked + unbanked run earnings
@@ -274,6 +277,10 @@ window.Delve = window.Delve || {};
    });
   }
 
+  // Everything is on screen now, so the "new" flags have been seen. Clearing them
+  // here is what stops the number sitting on the 🎒 after the player has looked.
+  if(Delve.markBagSeen) Delve.markBagSeen();
+  Delve.updateHUD();
   $("inventoryScreen").style.display = "flex";
  };
  $("invBtn").addEventListener("click", Delve.openInventory);
@@ -351,6 +358,7 @@ window.Delve = window.Delve || {};
     const it = Object.assign({}, pendingItemAction.item);
     const x = it.x, y = it.y; delete it.x; delete it.y;
     Delve.G.items = Delve.G.items.filter(function(i){ return !(i.x === x && i.y === y); });
+    it.isNew = true;
     Delve.G.inventory.push(it);
     if(Delve.logPickup) Delve.logPickup(it.name, it.tier);
     Delve.flash("Picked up " + it.name);

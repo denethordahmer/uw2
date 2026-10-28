@@ -36,7 +36,7 @@ window.Delve = window.Delve || {};
    // and water overlays as pure data — snow instead of moss, ice instead of water
    patchGrass: b.patchGrass || b.moss || "#3f6d55",
    patchWater: b.patchWater || b.water || "#1e3a4a",
-   // Seamless floor + linked growth (js/growth.js). floorStyle "runningbond" = the
+   // Seamless floor + linked growth (js/growth/). floorStyle "runningbond" = the
    // baked 3x3 torus masonry pattern instead of per-tile slabs; growthLinked = the
    // walls grow growth only where a floor patch touches them; growthPal = the
    // biome's locked green gradient (dark root → bright tip).
@@ -522,7 +522,7 @@ window.Delve = window.Delve || {};
   // the biome's own growth creeping over the top edge: lichen in the
   // Blackvein, frost in the Vault — colour comes from b.moss. A growthLinked
   // biome (the Upper Ruins) skips this: its walls only grow moss where a
-  // floor patch touches them, painted by js/growth.js drawGrowthWalls instead.
+  // floor patch touches them, painted by js/growth/core.js drawGrowthWalls instead.
   if(!b.growthLinked && hash3(gx,gy,171) < 0.45){
    ctx.save(); ctx.globalAlpha = mood===2 ? 0.40 : 0.28;
    ctx.fillStyle = b.moss;

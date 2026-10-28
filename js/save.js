@@ -81,7 +81,14 @@ window.Delve = window.Delve || {};
   }
   function cleanItems(list){
     if(!Array.isArray(list)) return [];
-    return list.filter(isCurrentItem);
+    // isNew is bag-badge UI state, not item data. Saving it would bring a stale
+    // "new" dot back on resume; this runs on the way in and out, so drop it here.
+    return list.filter(isCurrentItem).map(function(it){
+      if(!it || !it.isNew) return it;
+      const copy = Object.assign({}, it);
+      delete copy.isNew;
+      return copy;
+    });
   }
 
   // The heirloom (js/items.js): one carried item kept through a death and
@@ -201,6 +208,10 @@ window.Delve = window.Delve || {};
   }
 
   Delve.createDefaultSave = function(){ return makeDefaultSave(); };
+
+  // Test hook: test_items.js sanitises a hand-written v3 run through the real
+  // migration path instead of guessing at it (the check used to be a silent no-op).
+  Delve.__testSanitizeRun = sanitizeRun;
 
   Delve.resetSave = function(options){
     const silent = !!(options && options.silent);

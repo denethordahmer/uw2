@@ -194,7 +194,7 @@ window.Delve = window.Delve || {};
   // Biome ground cover (Batch 16) — placed after the arena so it avoids the
   // boss and the spawn; read-only decoration, like the props above.
   Delve.placeGroundCover(G);
-  // Ward growth (js/growth.js) — rolled per room after everything else is
+  // Ward growth (js/growth/core.js) — rolled per room after everything else is
   // placed. Guarded + try/caught so a growth failure (missing file, runtime
   // error) can NEVER abort floor generation: the boss, its arena, monsters
   // and everything else this floor lays down must always survive.

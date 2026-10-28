@@ -16,7 +16,7 @@ window.Delve = window.Delve || {};
  // the run checkpoint behave exactly as they did.
 
  const T = function(){ return Delve.T; };
- const PX = 16;             // sample cells per tile, same grain as growth.js
+ const PX = 16;             // sample cells per tile, same grain as js/growth/
  const MIN_LEAKS = 2, MAX_LEAKS = 4;
  const MIN_R = 1.30, MAX_R = 1.90;
 

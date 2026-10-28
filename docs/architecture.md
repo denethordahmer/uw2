@@ -198,7 +198,8 @@ Notes: derived stats are split — `items.js` owns `playerSpeed` and `itemBuffs`
 
 **`js/items.js`** — RUNTIME
 `rollTier`, `stampProvenance`, `rollKillDrop`, `dropPotion`, `dropUnique`, `itemPrice`,
-`sellValue`, `sellItem`, `sellAll`, `inventoryCap`, `pickupItem`, `playerSpeed`,
+`sellValue`, `sellItem`, `sellAll`, `inventoryCap`, `unseenCount`, `markBagSeen`,
+`markItemSeen`, `pickupItem`, `playerSpeed`,
 `itemBuffs`, `equipItem`, `unequipItem`, `equipWeapon`, `equipArmour`, `weaponStatus`,
 `useConsumable`, `itemStatLines`, `wardOf`, `itemsByTier`, `makeShopStock`,
 `shopHealCost`, `isShopFloor`, `healCost`.
@@ -277,23 +278,46 @@ called from the end of both `genFloor` and `genBossFloor`. Everything is read at
 so the file has no load-order position of its own — it sits after `levels.js` only to group
 generation code.
 
-**`js/growth.js`**
-`Delve.placeGrowth`, `Delve.drawGrowthFloor`, `Delve.drawGrowthWalls`. The wards' organic growth:
-per-room sporadic spots rolled at the end of `genFloor`/`genBossFloor`, biased to corners and
-wall bases and growing outward, each a random radius between the ward's low/high caps
-(`growth` block on the ward in con-biomes.js — only ward 1 has one so far, so the other wards
-grow none). Each spot bakes once per floor into a wobbled, multi-lobed fine-pixel blob
-(16 px/tile) dressed in the biome's `growthPal` gradient — more shades the bigger the patch —
-with a dithered dark→bright gradient root-to-fringe, a pixel-eroded rim (no straight edges,
-even against walls) and a per-pixel FLOOR-tile clip, so growth never grows over water, doors,
-stairs or furniture. Wall growth is LINKED: the `C.WALL_MOSS` climbs are recoloured from
-`growthPal` and drawn, rotated to face the floor, only on the wall tiles a patch touches
-(never over braziers). Floors roll fresh growth every generation — within one floor the baked
-blobs are stable — and nothing enters the grid or the run snapshot; a resume re-rolls it
-with the floor, like ground cover. render.js draws the floor blobs after `drawGroundCover`
-and the climbs after the wall pass; a `floorStyle:"runningbond"` biome (ward 1)
-additionally paints the seamless baked 3x3-tile torus masonry pattern instead of
-per-tile slabs, which is what removed the tile grid from the Upper Ruins' floors.
+**`js/growth/core.js`, `js/growth/moss.js`, `js/growth/mycelium.js`**
+The wards' organic growth, as an **open set of forms — one per biome**. A biome names its form
+with `BIOMES[n].growthStyle`; the form registers itself through
+`Delve.registerGrowthStyle(id, { place, bake, palette?, wallDesigns? })`, so adding a biome's
+own growth is a new file under `js/growth/` plus that one string — no branch in the framework.
+Registered today: `"moss"` (the Upper Ruins' lobed patches) and `"mycelium"` (the Blackvein's
+branching veins).
+- **core.js** owns the shared rules and both public draw seams: `Delve.placeGrowth` (end of
+  `genFloor`/`genBossFloor`), `Delve.drawGrowthFloor` (after `drawGroundCover`),
+  `Delve.drawGrowthWalls` (after the wall pass). It finds the rooms (flood fill of
+  FLOOR/WATER/GRASS, so a "room" is a chamber the player sees), picks anchors —
+  corner-biased, then wall-biased, then open floor, odds from the ward's `growth` block —
+  and hands each form `place(G, cfg, pal, U)` / `bake(spot, pal, U)` plus the utilities in
+  `Delve.growthUtil` (`regions`, `wallSides`, `pickAnchor`, `rngFrom`, `shades`,
+  `newBake`, `commitBake`). It also caches bakes per floor+spot and does the blit: every
+  canvas is square, `S` fine px wide, **centred on the spot's `cx/cy`**, pixel `i`'s centre
+  at `ox + i + 0.5`, drawn at `S/16` tiles wide. A spot must set `cx, cy, r, seed`; nothing
+  about its shape is core's business.
+- **moss.js** — the original form: one wobbled, multi-lobed blob grown outward from the
+  anchor, a per-room plan of one normal patch, two, or one large one. Bigger patch = more
+  shades of the biome's `growthPal`; dark root at the wall, bright tips facing open floor;
+  the rim is nibbled fine-pixel by fine-pixel, so no edge is ever a clean curve. Ward 1's
+  art is unchanged by the split (same anchors, same seeds, pixel-identical bakes).
+- **mycelium.js** — veins, not a carpet: a colony is 1–9 thin strands that leave the wall or
+  corner, wander, fork up to three deep and taper to single-pixel tips, sometimes curling
+  into a fairy ring. Each colony rolls its heading, curl, branching rate, width and reach, so
+  shapes vary widely on purpose; the strands are stamped pixel by pixel (no canvas strokes)
+  and clip to plain FLOOR. The tile set the strands cover is recorded at placement, so the
+  walls they reach get climbs (the linked rule). It has its own palette
+  (`BIOMES[1].growthVeinPal`) and its own climb art (`C.WALL_MYCELIUM`).
+- **Shared rules.** Every form paints **only plain FLOOR** — walls, doors, water, stairs,
+  chests and props cut it. Growth never enters the grid, never blocks, never shows on the
+  minimap and never enters the run snapshot: a floor re-rolls its growth on every generation
+  and a resume rebuilds it with the floor. A ward with no `growth` block grows nothing
+  whatever its biome says, and a biome with no registered `growthStyle` grows nothing
+  either. render.js draws the floor spots after `drawGroundCover` and the climbs after the
+  wall pass; climbs are recoloured from the palette, rotated to face the floor, and never
+  drawn over a brazier. A `floorStyle:"runningbond"` biome (ward 1) additionally paints the
+  seamless baked 3x3-tile torus masonry pattern instead of per-tile slabs, which is what
+  removed the tile grid from the Upper Ruins' floors.
 
 **`js/puddles.js`**
 `Delve.placePuddles`, `Delve.drawPuddleTile`. Wall-anchored puddles (§6.18). Every WATER tile
@@ -301,7 +325,7 @@ belongs to one lobed blob that sits against a wall. `placePuddles` runs at the e
 (normal floors only — the boss branch returns earlier), guarded + try/caught like growth so it
 can never abort generation; `render.js` paints the water in the tile pass (where the old square
 `drawWaterPatch` used to be). Everything is read at call time, so the file has no load-order
-position of its own — it sits after `growth.js` only to group generation code.
+position of its own — it sits after `js/growth/` only to group generation code.
 
 ### 3.4 Engine — progression, combat, movement, economy
 
@@ -477,7 +501,11 @@ the in-run pause menu dead (§8). It defines no name another file defines, and o
   under the HUD at `top:calc(var(--hud-h) + 8px)`, with `--hud-h` measured by a
   `ResizeObserver` on `#hud`; that is what keeps it clear of the ability bar, which wraps
   and scrolls inside `max-height:34vh`. `Delve.setMinimapOpen(open)` owns the map panel and
-  the 📍 button's lit state. Every combat number (attack, weapon damage, crit,
+  the 📍 button's lit state. The 🎒 badge is `content:attr(data-bag)` and shows
+  `Delve.unseenCount()` — bag items flagged `isNew` — **not** how much is carried:
+  it used to count `G.items`, which is loot on the floor, so it never cleared. Opening
+  the inventory (`markBagSeen`) or equipping the item clears the flag; the title keeps
+  `carried/cap`. Every combat number (attack, weapon damage, crit,
   attack speed, damage reduction, dodge, luck, merchant discount) lives in the **character
   sheet** (`#statsOverlay`, opened with 📊), together with your passives, their ranks and
   set progress. It is read standing still, so it uses the full screen, and it is in
@@ -685,37 +713,39 @@ copy of the list. **If you add, remove or reorder a script, edit the manifest an
  7  js/content/con-biomes.js
  8  js/content/con-traits.js
  9  js/content/con-progression.js
-10  js/save.js
-11  js/attrs.js
-12  js/itemgen.js                      ← item construction: quality budget, stats, affixes
-13  js/items.js                        ← item runtime: price, sell, pickup, equip, shop
-14  js/sprites.js
-15  js/content/con-bosssprites.js      ← ordering exception (needs sprites.js)
-16  js/content/con-itemsprites.js      ← same constraint (needs sprites.js)
-17  js/content/con-worldart.js         ← same constraint (needs sprites.js)
-18  js/content/con-monstersprites.js   ← same constraint (needs sprites.js)
-19  js/state.js
-20  js/gen/bsp.js                      ← floor-plan geometry
-21  js/gen/bossarena.js                ← boss floors: arena layout + dressing
-22  js/levels.js
-23  js/ground.js                       ← no load-dependency; grouped with generation
-24  js/growth.js                       ← no load-dependency; grouped with generation
-25  js/puddles.js                      ← no load-dependency; grouped with generation
-26  js/traits.js
-27  js/combat.js
-28  js/movement.js                     ← follows combat.js
-29  js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
-30  js/effects.js
-31  js/sfx.js
-32  js/log.js
-33  js/render/tiles.js                 ← tile atlas; render.js destructures Delve.tiles
-34  js/render.js
-35  js/pathfind.js
-36  js/input.js
-37  js/ui.js
-38  js/menu.js
-39  js/progression.js
-40  js/main.js
+ 10 js/save.js
+ 11 js/attrs.js
+ 12 js/itemgen.js                      ← item construction: quality budget, stats, affixes
+ 13 js/items.js                        ← item runtime: price, sell, pickup, equip, shop
+ 14 js/sprites.js
+ 15 js/content/con-bosssprites.js      ← ordering exception (needs sprites.js)
+ 16 js/content/con-itemsprites.js      ← same constraint (needs sprites.js)
+ 17 js/content/con-worldart.js         ← same constraint (needs sprites.js)
+ 18 js/content/con-monstersprites.js   ← same constraint (needs sprites.js)
+ 19 js/state.js
+ 20 js/gen/bsp.js                      ← floor-plan geometry
+ 21 js/gen/bossarena.js                ← boss floors: arena layout + dressing
+ 22 js/levels.js
+ 23 js/ground.js                       ← no load-dependency; grouped with generation
+ 24 js/growth/core.js                 ← growth framework: rooms, anchors, bake cache, climbs
+ 25 js/growth/moss.js                 ← form "moss": lobed patches (needs core)
+ 26 js/growth/mycelium.js             ← form "mycelium": veins (needs core)
+ 27 js/puddles.js                      ← no load-dependency; grouped with generation
+ 28 js/traits.js
+ 29 js/combat.js
+ 30 js/movement.js                     ← follows combat.js
+ 31 js/rewards.js                      ← follows combat.js (uses Delve.rowFor)
+ 32 js/effects.js
+ 33 js/sfx.js
+ 34 js/log.js
+ 35 js/render/tiles.js                 ← tile atlas; render.js destructures Delve.tiles
+ 36 js/render.js
+ 37 js/pathfind.js
+ 38 js/input.js
+ 39 js/ui.js
+ 40 js/menu.js
+ 41 js/progression.js
+ 42 js/main.js
 ```
 
 ### Hard constraints (violate = silent breakage)

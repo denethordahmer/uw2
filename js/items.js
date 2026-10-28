@@ -213,6 +213,32 @@ window.Delve = window.Delve || {};
  return Math.min(Delve.CONFIG.inventoryMax || 24, base);
  };
 
+ // ── "New in the bag" markers ──────────────────────────────────
+ // The 🎒 badge used to count G.items, which is the loot lying on the FLOOR, so a
+ // single drop anywhere on the level kept a "1" on the button all floor long and
+ // equipping the thing you just picked up changed nothing. The badge now means
+ // "items in the bag you have not looked at": every path that puts something in
+ // G.inventory marks it, and opening the inventory (or equipping the item) clears it.
+ Delve.unseenCount = function(){
+ const G = Delve.G;
+ if(!G || !G.inventory) return 0;
+ return G.inventory.filter(function(x){ return !!(x && x.isNew); }).length;
+ };
+
+ Delve.markItemSeen = function(item){
+ if(item) item.isNew = false;
+ };
+
+ Delve.markBagSeen = function(){
+ const G = Delve.G;
+ if(!G || !G.inventory) return 0;
+ let n = 0;
+ G.inventory.forEach(function(x){
+ if(x && x.isNew){ x.isNew = false; n++; }
+ });
+ return n;
+ };
+
  // ── Pickup with capacity enforcement ──────────────────────────
  Delve.pickupItem = function(item){
  const G = Delve.G;
@@ -229,6 +255,7 @@ window.Delve = window.Delve || {};
  }
  const stored = Object.assign({}, item);
  delete stored.x; delete stored.y;
+ stored.isNew = true;
  G.inventory.push(stored);
  if(Delve.sfx) Delve.sfx("pickup_item", { tier: item.tier });
  Delve.flash("Picked up " + item.name);
@@ -260,6 +287,7 @@ window.Delve = window.Delve || {};
  const it = Object.assign({}, s.heirloom);
  s.heirloom = null;
  G.inventory = G.inventory || [];
+ it.isNew = true;
  G.inventory.push(it);
  if(Delve.persist) Delve.persist();
  if(Delve.flash) Delve.flash("Heirloom recovered: " + it.name);
@@ -385,6 +413,7 @@ window.Delve = window.Delve || {};
  if(old) G.inventory.push(old);
  G.equip[key] = item;
  removeFromInv(item);
+ item.isNew = false;   // you have obviously seen it now
  clampHp();
  if(Delve.sfx) Delve.sfx("equip", { slot: item.slot });
  Delve.flash("Equipped " + item.name);

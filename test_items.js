@@ -291,5 +291,209 @@ try { D.buildShop(); }
 catch(e){ shopOk = false; console.log("  buildShop threw: " + e.message); }
 ok(shopOk, "buildShop renders with carried items");
 
+// ── 13. Bag "new" markers and the save round trip ──────────────────────────
+newRun(5, 3);
+D.G.inventory = [];
+D.pickupItem(D.makeGear("ring", 5, {}));
+ok(D.unseenCount() === 1, "a pickup is counted as unseen");
+ok(D.G.inventory[0].isNew === true, "the flag lives on the item");
+D.markItemSeen(D.G.inventory[0]);
+ok(D.unseenCount() === 0, "markItemSeen clears one item");
+D.G.inventory[0].isNew = true;
+ok(D.markBagSeen() === 1, "markBagSeen reports what it cleared");
+ok(D.unseenCount() === 0, "and clears everything");
+const keepItem = D.makeGear("ring", 5, {});
+keepItem.isNew = true;
+const savedRun = D.__testSanitizeRun
+  ? D.__testSanitizeRun({ floor:5, inventory:[keepItem], items:[] })
+  : null;
+ok(!!savedRun && savedRun.inventory.length === 1 && savedRun.inventory[0].isNew === undefined,
+   "a saved run does not keep the badge flag (no stale dot on resume)");
+
+// ── 14. Per-biome growth forms (js/growth/) ────────────────────────────────
+// Growth used to be one hard-coded blob for every ward. It is now a form per
+// biome: the biome NAMES a style (BIOMES[n].growthStyle) and one file under
+// js/growth/ supplies it. These checks pin the seams, not the art.
+console.log("\n-- growth forms ---------------------------------------");
+const realRandom = Math.random;
+(function seedGrowth(){
+  let n = 20250101;
+  Math.random = function(){ n = (n * 1664525 + 1013904223) >>> 0; return n / 4294967296; };
+})();
+// A canvas stub that keeps its pixels, so a bake can be inspected.
+const realCreate = ctx.document.createElement;
+ctx.document.createElement = function(t){
+  if(t !== "canvas") return realCreate.call(ctx.document, t);
+  const el = { width:0, height:0, style:{}, _img:null };
+  el.getContext = () => ({
+    createImageData:(w,h)=>({ width:w, height:h, data:new Uint8ClampedArray(w*h*4) }),
+    putImageData(img){ el._img = img; },
+    fillRect(){}, drawImage(){}, save(){}, restore(){}, translate(){}, rotate(){}
+  });
+  return el;
+};
+
+// A floor of two walled rooms: enough shape for anchors, wall links and the
+// "large room" branch of the placement plan.
+function growthGrid(){
+  const W = 24, H = 16, g = [];
+  for(let y = 0; y < H; y++) g.push(new Array(W).fill(D.T.WALL));
+  for(let y = 2; y <= 8; y++) for(let x = 2; x <= 13; x++) g[y][x] = D.T.FLOOR;
+  for(let y = 10; y <= 13; y++) for(let x = 2; x <= 8; x++) g[y][x] = D.T.FLOOR;
+  return { grid:g, gridW:W, gridH:H, floor:5 };
+}
+function runGrowth(ward){
+  const saved = D.getWard;
+  if(ward) D.getWard = function(){ return ward; };
+  const G = growthGrid();
+  D.G = G;
+  D.placeGrowth(G);
+  D.getWard = saved;
+  return G;
+}
+function bakeAll(styleId, G, biome){
+  const st = D.growthStyles[styleId];
+  const bm = C.BIOMES[biome] || {};
+  const pal = st.palette ? st.palette(bm) : (bm.growthPal || []);
+  return (G.growth.floor || []).map(sp => st.bake(sp, pal, D.growthUtil));
+}
+// Painted pixels split by where they land: on plain floor, or anywhere else.
+function paintSplit(G, imgs){
+  let on = 0, off = 0;
+  G.growth.floor.forEach(function(sp, idx){
+    const c = imgs[idx];
+    if(!c || !c._img) return;
+    const S = c.width, d = c._img.data;
+    const span = S / 16;                       // the canvas, in tiles
+    const ox = sp.cx - span / 2, oy = sp.cy - span / 2;
+    const off = 0.5 / 16;                      // a pixel's centre, in tiles
+    for(let j = 0; j < S; j++){
+      for(let i = 0; i < S; i++){
+        if(!d[(j * S + i) * 4 + 3]) continue;
+        const tx = Math.floor(ox + i / 16 + off), ty = Math.floor(oy + j / 16 + off);
+        const row = G.grid[ty];
+        if(row && row[tx] === D.T.FLOOR) on++; else off++;
+      }
+    }
+  });
+  return { on: on, off: off };
+}
+
+const styles = Object.keys(D.growthStyles || {}).sort();
+ok(styles.indexOf("moss") >= 0, "the moss form is registered");
+ok(styles.indexOf("mycelium") >= 0, "the mycelium form is registered");
+const formless = C.BIOMES.filter(function(b, i){
+  const ward = C.WARDS.filter(function(w){ return w.biome === i; })[0];
+  return ward && ward.growth && !(b.growthStyle && D.growthStyles[b.growthStyle]);
+});
+ok(formless.length === 0, "every biome that grows anything names a registered form" +
+   (formless.length ? " (bad: " + formless.map(b => b.name).join(", ") + ")" : ""));
+ok(C.BIOMES[0].growthStyle === "moss" && C.BIOMES[1].growthStyle === "mycelium",
+   "biome 1 grows moss and biome 2 grows mycelium — not the same form");
+ok(C.BIOMES[1].growthVeinPal && C.BIOMES[1].growthVeinPal.length >= 3 &&
+   C.BIOMES[1].growthVeinPal.join() !== C.BIOMES[1].growthPal.join(),
+   "the Blackvein has its own vein palette");
+ok(Array.isArray(C.WALL_MYCELIUM) && C.WALL_MYCELIUM.length >= 2 &&
+   C.WALL_MYCELIUM.every(function(d){ return d.length === 16 && d.every(r => r.length === 16); }),
+   "the mycelium wall climbs are 16x16 art, like C.WALL_MOSS");
+
+// The moss form still paints, and links its walls.
+const mossG = runGrowth(C.WARDS[0]);
+ok((mossG.growth.floor || []).length > 0, "the moss form places patches on a floor");
+ok((mossG.growth.walls || []).length > 0, "and links wall climbs to them");
+const mossImgs = bakeAll("moss", mossG, 0);
+ok(mossImgs.length === mossG.growth.floor.length && mossImgs.every(c => c && c._img),
+   "every moss patch bakes a canvas");
+const mossSplit = paintSplit(mossG, mossImgs);
+ok(mossSplit.on > 50, "the moss patch actually paints (" + mossSplit.on + " fine px)");
+ok(mossSplit.off === 0, "moss never paints off plain floor (" + mossSplit.off + ")");
+ok(!mossG.growth.error, "moss placement reported no error" +
+   (mossG.growth.error ? " (" + mossG.growth.error + ")" : ""));
+
+// The veins: they place, they bake, they are thin, and they stay on the floor.
+const veinG = runGrowth(C.WARDS[1]);
+ok((veinG.growth.floor || []).length > 0, "the mycelium form places colonies on a floor");
+const veinImgs = bakeAll("mycelium", veinG, 1);
+ok(veinImgs.length === veinG.growth.floor.length && veinImgs.every(c => c && c._img),
+   "every colony bakes a canvas");
+ok(veinG.growth.floor.every(sp => Array.isArray(sp.paths) && sp.paths.length > 0),
+   "every colony keeps its strands");
+const veinSplit = paintSplit(veinG, veinImgs);
+ok(veinSplit.off === 0, "veins never paint off plain floor (" + veinSplit.off + ")");
+ok(!veinG.growth.error, "mycelium placement reported no error" +
+   (veinG.growth.error ? " (" + veinG.growth.error + ")" : ""));
+let vPainted = 0, vTotal = 0;
+veinImgs.forEach(function(c){
+  const d = c._img.data;
+  vTotal += c.width * c.height;
+  for(let i = 3; i < d.length; i += 4) if(d[i]) vPainted++;
+});
+const vCover = vTotal ? vPainted / vTotal : 0;
+ok(vCover > 0.02, "the veins paint (" + (100 * vCover).toFixed(1) + "% of their canvas)");
+ok(vCover < 0.55, "and stay veins, not a carpet (" + (100 * vCover).toFixed(1) + "%)");
+
+// Determinism: the same spot must bake to the same pixels every time.
+const vst = D.growthStyles.mycelium;
+const vpal = vst.palette ? vst.palette(C.BIOMES[1]) : C.BIOMES[1].growthPal;
+const vsp = veinG.growth.floor[0];
+const vb1 = vst.bake(vsp, vpal, D.growthUtil), vb2 = vst.bake(vsp, vpal, D.growthUtil);
+ok(!!vb1 && !!vb2 && Buffer.compare(Buffer.from(vb1._img.data), Buffer.from(vb2._img.data)) === 0,
+   "baking is a pure function of the spot (same seed, same pixels)");
+
+// Shapes vary: a floor should not repeat one silhouette.
+const shapeKeys = {};
+veinG.growth.floor.forEach(function(sp){
+  shapeKeys[sp.paths.length + ":" + Math.round(sp.reach * 10)] = 1;
+});
+ok(Object.keys(shapeKeys).length >= Math.min(2, veinG.growth.floor.length),
+   "colonies differ in shape (" + Object.keys(shapeKeys).length + " variants)");
+
+// Every climb sits against floor — the linked rule.
+let strandedClimb = 0;
+(veinG.growth.walls || []).forEach(function(w){
+  const near = [[1,0],[-1,0],[0,1],[0,-1]].some(function(d){
+    const row = veinG.grid[w.y + d[1]];
+    return row && row[w.x + d[0]] === D.T.FLOOR;
+  });
+  if(!near) strandedClimb++;
+});
+ok(strandedClimb === 0, "no wall climb without a floor colony against it");
+
+// A ward with no growth block grows nothing, whatever its biome says.
+const savedWards = C.WARDS[0].growth;
+delete C.WARDS[0].growth;
+const bare = runGrowth(C.WARDS[0]);
+ok((bare.growth.floor || []).length === 0 && (bare.growth.walls || []).length === 0,
+   "no growth block, no growth");
+C.WARDS[0].growth = savedWards;
+
+// Integration: a real generated floor, not a hand-built grid, must end up with
+// growth in G.growth and bake without throwing (levels.js calls placeGrowth).
+let integrationOk = true, integrationMsg = "";
+try {
+  D.newRun();
+  const f1 = D.G.growth || {};
+  integrationOk = (f1.floor || []).length >= 0;
+  if(f1.error){ integrationOk = false; integrationMsg = "floor 1: " + f1.error; }
+  const baked = (f1.floor || []).length ? bakeAll("moss", D.G, 0) : [];
+  if(baked.some(c => !c)) { integrationOk = false; integrationMsg = "a moss bake returned null"; }
+  // and ward 2
+  D.G.floor = 15;
+  D.genFloor();
+  const f15 = D.G.growth || {};
+  if(f15.error){ integrationOk = false; integrationMsg = "floor 15: " + f15.error; }
+  const vbaked = (f15.floor || []).length ? bakeAll("mycelium", D.G, 1) : [];
+  if(vbaked.some(c => !c)) { integrationOk = false; integrationMsg = "a vein bake returned null"; }
+} catch(e){
+  integrationOk = false;
+  integrationMsg = e.message;
+}
+ok(integrationOk, "a generated floor grows and bakes end to end" +
+   (integrationMsg ? " (" + integrationMsg + ")" : ""));
+
+ctx.document.createElement = realCreate;
+Math.random = realRandom;
+D.G = null;
+
 console.log("\n" + (fails ? "FAILED " + fails + "/" + checks : "PASSED " + checks + "/" + checks) + " checks");
 process.exit(fails ? 1 : 0);

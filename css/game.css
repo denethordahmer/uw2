@@ -98,8 +98,11 @@ body{
 #statsBtn:active,#minimapBtn:active,#gearBtn:active,#invBtn:active{ background:#1a2a3a; }
 /* tapping the map used to look inert: the button now shows whether its panel is up */
 #minimapBtn.active{ background:#1a2a3a;border-color:#7ee0ff; }
-/* Carried items, so the bag says something before you open it. updateHUD()
-   writes the count to data-bag; 0 hides the badge rather than showing a "0". */
+/* Unseen items in the bag, so the 🎒 says "there is something to look at"
+   without opening it. updateHUD() writes the count to data-bag; 0 hides the
+   badge rather than showing a "0". Bag fullness lives in the button's title —
+   this used to count G.items (loot on the FLOOR) and never went away after the
+   drop had been equipped. */
 #invBtn{ position:relative; }
 #invBtn::after{
   content:attr(data-bag); position:absolute;top:-4px;right:-4px;
