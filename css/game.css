@@ -36,6 +36,9 @@ body{
   min-width:56px;text-align:right;flex-shrink:0;
 }
 #hudMeta{ display:flex;align-items:center;gap:5px; }
+/* Labelled on purpose: a 🗺️ here read as a second map button beside 📍. */
+.hud-floor-lbl{ font-size:10px;font-weight:800;letter-spacing:.08em;color:#7f94a8; }
+.rest-pips{ gap:5px; }
 .stat{
   display:flex;align-items:center;gap:4px;background:#141b23;
   border:1px solid #2a3440;border-radius:9px;padding:4px 8px;

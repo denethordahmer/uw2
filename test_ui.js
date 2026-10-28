@@ -326,6 +326,9 @@ ok(textOf("hudShards") === String(30 + (D.pendingRunShards ? D.pendingRunShards(
 const dots = registry.get("restDots").children;
 ok(dots.length === D.restsPerFloor(), "one rest dot per rest (" + dots.length + ")");
 ok(dots.filter(d => d.className.indexOf("used") >= 0).length === 1, "the spent rest dot is marked");
+ok(/hud-floor-lbl/.test(html), "the floor chip is labelled FLOOR, not a map icon");
+ok(/rest-pips/.test(html), "the rest pips are labelled as rests");
+ok(html.indexOf("🗺️") < 0, "no map emoji sits beside the floor number");
 ok(registry.get("logPanel").classList.contains("active"), "log pill activated during a run");
 
 // ── 9. Ability bar ──────────────────────────────────────────
@@ -856,8 +859,11 @@ newRun(3);
 D.G.traits = [at("sharpened_edge", 1)];
 D.G.abilities = []; D.G.takenUniques = []; D.G.levelUpOpen = false; D.G.pendingLevelUps = 0;
 let upgradedLine = null, sawUpgradeCard = false;
-for(let i = 0; i < 80 && !upgradedLine; i++){
-  D.addXP(D.xpCurveFor(D.G.floor)[0] + 5);
+for(let i = 0; i < 120 && !upgradedLine; i++){
+  // Grant enough for a level EVERY time: a fixed amount stops clearing the
+  // threshold as the level rises, and the loop then re-reads the same stale
+  // cards forever. (This was flaky until the gate happened to fail on it.)
+  D.addXP(D.xpToNext() + 5);
   const cards = registry.get("levelupChoices").children;
   const up = cards.filter(c => cText(c).indexOf("Sharpened Edge II") >= 0)[0];
   if(up){

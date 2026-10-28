@@ -27,9 +27,19 @@ than narrating their own past.
   `test.html`'s fixtures.
 - **`Delve.xpToNext()`** added in `traits.js`, so the XP bar uses the exact number the
   level-up loop uses rather than recomputing it.
-- **Verified:** 19 new checks — the three fills track HP/energy/XP, the sheet opens, lists
-  every stat, shows passive ranks and set progress, blocks taps, and the old attribute ids
-  are gone from the markup. `test_ui` 198 → 217.
+- **The floor chip is labelled.** It used a 🗺️ emoji, sitting a few pixels from the 📍
+  minimap button — the owner read it as a second, broken map button. It now reads
+  **FLOOR 3**. The three bare rest pips beside it (7px dots, one per rest charge) are now
+  inside a chip with 💤 and a `title`, because unlabelled dots read as punctuation and
+  nothing about them said "tap your own tile to rest". Neither was ever a button; now
+  neither looks like one.
+- **A flaky check in the suite, fixed.** The passive rank-up test granted a fixed amount of
+  XP per pass; once the level rose that stopped clearing the threshold, so the loop re-read
+  the same stale cards and failed — intermittently, and only when the gate was run without
+  piping. It now grants `xpToNext() + 5` each pass and passed 25 consecutive runs.
+- **Verified:** 22 new checks — the three fills track HP/energy/XP, the sheet opens, lists
+  every stat, shows passive ranks and set progress, blocks taps, the old attribute ids are
+  gone from the markup, and the floor/rest chips are labelled. `test_ui` 198 → 220.
 
 ### Changed — passives: 12 ranked lines, 4 tags, set bonuses
 
