@@ -673,7 +673,217 @@ window.Delve = window.Delve || {};
   }
  });
 
+ // ═══════════ THE ASHEN FORGE (ward 5, The Forge Titan) ═══════════
+ // Palette: char #241f1e, clinker #3a3230, ash #6a615c, iron #4a443f,
+ // hot #ff6a00, ember #ffb347, white heat #ffe9b0.
+ // ── pillar: a banded iron stanchion on a slag footing ──
+ function buildPillarForge(){
+  const c=mk(24,24),x=gx(c);
+  R(x,3,20,18,4,"#1a1512");R(x,3,20,18,1,"#3a3230");            // slag footing
+  R(x,7,5,10,16,"#3a3230");R(x,7,5,2,16,"#57504a");R(x,15,5,2,16,"#241f1e");
+  // three riveted bands
+  [8,13,17].forEach(function(y){
+   R(x,6,y,12,1.6,"#241f1e");R(x,6,y,12,0.5,"#6a615c");
+   x.fillStyle="#ffb347"; x.fillRect(8,y+0.5,1,1); x.fillRect(15,y+0.5,1,1);
+  });
+  R(x,5,3,14,3,"#4a443f");R(x,5,3,14,1,"#6a615c");              // capital
+  // a molten seam weeping down one side
+  x.globalAlpha=0.8; R(x,12,6,0.9,9,"#ff6a00"); x.globalAlpha=1;
+  R(x,2,22,5,2,"#241f1e");R(x,17,22,5,2,"#241f1e");
+  return c;
+ }
+ // ── banner: a soot-stained forge standard on a chain rail ──
+ function buildBannerForge(){
+  const c=mk(24,36),x=gx(c);
+  R(x,2,0,20,2,"#4a443f");R(x,2,0,20,0.8,"#8d827b");            // rail
+  R(x,4,2,16,22,"#2a2320");                                      // soot-black cloth
+  R(x,4,2,3,22,"#3a3230");R(x,17,2,3,22,"#1a1512");              // folds
+  // the Titan's mark: a furnace mouth, blazing
+  R(x,8,7,8,7,"#ff6a00");R(x,9.4,8.4,5.2,4.2,"#ffe9b0");
+  R(x,8,7,8,0.8,"#241f1e");R(x,8,12,8,0.8,"#241f1e");
+  for(let i=0;i<3;i++) R(x,9.4+i*2,7.8,0.8,6,"#241f1e");
+  // burned-through gaps + a torn hem
+  x.globalAlpha=0.55; R(x,6,18,3,3,"#120e0c"); x.globalAlpha=1;
+  R(x,4,24,5,5,"#2a2320");R(x,11,26,6,3,"#3a3230");
+  R(x,13,29,3,2,"#241f1e");
+  return c;
+ }
+ // ── wallBit: a hanging crucible chain with a glowing hook ──
+ function buildChainForge(){
+  const c=mk(24,36),x=gx(c);
+  R(x,9,0,6,2,"#4a443f");R(x,9,0,6,0.7,"#8d827b");
+  for(let i=0;i<5;i++){
+   const y=2+i*6;
+   R(x,9,y,6,2,"#57504a");R(x,10,y+1,4,3,"#241f1e");
+   R(x,9,y,6,0.6,"#7a726b");
+  }
+  // the crucible at the end, still holding heat
+  R(x,7,31,10,5,"#3a3230");R(x,7,31,10,1,"#6a615c");
+  R(x,8,33,8,1.6,"#ff6a00");R(x,9.5,33.4,5,0.8,"#ffe9b0");
+  return c;
+ }
+ // ── rubble: clinker and cooled slag heaps ──
+ function buildRubbleForge(){
+  const c=mk(24,24),x=gx(c);
+  R(x,3,18,9,5,"#3a3230");R(x,3,18,9,1,"#57504a");
+  R(x,10,15,9,7,"#2a2320");R(x,10,15,9,1,"#4a443f");R(x,10,20,9,2,"#1a1512");
+  R(x,17,18,5,4,"#3a3230");R(x,6,14,4,4,"#241f1e");
+  // a dull ember still alive in the heap
+  x.globalAlpha=0.85; R(x,12,17,3,2,"#ff6a00"); x.globalAlpha=1;
+  R(x,12.8,17.4,1.4,1,"#ffe9b0");
+  return c;
+ }
+ // ── bone role: cremated remains + an ash urn ──
+ function buildAshForge(){
+  const c=mk(24,24),x=gx(c);
+  // tipped urn
+  R(x,5,13,8,9,"#4a443f");R(x,5,13,8,1.2,"#6a615c");
+  R(x,6,11,6,2,"#3a3230");R(x,7,10,4,1,"#57504a");
+  R(x,8,16,2,3,"#2a2320");                                      // its cracked face
+  // spilled ash and charred bone
+  x.globalAlpha=0.55; x.fillStyle="#6a615c";
+  x.beginPath(); x.ellipse(15,20,6,2.6,0,0,Math.PI*2); x.fill(); x.globalAlpha=1;
+  x.strokeStyle="#8d827b"; x.lineWidth=1.6; x.lineCap="round";
+  x.beginPath(); x.moveTo(12,20); x.lineTo(20,18.4); x.stroke();
+  x.beginPath(); x.moveTo(13,21.6); x.lineTo(19,21); x.stroke();
+  R(x,19,15,1.2,2.6,"#e8e0d0");                                 // a bleached shard
+  // the last of the pyre, still warm
+  x.globalAlpha=0.7; R(x,14,21.4,4,1,"#ff6a00"); x.globalAlpha=1;
+  return c;
+ }
+ // ── cluster: a mound of coal with one live seam ──
+ function buildCoalForge(){
+  const c=mk(24,24),x=gx(c);
+  x.fillStyle="#1a1512";
+  x.beginPath(); x.ellipse(12,18,9,4.6,0,0,Math.PI*2); x.fill();
+  // lumps piled into a rough cone
+  R(x,7,13,4,6,"#241f1e");R(x,11,10,5,9,"#2a2320");R(x,15,13,4,6,"#1a1512");
+  R(x,8,13,2,3,"#3a3230");R(x,12,11,2,4,"#3a3230");R(x,16,14,1.6,3,"#2a2320");
+  // the live seam running through the pile
+  x.globalAlpha=0.9; R(x,9,15,7,1.2,"#ff6a00"); x.globalAlpha=1;
+  R(x,11,15.2,3,0.6,"#ffe9b0");
+  x.globalAlpha=0.4; x.fillStyle="#ff6a00";
+  x.beginPath(); x.ellipse(12,19.5,7,2,0,0,Math.PI*2); x.fill(); x.globalAlpha=1;
+  return c;
+ }
+ // ── ground cover: cooling lava veins in dark rock ──
+ // Jagged, glowing orange cracks with dark, cooling rim — the ward's signature
+ // floor detail, drawn as one self-contained tile like the other wards.
+ function buildGroundAsh(){
+  const c=mk(24,24),x=gx(c);
+  // the cooling rock body
+  x.globalAlpha=0.55; x.fillStyle="#241f1e";
+  x.beginPath(); x.ellipse(12,14,9,5.4,0,0,Math.PI*2); x.fill(); x.globalAlpha=1;
+  // a main vein crossing the tile, forking twice — jagged, never straight
+  x.strokeStyle="#2a2320"; x.lineWidth=3.4; x.lineCap="round";
+  x.beginPath();
+  x.moveTo(2,16); x.lineTo(7,13.4); x.lineTo(11,14.6); x.lineTo(16,11.6); x.lineTo(22,13);
+  x.stroke();
+  x.strokeStyle="#ff6a00"; x.lineWidth=1.7;
+  x.beginPath();
+  x.moveTo(2,16); x.lineTo(7,13.4); x.lineTo(11,14.6); x.lineTo(16,11.6); x.lineTo(22,13);
+  x.stroke();
+  // forks
+  x.lineWidth=1.2;
+  x.beginPath(); x.moveTo(11,14.6); x.lineTo(12.6,18.4); x.stroke();
+  x.beginPath(); x.moveTo(16,11.6); x.lineTo(15.4,7.6); x.stroke();
+  // white-hot centre of the strongest junction
+  x.fillStyle="#ffe9b0"; x.fillRect(10.4,13.8,2,1.6);
+  x.fillRect(15.4,10.9,1.4,1.2);
+  // faint bloom on the surrounding rock
+  x.globalAlpha=0.30; x.fillStyle="#ff6a00";
+  x.beginPath(); x.ellipse(12,14,8,4,0,0,Math.PI*2); x.fill(); x.globalAlpha=1;
+  // a couple of cold cracks that never lit
+  x.strokeStyle="#151110"; x.lineWidth=0.9;
+  x.beginPath(); x.moveTo(4,9); x.lineTo(8,7.4); x.stroke();
+  x.beginPath(); x.moveTo(18,19); x.lineTo(21,18); x.stroke();
+  return c;
+ }
+
+ // ── CLUTTER FAMILY — "forge" ───────────────────────────────
+ // A foundry floor: clinker, cold slag, and the odd still-hot fleck. Nothing
+ // grows here, so the "weed" pass draws heat damage instead of plants — a
+ // venting crack, a splinter of iron, a drift of ash against the stone.
+ Delve.registerClutter("forge", {
+  clutter: function(ctx, sx, sy, ts, roll){
+   // Position jitter must come from TILE coords, not screen pixels: drawClutter
+   // runs every frame with sx/sy in camera space, so hashing those would make
+   // the debris crawl as the player walks.
+   const jx = hash3(sx|0, sy|0, 921), jy = hash3(sx|0, sy|0, 923);
+   const jr = hash3(sx|0, sy|0, 927), js = hash3(sx|0, sy|0, 929);
+   const ox = sx + ts*(0.20 + jx*0.60), oy = sy + ts*(0.22 + jy*0.56);
+   const sc = (ts/40) * (0.72 + js*0.66);
+   ctx.save(); ctx.globalAlpha=0.66;
+   if(roll < 0.010){
+    // a lump of clinker, rough and grey
+    ctx.fillStyle="#3a3230";
+    ctx.beginPath(); ctx.ellipse(ox,oy,sc*3.6,sc*2.4,jr*3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#57504a";
+    ctx.beginPath(); ctx.ellipse(ox-sc*0.8,oy-sc*0.8,sc*1.8,sc*1.1,jr*3,0,Math.PI*2); ctx.fill();
+   } else if(roll < 0.018){
+    // a still-warm fleck: dark rock with one live ember in it
+    ctx.fillStyle="#241f1e";
+    ctx.beginPath(); ctx.ellipse(ox,oy,sc*2.8,sc*2,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#ff6a00"; ctx.globalAlpha=0.9;
+    ctx.beginPath(); ctx.arc(ox+sc*0.4,oy,sc*0.9,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=0.5; ctx.fillStyle="#ffb347";
+    ctx.beginPath(); ctx.arc(ox+sc*0.4,oy,sc*1.8,0,Math.PI*2); ctx.fill();
+   } else {
+    // a scatter of ash and cinders
+    ctx.globalAlpha=0.42; ctx.fillStyle="#6a615c";
+    ctx.beginPath(); ctx.ellipse(ox,oy+sc,sc*4,sc*1.5,jr,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=0.5; ctx.fillStyle="#241f1e";
+    ctx.fillRect(ox-sc*2,oy-sc*0.6,sc*0.9,sc*0.9);
+    ctx.fillRect(ox+sc*1.4,oy-sc*1.2,sc*0.7,sc*0.7);
+   }
+   ctx.restore();
+  },
+  weed: function(ctx, sx, sy, ts, gx, gy, b, type){
+   // "Growth" in a foundry is damage: heat vents, iron splinters, ash drifts.
+   ctx.save(); ctx.globalAlpha=0.78;
+   const cx = sx + ts*(0.3 + hash3(gx,gy,61)*0.4);
+   const cy = sy + ts*(0.4 + hash3(gx,gy,67)*0.4);
+   const sc = ts/40;
+   switch(type % 3){
+    case 0: {  // a venting crack: jagged, glowing at its widest point
+     ctx.strokeStyle="#241f1e"; ctx.lineWidth=Math.max(1,sc*2.2); ctx.lineCap="round";
+     ctx.beginPath(); ctx.moveTo(cx-sc*7,cy+sc*4); ctx.lineTo(cx-sc*2,cy+sc*0.6);
+     ctx.lineTo(cx+sc*2,cy+sc*2); ctx.lineTo(cx+sc*7,cy-sc*3); ctx.stroke();
+     ctx.strokeStyle="#ff6a00"; ctx.lineWidth=Math.max(1,sc*0.9);
+     ctx.beginPath(); ctx.moveTo(cx-sc*6.4,cy+sc*3.6); ctx.lineTo(cx-sc*2,cy+sc*0.8);
+     ctx.lineTo(cx+sc*2,cy+sc*1.8); ctx.lineTo(cx+sc*6.4,cy-sc*2.8); ctx.stroke();
+     ctx.fillStyle="#ffe9b0"; ctx.fillRect(cx-sc*1,cy+sc*0.8,sc*1.4,sc*1);
+     break;
+    }
+    case 1: {  // a splinter of black iron jutting from the floor
+     ctx.fillStyle="#3a3230";
+     ctx.beginPath(); ctx.moveTo(cx,cy-sc*7); ctx.lineTo(cx-sc*1.6,cy+sc*3);
+     ctx.lineTo(cx+sc*1.6,cy+sc*3); ctx.closePath(); ctx.fill();
+     ctx.fillStyle="#6a615c"; ctx.fillRect(cx-sc*0.3,cy-sc*6,sc*0.7,sc*7);
+     ctx.globalAlpha=0.4; ctx.fillStyle="#000";
+     ctx.fillRect(cx-sc*1.6,cy+sc*2,sc*3.2,sc*1);
+     break;
+    }
+    default:  // a drift of pale ash banked against the stone
+     ctx.globalAlpha=0.4; ctx.fillStyle="#8d827b";
+     ctx.beginPath(); ctx.ellipse(cx,cy+sc*3,sc*6,sc*2,0,0,Math.PI*2); ctx.fill();
+     ctx.globalAlpha=0.7; ctx.fillStyle="#6a615c";
+     ctx.beginPath(); ctx.ellipse(cx-sc*1.5,cy+sc*1.6,sc*3,sc*1.2,0,0,Math.PI*2); ctx.fill();
+     break;
+   }
+   ctx.restore();
+  }
+ });
+
  // ── REGISTRATIONS ─────────────────────────────────────────
+ reg("prop_pillarForge",   buildPillarForge);
+ reg("prop_bannerForge",   buildBannerForge);
+ reg("prop_chainForge",    buildChainForge);
+ reg("prop_rubbleForge",   buildRubbleForge);
+ reg("prop_ashForge",      buildAshForge);
+ reg("prop_coalForge",     buildCoalForge);
+ reg("ground_ash",         buildGroundAsh);
+
  reg("prop_pillarBone",    buildPillarBone);
  reg("prop_shroudOssuary", buildShroudOssuary);
  reg("prop_nicheOssuary",  buildNicheOssuary);

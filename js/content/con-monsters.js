@@ -38,7 +38,28 @@ window.Delve = window.Delve || {};
   reassembled:     { name:"The Reassembled", hp:30, hpPerFloor:3.6, atk:8,  atkPerFloor:0.85, xp:9, gold:9, shards:4, kind:"reassembled",     speed:1.00,
                     // The gimmick: on death it reassembles once at half HP.
                     // Fight it twice; the base HP is deliberately low.
-                    reassembleOnce:true }
+                    reassembleOnce:true },
+
+  // ── The Ashen Forge (ward 5, floors 41-50) ─────────────────────
+  // A foundry's population: things that live in heat. Burn is the ward's
+  // signature status (themed as a deep burn), with bleed and poison in support.
+  ash_tick:      { name:"Ash Tick",        hp:14, hpPerFloor:1.8, atk:4,  atkPerFloor:0.50, xp:4, gold:4, shards:2, kind:"ash_tick",      speed:1.40 },
+  slag_hound:    { name:"Slag Hound",      hp:16, hpPerFloor:2.2, atk:5,  atkPerFloor:0.60, xp:4, gold:4, shards:2, kind:"slag_hound",    speed:1.35, onHitEffect:"bleed"  },
+  cinder_wretch: { name:"Cinder Wretch",   hp:28, hpPerFloor:3.0, atk:7,  atkPerFloor:0.75, xp:7, gold:7, shards:3, kind:"cinder_wretch", speed:1.20, onHitEffect:"burn"   },
+  furnace_guard: { name:"Furnace Guard",   hp:42, hpPerFloor:4.2, atk:9,  atkPerFloor:0.90, xp:8, gold:8, shards:3, kind:"furnace_guard", speed:0.80, onHitEffect:"weaken" },
+  emberfiend:    { name:"Emberfiend",      hp:34, hpPerFloor:3.8, atk:8,  atkPerFloor:0.85, xp:8, gold:8, shards:3, kind:"emberfiend",    speed:1.10, onHitEffect:"burn"   },
+  molten_brute:  { name:"Molten Brute",    hp:55, hpPerFloor:5.0, atk:12, atkPerFloor:1.10, xp:9, gold:9, shards:4, kind:"molten_brute",  speed:0.65 },
+  smog_stalker:  { name:"Smog Stalker",    hp:44, hpPerFloor:4.5, atk:13, atkPerFloor:1.00, xp:9, gold:9, shards:4, kind:"smog_stalker",  speed:1.00, onHitEffect:"poison" },
+  // The Forge's gimmick enemy: on death it splits, and you fight both halves.
+  // `splitOnDeath` is read by combat.js (it had to be added there — the old
+  // reassembleOnce was a different, single-monster trick).
+  reforged:      { name:"The Reforged",    hp:32, hpPerFloor:3.6, atk:9,  atkPerFloor:0.80, xp:9, gold:9, shards:4, kind:"reforged",      speed:1.00,
+                   // On death it splits into two smaller halves at 25% HP / ATK.
+                   splitOnDeath:{ into:"reforged_shard", count:2, hpPct:0.25, atkPct:0.25 } },
+  // The split halves. A real roster row so stats, rewards and the sprite lookup
+  // all resolve; never placed by a band, so it only ever exists via the split.
+  reforged_shard:{ name:"Reforged Shard",   hp:8,  hpPerFloor:0.9, atk:2,  atkPerFloor:0.20, xp:2, gold:2, shards:1, kind:"reforged_shard", speed:1.15,
+                   isFragment:true }
  };
 
  C.MONSTER_BANDS = [
@@ -59,12 +80,22 @@ window.Delve = window.Delve || {};
   { floors:[31,32], boss:false, countMin:12, countMax:15, weights:{ bone_rat:40, grave_skitter:35, marrow_hound:15, bonecaller:10 } },
   { floors:[33,35], boss:false, countMin:13, countMax:17, weights:{ bone_rat:20, grave_skitter:20, marrow_hound:20, bonecaller:20, ossuary_sentry:12, ribcage_brute:8 } },
   { floors:[36,39], boss:false, countMin:14, countMax:18, weights:{ bone_rat:8, grave_skitter:10, marrow_hound:22, bonecaller:22, ossuary_sentry:18, ribcage_brute:20, skull_warden:0, reassembled:0 } },
+  // Floors 41-50 — The Ashen Forge. Ordering rule: getMonsterBand scans FIRST
+  // MATCH and returns the first band whose range contains the floor, so a band
+  // whose range OVERLAPS another must come first. These three do not overlap the
+  // [51,999] overflow, so they are safe here — but if a future ward's overflow
+  // range is ever widened (or one of these is widened), the deeper band has to
+  // stay above it or it will silently never fire. Pinned by a test that asserts
+  // floor 41 resolves to its OWN band rather than the catch-all.
+  // Floor 50 has no band: it is a boss floor and genBossFloor spawns nothing.
+  { floors:[41,42], boss:false, countMin:12, countMax:15, weights:{ ash_tick:40, slag_hound:35, cinder_wretch:15, furnace_guard:10 } },
+  { floors:[43,45], boss:false, countMin:13, countMax:17, weights:{ ash_tick:20, slag_hound:20, cinder_wretch:20, furnace_guard:15, emberfiend:15, molten_brute:10 } },
+  { floors:[46,49], boss:false, countMin:14, countMax:18, weights:{ ash_tick:10, slag_hound:10, cinder_wretch:15, furnace_guard:20, emberfiend:15, molten_brute:15, smog_stalker:15 } },
   // Overflow fallback band — used by getMonsterBand for any floor past the last
-  // defined ward. Kept deliberately: future wards override it by defining their
-  // own bands above this entry. (Boss floors need no band: genBossFloor spawns
-  // nothing.) Carries Bone Ossuary weights, since that is now the deepest
-  // content.
-  { floors:[41,999], boss:false, countMin:14, countMax:18, weights:{ bone_rat:8, grave_skitter:10, marrow_hound:22, bonecaller:22, ossuary_sentry:18, ribcage_brute:20 } }
+  // defined ward. Kept deliberately: a future ward overrides it by defining its
+  // own bands ABOVE this entry. (Boss floors need no band: genBossFloor spawns
+  // nothing.) Carries Ashen Forge weights, since that is now the deepest content.
+  { floors:[51,999], boss:false, countMin:14, countMax:18, weights:{ ash_tick:10, slag_hound:10, cinder_wretch:15, furnace_guard:20, emberfiend:15, molten_brute:15, smog_stalker:15 } }
  ];
 
  C.spawnSafetyRadius = 4;
@@ -119,6 +150,15 @@ window.Delve = window.Delve || {};
    shieldHp:120,                        // the ribs soak ~120 damage, then break
    accent:"#e8dcc0",                    // bleached bone
    size:{ w:2, h:2 }
+  },
+  5: {
+   name:"The Forge Titan",
+   title:"Master of the Molten Core",
+   flavour:"The fire has burned for a thousand years.\nIt will not stop for you.",
+   hp:340, atk:26, speed:0.65, chainHitEvery:3,
+   sprite:"boss_titan",                 // registered in content/con-bosssprites.js
+   accent:"#ff6a00",                    // the molten core
+   size:{ w:2, h:2 }
   }
  };
 
@@ -134,4 +174,7 @@ window.Delve = window.Delve || {};
  C.xpKill.bone_rat = 4; C.xpKill.grave_skitter = 4; C.xpKill.marrow_hound = 7;
  C.xpKill.bonecaller = 8; C.xpKill.ossuary_sentry = 8; C.xpKill.ribcage_brute = 9;
  C.xpKill.skull_warden = 9; C.xpKill.reassembled = 9;
+ C.xpKill.ash_tick = 4; C.xpKill.slag_hound = 4; C.xpKill.cinder_wretch = 7;
+ C.xpKill.furnace_guard = 8; C.xpKill.emberfiend = 8; C.xpKill.molten_brute = 9;
+ C.xpKill.smog_stalker = 9; C.xpKill.reforged = 9;
 })();

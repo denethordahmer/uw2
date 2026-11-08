@@ -319,6 +319,75 @@ window.Delve = window.Delve || {};
    [2,34,5,3,"#e8dcc0"],[41,34,5,3,"#e8dcc0"]]);
  });
 
+ // ── THE ASHEN FORGE (ward 5) — The Forge Titan ───────────────
+ // 48x48, so 24px per tile for a 2x2 footprint. A walking furnace: a squat
+ // iron-plated body on heavy legs, a chimney crown venting two plumes, and the
+ // molten core showing through a grate in its chest — the same grate language
+ // as the Furnace Guard, scaled up, so the boss reads as the ward's summit.
+ function buildBossTitan(){
+  const c=mk(48,48),x=gx(c);
+  const char="#241f1e", charD="#171313", clink="#3a3230", ash="#6a615c",
+        hot="#ff6a00", ember="#ffb347", white="#ffe9b0";
+  // ── legs: short, massive, planted wide ──
+  R(x,8,36,11,10,char); R(x,29,36,11,10,char);
+  R(x,8,36,11,1.6,clink); R(x,29,36,11,1.6,clink);
+  R(x,7,43,13,3,charD); R(x,28,43,13,3,charD);
+  R(x,7,43,13,0.8,clink); R(x,28,43,13,0.8,clink);
+  // heat under the feet — the floor is melting where it stands
+  x.globalAlpha=0.5; R(x,5,45.5,16,2,hot); R(x,27,45.5,16,2,hot);
+  x.globalAlpha=1;
+  // ── hips and barrel torso ──
+  R(x,10,28,28,10,char);
+  R(x,10,28,28,1.6,clink);
+  R(x,10,34,28,1,charD);
+  // ── chest grate: the molten core ──
+  R(x,16,16,16,13,charD);
+  R(x,17.5,17.5,13,11,hot);
+  R(x,19,19,7,7,white);                       // the hottest part of the core
+  R(x,17.5,17.5,13,1,ember);                  // glow spilling upward
+  for(let i=0;i<5;i++) R(x,17.5+i*2.7,17.5,1.2,11,charD);   // grate bars
+  // ── shoulder pauldrons: stacks of plate ──
+  R(x,1,15,13,12,char); R(x,34,15,13,12,char);
+  R(x,1,15,13,1.8,clink); R(x,34,15,13,1.8,clink);
+  R(x,2,20,11,1,charD); R(x,35,20,11,1,charD);
+  R(x,3,24,9,1,charD); R(x,36,24,9,1,charD);
+  // rivets along the plate edges
+  x.fillStyle=ember;
+  for(let i=0;i<3;i++){ x.fillRect(3+i*4,17,1.4,1.4); x.fillRect(36+i*4,17,1.4,1.4); }
+  // ── arms: hanging, ending in hammer-fists ──
+  R(x,1,27,10,13,char); R(x,37,27,10,13,char);
+  R(x,1,27,10,1.4,clink); R(x,37,27,10,1.4,clink);
+  R(x,0,38,12,9,clink); R(x,36,38,12,9,clink);
+  R(x,0,38,12,1.6,ash); R(x,36,38,12,1.6,ash);
+  R(x,2,41,8,1,hot); R(x,38,41,8,1,hot);      // molten knuckles
+  // ── head: a low helm sunk between the pauldrons, one visor slit ──
+  R(x,17,5,14,9,char);
+  R(x,17,5,14,1.6,clink);
+  R(x,19,8.5,10,2.6,hot);                     // the slit
+  R(x,21,9.2,4,1.2,white);
+  R(x,16,13,16,2,charD);                      // gorget
+  // ── chimney crown: two stacks venting flame ──
+  R(x,13,0,7,7,char); R(x,28,0,7,7,char);
+  R(x,13,0,7,1.4,clink); R(x,28,0,7,1.4,clink);
+  R(x,14,1.5,5,2,hot); R(x,29,1.5,5,2,hot);
+  R(x,15,2,3,1,white); R(x,30,2,3,1,white);
+  // ash streaks down the plating
+  x.globalAlpha=0.35; x.fillStyle=ash;
+  R(x,12,30,1.4,8,ash); R(x,35,30,1.4,8,ash); R(x,23,31,1.4,6,ash);
+  x.globalAlpha=1;
+  return c;
+ }
+
+ Delve.registerBossSprite("boss_titan", buildBossTitan);
+ Delve.registerBossAttackSprite("boss_titan", function(idle){
+  return U.atkFrom(idle, [
+   [0,36,13,11,"#ff6a00"],[35,36,13,11,"#ff6a00"],   // fists flare on the slam
+   [0,37,13,2,"#ffe9b0"],[35,37,13,2,"#ffe9b0"],
+   [16,15,16,15,"#ffe9b0"],                          // core blooms
+   [13,0,7,3,"#ffe9b0"],[28,0,7,3,"#ffe9b0"]         // stacks vent hard
+  ]);
+ });
+
  // sprites.js already ran buildAll() once without these; rebuild now.
  Delve.rebuildSprites();
 })();

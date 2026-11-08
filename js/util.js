@@ -40,16 +40,21 @@ window.Delve = window.Delve || {};
  // hash2 maps an integer (x,y) to [0,1). Same input, same output, forever —
  // this is what keeps decoration pinned to a tile across frames and re-renders.
  //
- // NOTE: this is NOT a uniformly distributed hash. The multiply overflows 2^53
- // and loses precision, which biases small-integer inputs low (measured: one
- // salt returned only 0..0.46). That is fine for scattering decoration, but it
- // is not good enough for texture noise — js/render.js bakes its floor textures
- // with a separate Math.imul-based texHash for exactly that reason. Do not
- // "fix" this one without re-checking every tile layout that depends on it.
+ // The final mix uses a LOGICAL shift (>>>), not an arithmetic one (>>). An
+ // arithmetic shift of a negative int keeps the sign bit, so `n ^ (n>>16)` was
+ // always non-negative and `>>> 0` returned only 0 .. 2^31-1 — the hash could
+ // never reach 0.5. Every `hash3(...) < k` therefore fired at ~2k, every test
+ // above 0.5 was dead (not unlikely), and `drawWallTile`'s mood roll could
+ // never land on mood 0, which tinted 100% of wall tiles. Measured after the
+ // fix: min 0.0000, max 1.0000, deciles 9.7 .. 10.4.
+ //
+ // The multiply still overflows 2^53 and loses precision for large coords,
+ // which is why js/render/tiles.js bakes its texture noise with an
+ // Math.imul-based texHash instead. Re-check tile layouts if this changes.
  Delve.hash2 = function(x, y){
   let n = x*374761393 + y*668265263;
   n = (n ^ (n>>13)) * 1274126177;
-  return ((n ^ (n>>16)) >>> 0) / 4294967295;
+  return ((n ^ (n>>>16)) >>> 0) / 4294967295;
  };
  Delve.hash3 = function(x, y, salt){ return Delve.hash2(x*2053+salt, y*3571+salt*7); };
 

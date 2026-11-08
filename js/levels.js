@@ -125,6 +125,10 @@ window.Delve = window.Delve || {};
    atk: row.atk + Math.floor(G.floor * row.atkPerFloor),
    speed: row.speed,
    xp: row.xp, shards: row.shards, gold: row.gold,
+   // Roster flags the kill path reads off the INSTANCE must be carried across.
+   // `reassembleOnce` (the Ossuary's Reassembled) was read from m but never
+   // copied from the row, so its gimmick could never fire — it just died.
+   reassembleOnce: !!row.reassembleOnce,
    effects: [], elite: false, hasActed: false
   };
   m.hp = m.maxHp;
@@ -745,6 +749,10 @@ window.Delve = window.Delve || {};
    atk: row.atk + Math.floor(G.floor * row.atkPerFloor),
    speed: row.speed,
    xp: row.xp, shards: row.shards, gold: row.gold,
+   // Roster flags the kill path reads off the INSTANCE must be carried across.
+   // `reassembleOnce` (the Ossuary's Reassembled) was read from m but never
+   // copied from the row, so its gimmick could never fire — it just died.
+   reassembleOnce: !!row.reassembleOnce,
    effects: [], elite: false, hasActed: false
   };
   m.hp = m.maxHp;

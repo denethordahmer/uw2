@@ -443,6 +443,60 @@ window.Delve = window.Delve || {};
   if(Delve.updateHUD) Delve.updateHUD();
   return;
  }
+ // The Reforged (Ashen Forge): on death it BREAKS INTO TWO smaller copies. Both
+ // must be killed to clear the floor, and each inherits its own reward row
+ // ("reforged_shard"), so the halves pay their own, smaller, share — killing
+ // one big thing and getting four small ones free would be a shard farm.
+ //
+ // Placement: the split lands on the dead monster's tile plus the free
+ // orthogonal neighbours, so it can never stack on a wall, a prop or the
+ // player. If no neighbour is free it still spawns one on its own tile.
+ if(!m.isBoss && m.splitOnDeath && !m.hasSplit){
+  const spec = m.splitOnDeath;
+  const free = [];
+  [[0,0],[1,0],[-1,0],[0,1],[0,-1]].forEach(function(d){
+   const x = m.x + d[0], y = m.y + d[1];
+   const row = G.grid[y];
+   if(!row || row[x] === undefined) return;
+   if(row[x] !== T().FLOOR && row[x] !== T().GRASS) return;
+   if(x === G.px && y === G.py) return;             // never on the player
+   if(Delve.eventAt && Delve.eventAt(x, y)) return; // never on a floor event
+   free.push({ x:x, y:y });
+  });
+  if(free.length && Delve.spawnMonsterAt){
+   const count = Math.min(spec.count || 2, free.length);
+   let made = 0;
+   for(let i = 0; i < count; i++){
+    const spot = free[i];
+    const child = Delve.spawnMonsterAt(spot.x, spot.y, spec.into);
+    if(!child) continue;
+    // 25% HP and ATK, per the ward brief. Apply AFTER spawn so the depth
+    // scaling the spawner does is kept, then scaled down.
+    child.maxHp = Math.max(1, Math.round(child.maxHp * (spec.hpPct || 0.25)));
+    child.hp = child.maxHp;
+    child.atk = Math.max(1, Math.round(child.atk * (spec.atkPct || 0.25)));
+    child.hasSplit = true;                            // fragments never split again
+    child.isFragment = true;
+    made++;
+   }
+   if(made){
+    // The tile the parent occupied goes back to plain floor; the children hold
+    // their own tiles.
+    if(G.grid[m.y] && G.grid[m.y][m.x] === T().MONSTER) G.grid[m.y][m.x] = m.tile || T().FLOOR;
+    G.monsters = G.monsters.filter(function(x){ return x !== m; });
+    Delve.flash("IT SPLITS!");
+    Delve.addShake(3);
+    if(Delve.sfx) Delve.sfx("status_burn");
+    Delve.addFloater("split", m.x, m.y - 0.6, "#ff8a3d", 1.2);
+    if(Delve.logSystem) Delve.logSystem(m.name + " breaks apart!");
+    if(Delve.updateHUD) Delve.updateHUD();
+    return;
+   }
+  }
+  // No room to split: fall through and let it die normally rather than
+  // swallowing the kill.
+ }
+
  // Every death leaves a corpse fade and a beat of hit-stop (§Batch 15). A boss gets a
  // longer freeze — it should land like the end of something.
  hitStop(m.isBoss ? 170 : 70);

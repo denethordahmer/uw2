@@ -8,6 +8,13 @@ window.Delve = window.Delve || {};
  // deliberately NOT an HTML5 loop: the track fades out over its last ~2s, and on
  // `ended` a new one is picked and faded back in from silence. Volume mirrors
  // the music slider and the global mute, so both controls keep working.
+ // Ward 5's bed is deliberately ABSENT until the file exists: musicWardFor()
+ // falls back to ward 1 when a ward has no entry, so floors 41-50 play the
+ // Upper Ruins bed rather than going silent. Adding
+ //   5: ["music/biome5-1.mp3"]
+ // here is all that is needed once the track is uploaded — and the CI step
+ // "Music beds are present" will then require the file, so it cannot ship
+ // referenced-but-missing.
  const MUSIC_TRACKS = {
   1: ["music/biome1-1.mp3"],
   2: ["music/biome2-1.mp3"],

@@ -46,6 +46,20 @@ window.Delve = window.Delve || {};
    // walls grow growth only where a floor patch touches them; growthPal = the
    // biome's locked green gradient (dark root → bright tip).
    floorStyle: b.floorStyle || null,
+   // Wall look: absent = the masonry brick course; "ice" = vertical fracture
+   // lines. This MUST be forwarded or `drawWallTile`'s ice branch is dead code
+   // and the biome silently gets masonry in its own colours.
+   wallStyle: b.wallStyle || null,
+   // Pale grit scattered through the "loam" floor style. Losing this made the
+   // bone grit fall back to a hardcoded tone, so the biome's own colour was inert.
+   gritColour: b.gritColour || null,
+   // Molten light caught in the "ash" floor's ember veins (the Forge). Same
+   // class of field: the style reads it, so it has to survive this function.
+   ember: b.ember || null,
+   // Which puddle painter this biome uses (js/puddles.js): "water" or "blood".
+   // Colour alone was not enough — every ward shared one blob shape, so a
+   // recolour could only ever produce red water.
+   puddleStyle: b.puddleStyle || null,
    growthLinked: !!b.growthLinked,
    growthPal: b.growthPal || null
   };
@@ -161,6 +175,35 @@ window.Delve = window.Delve || {};
   return top + (bot - top) * fy;
  }
 
+ // ── CONTINUOUS WALL FIELDS ───────────────────────────────────
+ // Bilinearly interpolated hashes at a coarse knot spacing, so a value drifts
+ // across several tiles instead of stepping per tile. Takes FRACTIONAL tile
+ // coordinates, so a colour can be sampled exactly on a tile edge.
+ function wallFieldAt(fx, fy, salt, cell){
+  const px = fx / cell, py = fy / cell;
+  const xi = Math.floor(px), yi = Math.floor(py);
+  let tx = px - xi, ty = py - yi;
+  tx = tx * tx * (3 - 2 * tx);
+  ty = ty * ty * (3 - 2 * ty);
+  const a = hash3(xi, yi, salt),     b = hash3(xi + 1, yi, salt);
+  const c = hash3(xi, yi + 1, salt), d = hash3(xi + 1, yi + 1, salt);
+  const top = a + (b - a) * tx, bot = c + (d - c) * tx;
+  return top + (bot - top) * ty;
+ }
+ // The stone colour at an arbitrary point, as a hex string. Everything that
+ // varies (weathering, lichen, rust) is folded in here so one sample fully
+ // describes the surface at that point — that is what lets two neighbouring
+ // tiles agree exactly on the colour of the seam between them.
+ function wallColourAt(fx, fy, b){
+  const wt = wallFieldAt(fx, fy, 2017, 3);          // weathering, ~3 tiles
+  let col = blendHex(b.wall, "#0a0e12", 0.04 + wt * 0.10);
+  const lichen = wallFieldAt(fx, fy, 2011, 5);      // slow bloom, ~5 tiles
+  if(lichen > 0.62) col = blendHex(col, b.moss, (lichen - 0.62) * 0.45);
+  const rust = wallFieldAt(fx, fy, 2027, 5);
+  if(rust > 0.72) col = blendHex(col, "#5a3a1e", (rust - 0.72) * 0.30);
+  return col;
+ }
+
   // ── SEAMLESS RUNNING-BOND FLOOR ───────────────────────────────
   // The ward's stone floor (owner batch B1, modelled on the reference room):
   // interlocking masonry in 8-fine-pixel columns — each column carries an 11px
@@ -187,7 +230,7 @@ window.Delve = window.Delve || {};
   // periodic noise only, for biomes whose floor is earth rather than masonry.
   // A biome opts in with floorStyle:"<name>"; anything unknown keeps the old
   // per-tile slab look.
-  const BOND_STYLES = { runningbond:true, dirt:true, ice:true, loam:true };
+  const BOND_STYLES = { runningbond:true, dirt:true, ice:true, loam:true, ash:true };
 
   // Exact 32-bit position hash for texture baking. Delve.hash3 (state.js) loses
   // precision on large float products and skews low for small integer inputs —
@@ -285,6 +328,59 @@ window.Delve = window.Delve || {};
    return base;
   }
 
+  // Ash crust (The Ashen Forge): a cooled lava field. Continuous, no lattice and
+  // no per-tile rectangle — one surface for any room size, like the other three
+  // organic styles. Two crust octaves carry the grey ash; a domain-warped seam
+  // field opens the crust into glowing ember veins that wander like real
+  // fractures rather than running straight (a straight seam tiles as a stripe,
+  // which is its own grid). The ember is the ONLY warm colour on the floor, so
+  // the ward's heat reads without washing the surface orange.
+  function ashPixel(px, py, S, floorA, floorB, ember){
+   const n1 = periodicNoise(px, py, 5, S, 1801);    // broad ash drifts
+   const n2 = periodicNoise(px, py, 12, S, 1803);   // finer crust clumping
+   const grain = texHash(px, py, 1807) - 0.5;
+   let t = n1 * 0.58 + n2 * 0.28 + grain * 0.14;
+   t = Math.max(0, Math.min(1, t));
+   // Cool neutral grey drifting between the two floor tones; lifted so the ash
+   // never sinks into a black void.
+   let base = mixRGB(floorB, floorA, t * 1.12);
+   base = mixRGB(base, [72, 72, 78], 0.22);
+   // Compacted plates: a coarser field darkens patches into slab-like crust.
+   const plate = periodicNoise(px, py, 9, S, 1809);
+   if(plate > 0.66) base = mixRGB(base, [18, 18, 21], (plate - 0.66) * 0.9);
+   // Ember veins: domain-warped so the cracks meander. ONE field only, and a
+   // NARROW band — most of this floor must stay ash, or the ward turns into a
+   // lava lake and the ash-grey surface (and the blood pools against it)
+   // disappear. A second, sparse field adds a short offshoot here and there so
+   // the crust reads as crazed rather than cracked in one direction.
+   const wx = (periodicNoise(px, py, 5, S, 1811) - 0.5) * 17;
+   const wy = (periodicNoise(px, py, 5, S, 1813) - 0.5) * 17;
+   let vein = 0;
+   const band = 0.26 * 3 / S;                    // ~1.5px hairline at 16px/tile
+   const v = Math.abs(periodicNoise(px + wx, py + wy, 3, S, 1817) - 0.5);
+   if(v < band) vein = 1 - v / band;
+   else if(v < band * 2.4){
+    // a cooled halo either side of the glow: dark clinker, not another glow
+    base = mixRGB(base, [26, 16, 14], (1 - (v - band) / (band * 1.4)) * 0.30);
+   }
+   // sparse offshoots, well away from the main seam so they read as separate
+   const b2 = 0.2 * 4 / S;
+   const v2 = Math.abs(periodicNoise(px - wy, py + wx, 4, S, 1819) - 0.5);
+   if(v2 < b2) vein = Math.max(vein, (1 - v2 / b2) * 0.62);
+   if(vein > 0){
+    // hot core -> dark red shoulder, so the vein reads as depth, not a stripe
+    base = mixRGB(base, [70, 18, 10], vein * 0.42);
+    base = mixRGB(base, ember, vein * vein * 0.62);
+   }
+   // A large-scale mask: regions of the crust run colder, so the glowing seams
+   // come in patches instead of covering every tile evenly. Kept SUBTLE — an
+   // earlier pass darkened hard (x1.1) and the floor came out in obvious soft
+   // black blotches that read as dirt rather than as cool stone.
+   const heat = periodicNoise(px, py, 3, S, 1821);
+   if(heat < 0.46) base = mixRGB(base, [30, 30, 34], (0.46 - heat) * 0.55);
+   return base;
+  }
+
   // Graveyard loam (The Bone Ossuary): near-black-brown turned earth with pale
   // bone grit scattered through it. Continuous, with no lattice and no per-tile
   // rectangle, so the floor is one surface for any room size — the same rule the
@@ -312,7 +408,11 @@ window.Delve = window.Delve || {};
   }
   function bondTexture(b){
    const style = BOND_STYLES[b.floorStyle] ? b.floorStyle : "runningbond";
-   const key = style + "|" + b.floor + "|" + b.floor2;
+   // The key must include EVERY input the bake reads, or a second biome sharing
+   // floor tones would be served the first one's threads/grit/ember colour.
+   const key = style + "|" + b.floor + "|" + b.floor2 + "|" +
+               (b.growthThread || "") + "|" + (b.gritColour || "") +
+               "|" + (b.ember || "") + "|" + (b.moss || "");
    if(bondKey === key && bondTex) return bondTex;
    const S = BOND_PX * BOND_N;             // 48x48 fine pixels = 3x3 tiles
    const c = document.createElement("canvas");
@@ -329,9 +429,11 @@ window.Delve = window.Delve || {};
    const isDirt = style === "dirt";
    const isIce = style === "ice";
    const isLoam = style === "loam";
+   const isAsh = style === "ash";
    const thread = b.growthThread ? rgbOf(b.growthThread) : (b.moss ? rgbOf(b.moss) : [196, 208, 150]);
    const grit = b.gritColour ? rgbOf(b.gritColour) : [207, 192, 160];
    const iceGlow = b.moss ? rgbOf(b.moss) : [126, 200, 224];
+   const ember = b.ember ? rgbOf(b.ember) : [255, 122, 42];
    for(let py = 0; py < S; py++){
     for(let px = 0; px < S; px++){
      let col3;
@@ -341,6 +443,9 @@ window.Delve = window.Delve || {};
      } else if(isIce){
       // no seams anywhere — continuous glacial sheet with fractures + rune-light
       col3 = icePixel(px, py, S, floorA, floorB, iceGlow);
+     } else if(isAsh){
+      // continuous ash crust with glowing ember veins
+      col3 = ashPixel(px, py, S, floorA, floorB, ember);
      } else if(isLoam){
       // no seams anywhere — continuous turned earth with bone grit
       col3 = loamPixel(px, py, S, floorA, floorB, grit);
@@ -405,7 +510,7 @@ window.Delve = window.Delve || {};
    // now) already carries its own multi-octave variation, so the texture does its
    // own shading and there is no per-tile rectangle to see. Masonry keeps the
    // overlay, byte for byte, so ward 1 is untouched.
-   if(b.floorStyle !== "dirt" && b.floorStyle !== "ice" && b.floorStyle !== "loam"){
+   if(b.floorStyle !== "dirt" && b.floorStyle !== "ice" && b.floorStyle !== "loam" && b.floorStyle !== "ash"){
     const t = floorTone(gx, gy);
     ctx.save();
     ctx.globalAlpha = 0.05 + Math.abs(t - 0.5) * 0.22;
@@ -567,10 +672,34 @@ window.Delve = window.Delve || {};
   };
   // the dark base shows only at the exposed insets — the mortar between stones
   ctx.fillStyle=b.mortar; ctx.fillRect(sx,sy,ts,ts);
-  // per-tile stone tone — weathered variation instead of a flat fill
-  let stone = blendHex(b.wall, "#0a0e12", n * 0.16);
-  if(n3 > 0.90) stone = blendHex(stone, "#ffffff", 0.05);
-  wallPath(); ctx.fillStyle=stone; ctx.fill();
+  // Weathered stone. Painted as TWO continuous gradients — one carrying the
+  // weathering/lichen/rust field horizontally, one vertically — instead of a
+  // single per-tile flat fill. A flat fill makes every wall block its own
+  // rectangle, which is the checkerboard; two crossing gradients that both span
+  // the whole tile and are sampled from the same world-space field mean two
+  // neighbouring tiles agree exactly on the colour of the seam between them.
+  //
+  // Lichen uses the biome's own `moss` colour, so a ward can never grow another
+  // ward's colour (the old washes were hardcoded green and rust, which put green
+  // spots on the Frosted Vault's violet stone).
+  const cA = wallColourAt(gx, gy, b);          // top-left
+  const cB = wallColourAt(gx + 1, gy, b);      // top-right
+  const cC = wallColourAt(gx, gy + 1, b);      // bottom-left
+  const cD = wallColourAt(gx + 1, gy + 1, b);  // bottom-right
+  wallPath(); ctx.fillStyle = cA; ctx.fill();
+  // Horizontal pass: the exact top-left -> top-right colour ramp.
+  const gH = ctx.createLinearGradient(sx, sy, sx + ts, sy);
+  gH.addColorStop(0, cA); gH.addColorStop(1, cB);
+  ctx.fillStyle = gH; ctx.fillRect(sx, sy, ts, ts);
+  // Vertical pass: the same idea downward, held to a low alpha so it modulates
+  // the horizontal ramp (a bilinear blend of the four corner colours) instead of
+  // painting over it. Two crossing gradients cannot step on a tile boundary.
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  const gV = ctx.createLinearGradient(sx, sy, sx, sy + ts);
+  gV.addColorStop(0, cA); gV.addColorStop(0.5, cC); gV.addColorStop(1, cD);
+  ctx.fillStyle = gV; ctx.fillRect(sx, sy, ts, ts);
+  ctx.restore();
   // everything below paints inside the stone shape
   ctx.save(); wallPath(); ctx.clip();
   // soft top-down light, the biome's edge tone at the crest
@@ -579,8 +708,6 @@ window.Delve = window.Delve || {};
   lg.addColorStop(0.30,"rgba(255,255,255,0.06)");
   lg.addColorStop(1,"rgba(0,0,0,0.18)");
   ctx.fillStyle=lg; ctx.fillRect(sx,sy,ts,ts);
-  if(mood===2){ ctx.fillStyle="rgba(60,90,60,0.22)"; ctx.fillRect(sx,sy,ts,ts); }
-  if(mood===3){ const grad=ctx.createLinearGradient(sx+ts*0.5,sy,sx+ts*0.5,sy+ts); grad.addColorStop(0,"rgba(70,40,20,0.40)"); grad.addColorStop(0.6,"rgba(50,30,15,0.14)"); grad.addColorStop(1,"rgba(0,0,0,0)"); ctx.fillStyle=grad; ctx.fillRect(sx+ts*0.25,sy,ts*0.5,ts); }
   if(ts>=20){
    if(b.wallStyle === "ice"){
     // Ice-palace wall: vertical fracture lines instead of a brick course. The
@@ -604,6 +731,57 @@ window.Delve = window.Delve || {};
     // bright hoar-frost edge caught along the lit side of the first crack
     ctx.strokeStyle = b.wallEdge; ctx.globalAlpha = mood===1 ? 0.50 : 0.30;
     ctx.beginPath(); jag(fx1 - ts * 0.03); ctx.stroke();
+    ctx.globalAlpha = 1;
+   } else if(b.wallStyle === "forge"){
+    // Furnace wall: VERTICAL iron plating. Deliberately vertical and not a
+    // horizontal course — a seam at the same height in every tile stacks into
+    // endless horizontal stripes across a wall mass (the first version did
+    // exactly that, measured on the boss arena). Vertical joints are placed to
+    // continue from tile to tile, and only some plates leak heat.
+    //
+    // Joints: two per tile at positions that drift with gy, so a column of wall
+    // reads as one tall riveted sheet rather than a stack of bricks.
+    const j1 = x0 + (x1 - x0) * (0.34 + Math.sin(gy * 1.7 + gx * 0.4) * 0.07);
+    const j2 = x0 + (x1 - x0) * (0.78 + Math.cos(gy * 1.3 + gx * 0.9) * 0.06);
+    ctx.strokeStyle = b.wallBrick; ctx.lineWidth = Math.max(1, ts * 0.05);
+    ctx.globalAlpha = 0.80;
+    ctx.beginPath();
+    ctx.moveTo(j1, y0); ctx.lineTo(j1, y1);
+    ctx.moveTo(j2, y0); ctx.lineTo(j2, y1);
+    ctx.stroke();
+    // lit lip down one side of each joint: a little definition, not a light show
+    ctx.strokeStyle = b.wallEdge; ctx.lineWidth = Math.max(1, ts * 0.02);
+    ctx.globalAlpha = 0.16;
+    ctx.beginPath();
+    ctx.moveTo(j1 + ts * 0.035, y0); ctx.lineTo(j1 + ts * 0.035, y1);
+    ctx.stroke();
+
+    // Heat: only SOME plates leak, gated on a smooth position field so the lit
+    // plates cluster in runs along a wall instead of every tile glowing. The
+    // glow always rises from the FLOOR edge — heat comes from below, and pinning
+    // it to a tile-relative line is what created the stripe artefact.
+    const leak = wallFieldAt(gx + 0.5, gy + 0.5, 2039, 4);
+    if(leak > 0.56 && eB){
+     const heat = Math.min(1, (leak - 0.56) * 3.0);
+     const gy0 = y1 - ts * (0.18 + heat * 0.30);
+     const gg = ctx.createLinearGradient(0, gy0, 0, y1);
+     gg.addColorStop(0, "rgba(0,0,0,0)");
+     gg.addColorStop(0.65, b.wallEdge);
+     gg.addColorStop(1, b.wallEdge);
+     ctx.globalAlpha = 0.10 + heat * 0.22;
+     ctx.fillStyle = gg;
+     ctx.fillRect(x0, gy0, x1 - x0, y1 - gy0);
+    }
+    // rivets: pale iron down both joints, one pair per tile — hardware, not fire
+    ctx.globalAlpha = 0.30;
+    ctx.fillStyle = b.wallEdge;
+    const ry1 = sy + ts * 0.30, ry2 = sy + ts * 0.72;
+    ctx.beginPath();
+    ctx.arc(j1, ry1, Math.max(1, ts * 0.026), 0, Math.PI * 2);
+    ctx.arc(j1, ry2, Math.max(1, ts * 0.026), 0, Math.PI * 2);
+    ctx.arc(j2, ry1, Math.max(1, ts * 0.026), 0, Math.PI * 2);
+    ctx.arc(j2, ry2, Math.max(1, ts * 0.026), 0, Math.PI * 2);
+    ctx.fill();
     ctx.globalAlpha = 1;
    } else {
    // sagging course line + jittered verticals: masonry, not a grid

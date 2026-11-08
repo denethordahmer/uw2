@@ -716,6 +716,211 @@ try {
 ok(integrationOk, "a generated floor grows and bakes end to end" +
    (integrationMsg ? " (" + integrationMsg + ")" : ""));
 
+// ── finish-pass regressions ────────────────────────────────────────────────
+// Four defects found by the finish-up audit. Each check fails on the old code.
+console.log("\n-- finish-pass regressions -----------------------------");
+
+// 1. hash2 could never reach 0.5 (arithmetic shift kept the sign bit), so every
+//    `< 0.5` roll was always true and everything above was dead.
+(function(){
+  let mx = 0, above = 0, n = 0;
+  for(let x = 0; x < 160; x++) for(let y = 0; y < 160; y++){
+    const v = D.hash2(x, y); if(v > mx) mx = v; if(v >= 0.5) above++; n++;
+  }
+  ok(mx > 0.99, "hash2 reaches the top of its range (max " + mx.toFixed(4) + ")");
+  ok(above > n * 0.45, "hash2 splits evenly around 0.5 (" + above + "/" + n + ")");
+})();
+
+// 2. wallStyle/gritColour must survive the biome() normaliser or the Vault's
+//    ice-fracture walls are unreachable code.
+(function(){
+  const prev = D.G;
+  D.G = { floor:23, grid:[[1]], gridW:1, gridH:1, puddles:[] };
+  const ice = D.tiles.biome();
+  D.G = { floor:33, grid:[[1]], gridW:1, gridH:1, puddles:[] };
+  const loam = D.tiles.biome();
+  D.G = prev;
+  ok(ice.wallStyle === "ice", "biome() forwards wallStyle (the Vault's ice walls render)");
+  ok(loam.gritColour === "#cfc0a0", "biome() forwards gritColour (loam grit is the biome's own)");
+})();
+
+// 3. Every item in the game must resolve to a sprite. Rings used to look up
+//    "ring1:N" while the builders registered "ring:N"; consumables pointed at a
+//    sprite path that did not exist.
+(function(){
+  // Check for a REGISTERED BUILDER, not merely a non-null draw result: itemSprite
+  // falls back to the generic itemPile, so "it returned something" passes even
+  // when the art is missing. That is exactly how the ring bug hid.
+  const builders = D._itemSpriteBuilders || {};
+  const missing = [];
+  Object.keys(D.itemDefs).forEach(function(k){
+    const key = D.itemSpriteKey(D.itemDefs[k]);
+    if(!builders[key]) missing.push(k + " [" + key + "]");
+  });
+  ok(missing.length === 0, "every item def has its own registered sprite" +
+     (missing.length ? " (missing " + missing.length + ": " + missing.slice(0,6).join(", ") + ")" : ""));
+  ok(D.itemSpriteKey({ slot:"ring1", tier:2 }) === "ring:2" &&
+     D.itemSpriteKey({ slot:"ring2", tier:2 }) === "ring:2",
+     "an item drawn straight off an EQUIP key still finds ring art");
+  ok(D.itemSpriteKey({ slot:"consumable", kind:"cure", tier:2 }) === "consumable:cure:2",
+     "a consumable is keyed by its function");
+  // The bug that mattered: all 24 consumables used to resolve to one key, so a
+  // heal, a buff and a cure were the same picture on the floor.
+  const keys = {};
+  Object.keys(D.itemDefs).forEach(function(k){
+    const d = D.itemDefs[k];
+    if(d.slot === "consumable") keys[D.itemSpriteKey(d)] = 1;
+  });
+  ok(Object.keys(keys).length >= 8,
+     "consumables are visually distinct by function and tier (" +
+     Object.keys(keys).length + " keys)");
+})();
+
+// 4. reassembleOnce has to survive onto the instance, or the Ossuary's gimmick
+//    never fires (killMonster reads the flag off the monster, not the roster).
+(function(){
+  const prev = D.G;
+  D.G = { floor:35, grid:[], gridW:8, gridH:8, monsters:[], px:0, py:0,
+          monsters:[] };
+  for(let y = 0; y < 8; y++){ const r = []; for(let x = 0; x < 8; x++) r.push(D.T.FLOOR); D.G.grid.push(r); }
+  const m = D.spawnMonsterAt(4, 4, "reassembled");
+  const plain = D.spawnMonsterAt(2, 2, "bone_rat");
+  D.G = prev;
+  ok(!!m && m.reassembleOnce === true, "the Reassembled carries reassembleOnce onto the instance");
+  ok(!!plain && !plain.reassembleOnce, "an ordinary monster does not inherit the flag");
+})();
+
+// ── Ward 5: The Ashen Forge ────────────────────────────────────────────────
+console.log("\n-- ward 5: the Ashen Forge -----------------------------");
+(function(){
+  const W5 = C.WARDS.filter(function(w){ return w.id === 5; })[0];
+  ok(!!W5, "ward 5 exists");
+  ok(!!W5 && W5.floors[0] === 41 && W5.floors[1] === 50, "ward 5 covers floors 41-50");
+  ok(!!W5 && W5.biome === 4, "ward 5 points at biome index 4");
+  ok(!!C.BIOMES[4], "BIOMES[4] exists");
+  ok(!!C.DRESSING[5], "ward 5 has arena dressing");
+
+  // Every floor in the band must resolve to ward 5, and so must the boss floor.
+  const wrong = [];
+  for(let f = 41; f <= 50; f++){ if(D.getWard(f).id !== 5) wrong.push(f); }
+  ok(wrong.length === 0, "every floor 41-50 resolves to ward 5" +
+     (wrong.length ? " (wrong: " + wrong.join(",") + ")" : ""));
+
+  // The overflow fallback used to return ward 1 while the monster bands fell
+  // through to the deepest set — a silent ward/monster mismatch past floor 50.
+  ok(D.getWard(51).id === 4 + 1 || D.getWard(51).id === 5,
+     "past the last ward, getWard clamps to the DEEPEST ward (not ward 1)");
+})();
+
+(function(){
+  // Bands are FIRST-MATCH, so the Forge bands must precede the [51,999] overflow.
+  const b41 = D.getMonsterBand(41), b45 = D.getMonsterBand(45), b49 = D.getMonsterBand(49);
+  const forgeKinds = ["ash_tick","slag_hound","cinder_wretch","furnace_guard",
+                      "emberfiend","molten_brute","smog_stalker"];
+  const hasForge = function(b){ return b && Object.keys(b.weights || {}).some(function(k){
+    return forgeKinds.indexOf(k) >= 0 && b.weights[k] > 0; }); };
+  ok(hasForge(b41) && hasForge(b45) && hasForge(b49),
+     "floors 41/45/49 roll the Forge roster");
+  // Identity, not content: the overflow band ALSO holds Forge monsters, so a
+  // content check cannot tell them apart. Assert the resolved band is the
+  // depth-specific one. (Today's ranges do not overlap, so this is a guard
+  // against a future widening rather than a live bug.)
+  const isOverflow = function(b){ return !!b && b.floors[0] >= 51; };
+  ok(!isOverflow(b41) && !isOverflow(b45) && !isOverflow(b49),
+     "the Forge bands are NOT shadowed by the [51,999] overflow band");
+  ok(b41.floors[0] === 41 && b41.floors[1] === 42, "floor 41 gets its own band");
+  // and the boss itself
+  ok(!!C.BOSS_DEFS[5] && C.BOSS_DEFS[5].sprite === "boss_titan",
+     "floor 50 has its own boss, not the Warden fallback");
+  ok(!!(D.SPR.boss_titan && D.SPR.boss_titan.idle), "boss_titan has a sprite");
+  ok(!!(D.SPR.boss_titan && D.SPR.boss_titan.attack), "boss_titan has an attack frame");
+})();
+
+(function(){
+  // Every Forge monster must have art (test.html checks this in the browser, but
+  // this suite is the one that runs in CI without a DOM).
+  const kinds = ["ash_tick","slag_hound","cinder_wretch","furnace_guard",
+                 "emberfiend","molten_brute","smog_stalker","reforged","reforged_shard"];
+  const missing = kinds.filter(function(k){ return !(D.SPR[k] && D.SPR[k].idle); });
+  ok(missing.length === 0, "every Forge monster has a sprite" +
+     (missing.length ? " (missing: " + missing.join(", ") + ")" : ""));
+  // and contrast: a body the same luminance as the floor is invisible on it
+  const floorL = 0.299*58 + 0.587*58 + 0.114*64;
+  const dim = [];
+  // Pixel inspection goes through `_img`: under the Node stub, drawImage and
+  // getImageData are no-ops, but the builder's own putImageData is recorded.
+  kinds.forEach(function(k){
+    const sp = D.SPR[k]; if(!sp || !sp.idle) return;
+    const c = sp.idle;
+    if(!c._img) return;                      // stub cannot capture it; skip
+    const d = c._img.data;
+    let sum = 0, n = 0;
+    for(let i = 0; i < c.width*c.height; i++){
+      if(d[i*4+3] < 10) continue;
+      sum += 0.299*d[i*4] + 0.587*d[i*4+1] + 0.114*d[i*4+2]; n++;
+    }
+    if(n && Math.abs(sum/n - floorL) < 25) dim.push(k + "(" + Math.round(sum/n) + ")");
+  });
+  ok(dim.length === 0, "no Forge monster sits at the floor's own luminance" +
+     (dim.length ? " (too close: " + dim.join(", ") + ")" : ""));
+})();
+
+(function(){
+  // Blood, not water: the biome must name a different puddle style, and that
+  // style must actually differ in SHAPE and FINISH (a recolour is not enough).
+  const bm = C.BIOMES[4];
+  ok(bm.puddleStyle === "blood", "the Forge uses the blood puddle style");
+  const water = D.puddleStyles.water, blood = D.puddleStyles.blood;
+  ok(!!water && !!blood, "both puddle styles are registered");
+  ok(blood.finish !== water.finish, "blood has its own surface finish (no sparkles)");
+  const fake = { cx:4.5, cy:4.5, r:1.6, seed:4242 };
+  const pts = [[5.4,4.5],[4.5,5.6],[3.6,4.2],[5.2,5.4]];
+  let differs = 0;
+  pts.forEach(function(pt){
+    if(Math.abs(water.radius(fake, pt[0], pt[1]) - blood.radius(fake, pt[0], pt[1])) > 0.05) differs++;
+  });
+  ok(differs >= 2, "blood pools have a different OUTLINE from water pools (" + differs + "/4 probes)");
+})();
+
+(function(){
+  // The growth form must place, climb a little, and bake without clipping.
+  const forge = D.growthStyles.forge;
+  ok(!!forge, "the forge growth form is registered");
+  const prev = D.G;
+  D.G = { floor:45, grid:[], gridW:12, gridH:12, monsters:[], px:0, py:0,
+          puddles:[], chests:[], goldPiles:[], barrels:[], items:[] };
+  for(let y = 0; y < 12; y++){ const r = []; for(let x = 0; x < 12; x++) r.push(D.T.FLOOR); D.G.grid.push(r); }
+  for(let i = 0; i < 12; i++){ D.G.grid[0][i] = D.T.WALL; D.G.grid[11][i] = D.T.WALL;
+                               D.G.grid[i][0] = D.T.WALL; D.G.grid[i][11] = D.T.WALL; }
+  D.G.floor = 45;
+  D.placeGrowth(D.G);
+  const g = D.G.growth || {};
+  ok((g.floor || []).length > 0, "the forge form places ember zones on a floor");
+  ok(!g.error, "forge placement reported no error" + (g.error ? " (" + g.error + ")" : ""));
+  if((g.floor || []).length){
+    const sp = g.floor[0];
+    const pal = forge.palette ? forge.palette(C.BIOMES[4]) : C.BIOMES[4].growthPal;
+    const c = forge.bake(sp, pal, D.growthUtil);
+    ok(!!c, "an ember zone bakes a canvas");
+    // The canvas stub keeps its ImageData on `_img` (putImageData), which is how
+    // every other bake check in this file inspects pixels.
+    if(c && c._img){
+      const d = c._img.data;
+      let edge = 0, painted = 0;
+      for(let y = 0; y < c.height; y++) for(let x = 0; x < c.width; x++){
+        if(!d[(y*c.width+x)*4+3]) continue;
+        painted++;
+        if(x === 0 || y === 0 || x === c.width-1 || y === c.height-1) edge++;
+      }
+      ok(painted > 100, "the zone paints (" + painted + " px)");
+      ok(edge === 0, "no part of the zone is cut off by the bake canvas (" + edge + " edge px)");
+    } else {
+      ok(false, "the ember zone bake kept no pixels to inspect");
+    }
+  }
+  D.G = prev;
+})();
+
 ctx.document.createElement = realCreate;
 Math.random = realRandom;
 D.G = null;

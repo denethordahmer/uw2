@@ -20,6 +20,65 @@ window.Delve = window.Delve || {};
  const MIN_LEAKS = 2, MAX_LEAKS = 4;
  const MIN_R = 1.30, MAX_R = 1.90;
 
+ // ── the two styles ───────────────────────────────────────────
+ Delve.puddleStyles = Delve.puddleStyles || {};
+ // "water": the original blob. Rainwater: bright lipped, sparkles on the surface,
+ // 2-4 pools a floor. Unchanged, so wards 1-4 are untouched.
+ Delve.puddleStyles.water = {
+  minLeaks: MIN_LEAKS, maxLeaks: MAX_LEAKS, minR: MIN_R, maxR: MAX_R,
+  radius: waterRadius,
+  bands: function(pw){
+   return [
+    mix(pw, "#04070a", 0.42),   // sunken contact edge
+    mix(pw, "#ffffff", 0.16),   // shallow lip
+    pw,                         // body
+    mix(pw, "#04070a", 0.20)    // deeper middle
+   ];
+  },
+  alpha: [0.92, 0.80, 0.86, 0.90],
+  finish: "glint"
+ };
+
+ // "blood" (The Ashen Forge): thick, dark, and pooled. The outline is WIDER and
+ // FLATTER than a water puddle — it spreads under its own weight — with a ragged
+ // torn edge rather than a lobed circle. No sparkles: the surface carries a dull
+ // wet SHEEN instead, and the edge is a dark drying crust, so it reads as
+ // something that congealed, not something reflecting the sky.
+ Delve.puddleStyles.blood = {
+  minLeaks: 2, maxLeaks: 3,
+  minR: 1.55, maxR: 2.25,        // wider: it spreads
+  radius: function(p, wx, wy){
+   const dx = wx - p.cx, dy = wy - p.cy;
+   const ang = Math.atan2(dy, dx);
+   const s = p.seed;
+   // Flatter spread: the blob is squashed along one axis (bias from the seed),
+   // so pools are irregular ovals thrown out from the wall rather than circles.
+   const squash = 0.72 + ((s % 53) / 53) * 0.34;
+   const qx = dx, qy = dy / squash;
+   const rr = Math.hypot(qx, qy);
+   // Two slow harmonics + a sharper 7th: the 7th gives the torn, ragged fringe.
+   const lobes = 1
+    + 0.16 * Math.sin(ang * 2 + (s % 811) * 0.011)
+    + 0.09 * Math.sin(ang * 3 + (s % 733) * 0.014)
+    + 0.045 * Math.sin(ang * 7 + (s % 577) * 0.019);
+   // Coarser noise than water -> ragged, not rippled.
+   const n = vnoise(wx * 1.15 + (s % 97) * 0.41, wy * 1.15 + (s % 71) * 0.59) - 0.5;
+   return p.r * lobes * Math.sqrt(squash) + n * 0.26;
+  },
+  bands: function(pw){
+   return [
+    mix(pw, "#14000a", 0.62),   // dried crust, nearly black
+    mix(pw, "#2a0008", 0.34),   // clotted rim
+    pw,                         // body
+    mix(pw, "#1a0006", 0.44)    // thick centre, darker still
+   ];
+  },
+  // Opaque, because blood is not translucent the way water is: you cannot see
+  // the stone through it.
+  alpha: [0.97, 0.94, 0.96, 0.97],
+  finish: "sheen"
+ };
+
  // ── deterministic shape field ────────────────────────────────
  function smooth(t){ return t*t*(3-2*t); }
  function vnoise(x, y){
@@ -31,9 +90,24 @@ window.Delve = window.Delve || {};
   return top + (bot - top) * fy;
  }
 
- // Radius of the blob in a given direction: a soft circle with three harmonics
- // (the puddle's lobes) plus a fine world-space wobble at roughly half a tile.
- function puddleRadius(p, wx, wy){
+ // ── PUDDLE STYLES ────────────────────────────────────────────
+ // A biome names a style (BIOMES[n].puddleStyle). Each style owns THREE things:
+ //   radius(p, wx, wy) — the outline, in world tiles
+ //   bands(hex)        — the four colour bands, contact edge -> deep middle
+ //   alpha             — per-band opacity
+ //   glints            — "water" sparkles, or "sheen" for blood (see below)
+ // plus the placement numbers (minR/maxR/leaks) so a blood pool can be wider and
+ // flatter than a rainwater puddle. This exists because colour alone was not
+ // enough: every ward's pool was the SAME lobed blob, so "blood" would have been
+ // a red water puddle. A different outline and a different surface finish are
+ // what make it read as something else.
+ function puddleStyle(b){
+  const id = (b && b.puddleStyle) || "water";
+  return Delve.puddleStyles[id] || Delve.puddleStyles.water;
+ }
+
+ // Water: a soft circle with three harmonics plus a fine world-space wobble.
+ function waterRadius(p, wx, wy){
   const dx = wx - p.cx, dy = wy - p.cy;
   const ang = Math.atan2(dy, dx);
   const s = p.seed;
@@ -43,6 +117,13 @@ window.Delve = window.Delve || {};
    + 0.05 * Math.sin(ang * 2 + (s % 487) * 0.017);
   const n = vnoise(wx * 1.55 + (s % 89) * 0.37, wy * 1.55 + (s % 67) * 0.53) - 0.5;
   return p.r * lobes + n * 0.18;
+ }
+
+ // The outline used by every painted tile. Resolved through the active style, so
+ // the placement pass and the paint pass can never disagree about the shape.
+ function puddleRadius(p, wx, wy){
+  const st = p.style || Delve.puddleStyles.water;
+  return st.radius(p, wx, wy);
  }
  function inside(p, wx, wy){
   const dx = wx - p.cx, dy = wy - p.cy;
@@ -145,6 +226,10 @@ window.Delve = window.Delve || {};
   G.puddles = [];
   const ward = Delve.getWard ? Delve.getWard(G.floor) : null;
   if(ward && ward.puddles === false) return;
+  // The ward's biome names the puddle style (BIOMES[n].puddleStyle); anything
+  // unknown falls back to "water", so a biome can never end up with NO pools.
+  const bm = (Delve.CONFIG.BIOMES || [])[(ward && ward.biome) || 0] || {};
+  const style = puddleStyle(bm);
 
   const grid = G.grid;
   const dirs = [[0,1],[1,0],[0,-1],[-1,0]];
@@ -176,7 +261,7 @@ window.Delve = window.Delve || {};
    const tmp = cands[i]; cands[i] = cands[j]; cands[j] = tmp;
   }
 
-  const want = Delve.rng(MIN_LEAKS, MAX_LEAKS);
+  const want = Delve.rng(style.minLeaks, style.maxLeaks);
   const taken = {};
   for(let c = 0; c < cands.length && G.puddles.length < want; c++){
    const a = cands[c];
@@ -184,14 +269,15 @@ window.Delve = window.Delve || {};
    // Three size attempts: the first draws a small puddle; if the room is too
    // tight for it, the next two try slightly smaller ones before giving up.
    for(let tries = 0; tries < 3; tries++){
-    const r = (MIN_R + Math.random() * (MAX_R - MIN_R)) * (1 - tries * 0.10);
+    const r = (style.minR + Math.random() * (style.maxR - style.minR)) * (1 - tries * 0.10);
     const p = {
      cx: a.fx + 0.5,
      cy: a.fy + 0.5,
      r: r,
      seed: Delve.rng(1, 999999),
-     mx: a.fx, my: a.fy
-    };
+     mx: a.fx, my: a.fy,
+     style: style            // carried on the puddle, so the painter and the
+    };                        // outline test agree even if the ward lookup moves
     p.minR = p.r * 0.75 - 0.09;
     p.maxR = p.r * 1.25 + 0.09;
     p.reach = p.maxR + 0.05;
@@ -222,15 +308,11 @@ window.Delve = window.Delve || {};
                   Math.round(A[1] + (B[1] - A[1]) * t) + "," +
                   Math.round(A[2] + (B[2] - A[2]) * t) + ")";
  }
- function bands(pw){
-  if(pw === cacheKey) return cacheCols;
-  cacheKey = pw;
-  cacheCols = [
-   mix(pw, "#04070a", 0.42),   // sunken contact edge
-   mix(pw, "#ffffff", 0.16),   // shallow lip
-   pw,                         // body
-   mix(pw, "#04070a", 0.20)    // deeper middle
-  ];
+ function bands(pw, style){
+  const key = pw + "|" + (style && style.finish || "water");
+  if(key === cacheKey) return cacheCols;
+  cacheKey = key;
+  cacheCols = (style || Delve.puddleStyles.water).bands(pw);
   return cacheCols;
  }
 
@@ -246,8 +328,9 @@ window.Delve = window.Delve || {};
 
  function drawPart(ctx, sx, sy, ts, gx, gy, p, win){
   const N = PX, cellW = ts / N;
-  const cols = bands(win);
-  const alpha = [0.92, 0.80, 0.86, 0.90];
+  const style = p.style || Delve.puddleStyles.water;
+  const cols = bands(win, style);
+  const alpha = style.alpha;
   let any = false;
   ctx.save();
   for(let j = 0; j < N; j++){
@@ -274,15 +357,40 @@ window.Delve = window.Delve || {};
    }
   }
   ctx.restore();
+  // Surface finish. Water throws two small specular sparkles. Blood does NOT:
+  // a bright point on a red pool reads as water, which is exactly the mistake
+  // this style exists to avoid. Instead the surface gets one broad, soft, low
+  // contrast sheen patch — wet, not reflective — placed on the thickest part.
   if(any){
-   // two quiet highlights, placed only where the puddle is genuinely wet
-   const h1 = Delve.hash2(gx * 17 + 3, gy * 13 + 7);
-   glint(ctx, sx, sy, ts, gx, gy, p,
-         gx + 0.24 + h1 * 0.48, gy + 0.26 + Delve.hash3(gx, gy, 401) * 0.40);
-   if(Delve.hash3(gx, gy, 409) < 0.55){
+   if(style.finish === "sheen"){
+    const hx2 = gx + 0.30 + Delve.hash2(gx * 11 + 5, gy * 7 + 3) * 0.40;
+    const hy2 = gy + 0.32 + Delve.hash3(gx, gy, 431) * 0.36;
+    const d2 = Math.hypot(hx2 - p.cx, hy2 - p.cy);
+    if(puddleRadius(p, hx2, hy2) - d2 > 0.18){
+     ctx.save();
+     const g2 = ctx.createRadialGradient(
+       sx + (hx2 - gx) * ts, sy + (hy2 - gy) * ts, 1,
+       sx + (hx2 - gx) * ts, sy + (hy2 - gy) * ts, ts * 0.26);
+     g2.addColorStop(0, "rgba(255,150,150,0.16)");
+     g2.addColorStop(0.55, "rgba(180,60,70,0.10)");
+     g2.addColorStop(1, "rgba(0,0,0,0)");
+     ctx.fillStyle = g2;
+     ctx.beginPath();
+     ctx.ellipse(sx + (hx2 - gx) * ts, sy + (hy2 - gy) * ts,
+       ts * 0.30, ts * 0.17, 0.4, 0, Math.PI * 2);
+     ctx.fill();
+     ctx.restore();
+    }
+   } else {
+    // two quiet highlights, placed only where the puddle is genuinely wet
+    const h1 = Delve.hash2(gx * 17 + 3, gy * 13 + 7);
     glint(ctx, sx, sy, ts, gx, gy, p,
-          gx + 0.52 + Delve.hash3(gx, gy, 419) * 0.30,
-          gy + 0.58 + Delve.hash3(gx, gy, 421) * 0.24);
+          gx + 0.24 + h1 * 0.48, gy + 0.26 + Delve.hash3(gx, gy, 401) * 0.40);
+    if(Delve.hash3(gx, gy, 409) < 0.55){
+     glint(ctx, sx, sy, ts, gx, gy, p,
+           gx + 0.52 + Delve.hash3(gx, gy, 419) * 0.30,
+           gy + 0.58 + Delve.hash3(gx, gy, 421) * 0.24);
+    }
    }
   }
   return any;
@@ -304,9 +412,10 @@ window.Delve = window.Delve || {};
   // (older test fixture, manual grid edit), paint a plain rounded pool rather
   // than leaving invisible water.
   if(!drew){
+   const fb = bands(pw, puddleStyle(b));
    ctx.save();
-   ctx.globalAlpha = 0.84;
-   ctx.fillStyle = pw;
+   ctx.globalAlpha = fb[2] ? 0.9 : 0.84;
+   ctx.fillStyle = fb[2];
    const m = ts * 0.14;
    ctx.beginPath();
    ctx.roundRect(sx + m, sy + m, ts - m * 2, ts - m * 2, ts * 0.30);

@@ -11,6 +11,110 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Added — Ward 5: The Ashen Forge (floors 41-50)
+
+The fifth ward, built to the hellscape brief: a foundry that has been burning for
+centuries. Every layer is a new *style*, not a recolour of an existing one.
+
+- **Ash floor (`BOND_STYLES.ash`).** A continuous cooled-lava crust: neutral grey
+  ash drift over compacted plates, opened by domain-warped ember veins that
+  wander rather than running straight. A large-scale heat mask makes whole
+  regions cold and dead, so the glow comes in patches instead of web-banding the
+  whole floor. The first pass was far too hot — the ash grey vanished and the
+  ward read as a lava lake — so the vein band was cut to a hairline, one field
+  instead of two, and the heat mask added. Measured mean floor luminance ~50.
+- **Blood, not water (`Delve.puddleStyles`).** `js/puddles.js` gained a real
+  style seam — a style owns the outline, the colour bands, the per-band alpha and
+  the surface finish — because recolouring the shared blob could only ever have
+  produced *red water*. The `blood` style is wider and flatter (it spreads under
+  its own weight), squashed on an axis rolled from the seed, with a ragged
+  seventh-harmonic torn edge, near-black dried crust, a clotted rim, opaque
+  bands, and a dull wet sheen instead of water's sparkles. Wards 1-4 keep the
+  `water` style untouched.
+- **Ember growth (`js/growth/forge.js`).** The ward's "growth" is the floor
+  failing: a scorched halo, a cracked crust, and 2-5 branching fissures that are
+  white-hot at the root and cool toward their tips, with embers at the junctions.
+  It climbs — `C.WALL_SLAG` sends slag up the stone where a zone meets a wall.
+  The bake canvas is sized from the *scorch halo* as well as the farthest crack;
+  sizing it from the crack span alone cut one or the other off with a straight
+  edge (measured 3/17 zones clipped, then 14/16 when only the halo was enlarged;
+  now 0).
+- **Furnace walls (`wallStyle:"forge"`).** Vertical iron plating with rivets and
+  heat bleeding up from the floor edge. Explicitly *not* a horizontal course: the
+  first version put a seam at the same height in every tile and the boss arena
+  came out in endless horizontal stripes. Only some plates leak heat, gated on a
+  continuous position field, so the lit plates cluster in runs.
+- **Nine monsters + the Titan.** Eight roster creatures (Ash Tick, Slag Hound,
+  Cinder Wretch, Furnace Guard, Emberfiend, Molten Brute, Smog Stalker, The
+  Reforged) plus `reforged_shard` for the split, each with idle and attack
+  frames. The Forge palette is deliberately LIGHTER than the floor: the first
+  pass used `char:"#241f1e"` and measured mean sprite luminance 48 against a
+  50-luminance floor — literally invisible. Bodies now sit at 104-143, matching
+  the rest of the roster (97-185). A test pins that no Forge monster lands within
+  25 luminance of the floor.
+- **The Reforged splits on death.** New `splitOnDeath` spec read by
+  `killMonster`: the parent breaks into two `reforged_shard` bodies at 25% HP and
+  ATK, on its own tile and free neighbours (never on the player, a wall or a
+  floor event). Each half pays its own reward row, so the split is not a shard
+  farm, and fragments never split again.
+- **The Forge Titan** — 340 HP, 26 ATK, `chainHitEvery:3`, a 2x2 sprite with its
+  own attack frame. Arena dressing is six bespoke pieces (banded stanchion, soot
+  standard, crucible chain, clinker, cremated remains, coal mound) plus
+  `ground_ash` cover and a `forge` clutter family.
+- **Ward/monster fallback fixed.** `Delve.getWard` used to return ward 1 for any
+  floor past the last band, while `getMonsterBand` fell through to the deepest
+  set — so a hypothetical floor 51+ would have rendered and dressed as the Upper
+  Ruins while spawning Forge monsters. It now clamps to the deepest ward.
+- **Music:** ward 5 has no bed yet and deliberately no `MUSIC_TRACKS` entry, so
+  it falls back to ward 1's track. Adding `5: ["music/biome5-1.mp3"]` is the only
+  change needed once the file exists.
+
+`test.html` was extended to `CLUTTER_SETS += "forge"` and its generation sweep
+from floors 1-40 to 1-50; before that, Ward 5's arena, bands and dressing were
+never exercised by the browser suite.
+
+### Fixed — finish-up pass, batch 1 (walls, hashes, items, the Reassembled)
+
+- **The wall checkerboard is gone.** Wall stone used to be a FLAT fill of one
+  per-tile colour, and the lichen/rust "mood" washes were full-tile rectangles of
+  hardcoded green and rust. Across a wall mass that read as a grid of coloured
+  squares — and on the Frosted Vault's violet stone it put green spots there too.
+  Stone colour now comes from a continuous world-space field (`wallColourAt`)
+  sampled at all four corners of the tile and painted as two crossing gradients,
+  so neighbouring tiles agree exactly on the colour of the seam between them.
+  Lichen is mixed from the biome's own `moss` colour, so a ward can never grow
+  another ward's colour. Measured: per-tile brightness spread fell from a
+  hard 1-tile step to smooth drift while still varying ~9 luminance levels.
+- **`hash2` could never return 0.5 or above.** The final mix used an arithmetic
+  shift (`n >> 16`), which keeps the sign bit, so the result was always in
+  `0 .. 2^31-1`. Measured max over 40,000 samples: **0.499995**. Every
+  `hash3(...) < 0.5` therefore fired at ~2× its intended rate and every test
+  above 0.5 was unreachable — which is why `drawWallTile`'s mood roll could
+  never land on mood 0 (100% of tiles were tinted), and why two of the four
+  `WALL_MOSS` climb designs never appeared. One character (`>>` → `>>>`) fixed
+  the distribution to perfect deciles (9.7–10.4) and all four designs now appear
+  evenly. Pinned by two tests that fail on the old code.
+- **`wallStyle` and `gritColour` were dropped by the `biome()` normaliser**, so
+  the Frosted Vault's entire ice-fracture wall treatment (~24 lines) was dead
+  code and the Ossuary's loam grit always used a hardcoded tone. Both are now
+  forwarded; the Vault's walls draw as vertical fractures with a hoar-frost lit
+  edge, as designed.
+- **All 24 consumables were the same picture.** The accessor looked for
+  `Delve.SPR.potionPile`, which does not exist (the sprite is at
+  `SPR.world.potionPile`), so every potion silently fell back to the generic
+  item pile. Consumables now have their own art keyed by function and tier —
+  red heal draughts (fuller at higher tiers), amber buffs, green cures, and a
+  brown tool satchel for torches/rope/maps — and the broken path is corrected.
+- **The Reassembled never reassembled.** `killMonster` reads
+  `m.reassembleOnce`, but neither spawner copied it from the roster row, so the
+  Bone Ossuary's gimmick enemy simply died. Both spawners now carry the flag;
+  verified end to end (dies, returns at half HP, dies for good; ordinary
+  monsters do not inherit it).
+- **Stale `js/growth.js` removed.** The pre-split file was still on disk and in
+  no manifest, which made `tools/check-order.js` fail and `test_items.js` exit
+  before running a single check — the whole suite had been red. Backed up
+  outside the tree before deletion.
+
 ### Changed — the Bone Ossuary: dark loam floor, and dug earth with bones
 
 - **Floor: dark loam (owner pick).** New `BOND_STYLES.loam` bakes continuous

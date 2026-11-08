@@ -115,6 +115,38 @@ window.Delve = window.Delve || {};
       clustered:[2,3],           // 2-3 clustered-loot floors per run
       sarcophagusChance:0.25,    // "Sarcophagus Hall" replaces this ward's swarms
       sarcMin:6, sarcMax:10      // sealed tombs scattered across the floor
+    } },
+
+  { id:5, name:"The Ashen Forge", floors:[41,50], biome:4,
+    // A foundry that has been burning for centuries. No patch tiles: the whole
+    // surface is one continuous ash-and-obsidian sheet (BIOMES[4].floorStyle),
+    // and the blood comes from wall-fed pools (js/puddles.js) in its own
+    // "blood" style — thick, dark, slowly clotting, nothing like water.
+    patches:[],
+    // Ember growth (js/growth/forge.js): cracks in the crust that glow from
+    // below, and slag crust spreading from the walls. Wall-biased so the heat
+    // always appears to come from the stone. The most overgrown ward yet — a
+    // working forge is filthy.
+    growth:{ roomChance:0.88, largeArea:38, largeChance:0.60, bigChance:0.35,
+           cornerBias:0.50, wallBias:0.45,
+           sizeMin:0.55, sizeMax:1.05, bigSizeMin:1.25, bigSizeMax:2.00,
+           // ember-specific knobs, read by the forge form
+           embersMin:2, embersMax:5 },
+    roomMin:6, roomMax:10,
+    roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
+    roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:30,
+    treasureChanceBase:0.10, treasureChanceLuck:0.018, treasureChanceCap:0.35,
+    secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
+    lootRarityMult:1,
+    special:{
+      floors:[2,9],              // ward-relative: floors 42-49
+      clustered:[2,3],           // 2-3 clustered-loot floors per run
+      // The Slag Pit, in its data-only form: a heavily populated chamber of
+      // Molten Brutes rather than an impassable-lava maze (which would need a
+      // new tile type and a reachability check). See docs/ward5.md.
+      swarmChance:0.25,
+      swarmKind:"molten_brute",
+      swarmMin:10, swarmMax:14
     } }
  ];
 
@@ -135,7 +167,10 @@ window.Delve = window.Delve || {};
   1: { pillar:"prop_pillarWarden", banner:"prop_bannerWarden", wallBit:"prop_chainWarden", rubble:"prop_rubbleWarden", bone:"prop_bonesWarden", cluster:"prop_statueWarden" },
   2: { pillar:"prop_pillarThorn",  banner:"prop_bannerThorn",  wallBit:"prop_rootThorn",   rubble:"prop_rubbleThorn",  bone:"prop_huskThorn",    cluster:"prop_clusterThorn"  },
   3: { pillar:"prop_pillarFrost",  banner:"prop_bannerFrost",  wallBit:"prop_icicleFrost", rubble:"prop_rubbleFrost",  bone:"prop_bonesFrost",   cluster:"prop_clusterFrost"  },
-  4: { pillar:"prop_pillarBone",   banner:"prop_shroudOssuary", wallBit:"prop_nicheOssuary", rubble:"prop_rubbleOssuary", bone:"prop_pileOssuary", cluster:"prop_tombOssuary" }
+  4: { pillar:"prop_pillarBone",   banner:"prop_shroudOssuary", wallBit:"prop_nicheOssuary", rubble:"prop_rubbleOssuary", bone:"prop_pileOssuary", cluster:"prop_tombOssuary" },
+  // Ward 5 — the Titan's own six pieces: banded iron on slag, a soot-stained
+  // forge standard, a hanging chain, clinker, cremated remains, and a coal mound.
+  5: { pillar:"prop_pillarForge",  banner:"prop_bannerForge",   wallBit:"prop_chainForge",  rubble:"prop_rubbleForge",  bone:"prop_ashForge",     cluster:"prop_coalForge"     }
  };
 
  // ── Pixel-grain art data (Batch 22 heritage; moss now lives in js/growth/) ───────────
@@ -208,6 +243,25 @@ window.Delve = window.Delve || {};
     "....M...M...M...", "....MM.MM.MM....", ".....MMMMM......", "......MMM.......",
     ".......M........", "......MMM.......", ".....M.M.M......", "......MMM.......",
     ".......M........", "......MDM.......", ".....MMDMM......", "...MMDDDDDMM...." ]
+ ];
+
+ // Wall slag (js/growth/forge.js): the Forge's own climb. Cracks split upward
+ // out of the wall base and glow from below, hottest at the root — the stone is
+ // failing over a fire, not growing a plant. Same 16x16 grain and D/M/L letters
+ // as C.WALL_MOSS; the shared wall pass recolours it from the forge gradient.
+ C.WALL_SLAG = [
+  [ "..M.....L......", ".MM....L........", ".M......M.......", "MM..M...M.......",
+    "M...M..MM.......", "M..M....M.......", "M.M.....M..L....", ".MM....MM..M....",
+    "..M...M....M....", "..M..M.....M....", "...M.M....MM....", "...MM....M......",
+    "....MM..M.......", ".....MMM........", "......M.........", "....DDD........." ],
+  [ "L...L....L......", "M...M....M......", ".M..M...M.......", ".M..M...M.......",
+    "..M.M..M........", "..MMM.M.........", "...MM...........", "....M...........",
+    "....MM..........", "...M.M..........", "...M..M.........", "..M...M.........",
+    "..M....M........", ".M.....M........", ".D......D.......", "DDD....DDD......" ],
+  [ ".....M......L...", "....MM......M...", "....M......M....", "...MM.....M.....",
+    "...M.....M......", "..MM....M.......", "..M....M........", ".MM...M.........",
+    ".M...M..........", ".M..M...........", "MM.M............", "M.M.............",
+    "M.M.............", ".M..............", "DD..............", "DDD............." ]
  ];
 
  C.BIOMES = [
@@ -317,6 +371,43 @@ window.Delve = window.Delve || {};
     // Ground-cover sprite (js/ground.js): scattered bone fragments.
     groundCover:"ground_bone",
     // Organic-patch colours: bone-dust drifts and murky crimson pools.
-    patchGrass:"#b0a080", patchWater:"#4a1a18" }
+    patchGrass:"#b0a080", patchWater:"#4a1a18" },
+
+  { name:"The Ashen Forge",
+    // HELLSCAPE PALETTE. The rule that makes it read: the stone is DARK and
+    // DESATURATED (near-neutral greys, luminance 30-45) so the only saturated
+    // things on screen are the blood pools and the ember light. Walls sit
+    // clearly darker than the ash floor, and the wallEdge is a hot ember
+    // highlight, so every room silhouette is legible at a glance.
+    wall:"#26262a", wallEdge:"#ff6a3d", wallBrick:"#151518", mortar:"#08080a",
+    // Ash-grey floor: cool-neutral, faintly blue, so warm blood reads against it.
+    floor:"#3a3a40", floor2:"#2c2c32", moss:"#8a3a18",
+    // BLOOD, not water: deep venous crimson. This is the accent the whole ward
+    // is built around; `patchWater` is what the puddle painter actually uses.
+    water:"#5c0a10", torch:"#ffb347", light:"rgba(255,90,20,0.075)",
+    // Seamless ash sheet: continuous crust with cooling cinder veins. Organic
+    // field, so like dirt/ice/loam it skips the per-tile tone overlay.
+    floorStyle:"ash",
+    // A clipping of molten light caught in the crust — the ash style reads this
+    // as its ember-vein colour, the same way "ice" reads `moss` as rune light.
+    ember:"#ff7a2a",
+    // Vertical furnace flues instead of a masonry course.
+    wallStyle:"forge",
+    // Its own growth form (js/growth/forge.js): ember cracks + slag crust.
+    growthStyle:"forge",
+    // Dark crust -> dull clinker -> ember -> hot orange -> near-white heat.
+    growthPal:["#2a1a14","#4a2618","#8a3a18","#e0641e","#ffd08a"],
+    // Ground-cover sprite (js/ground.js): cooling lava veins in the dark rock.
+    groundCover:"ground_ash",
+    clutter:"forge",
+    // THICK BLOOD, not water. The style owns the outline (wider, flatter, torn
+    // edges), the bands (near-black dried crust, clotted rim, opaque body) and
+    // the surface finish (a dull wet sheen instead of water's sparkles), so this
+    // is a different liquid — not a red water puddle.
+    puddleStyle:"blood",
+    // WALL CLADDING: the floor flecks and the growth tint pull from `ember`.
+    // Keeping blood and ember distinct is what stops the ward turning into one
+    // flat red-orange wash.
+    patchWater:"#5c0a10", patchGrass:"#3a3330" }
  ];
 })();

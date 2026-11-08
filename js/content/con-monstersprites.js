@@ -254,7 +254,287 @@ window.Delve = window.Delve || {};
   return c;
  }
 
+ // ═══════════ THE ASHEN FORGE (ward 5, The Forge Titan) ═══════════
+ // Palette anchors, so all eight read as one population: charred iron #241f1e /
+ // #171313, clinker #3a3230, ash #6a615c, hot metal #ff6a00, ember #ffb347,
+ // white heat #ffe9b0. Silhouettes stay chunky and low so they read at 24px.
+ // CONTRAST RULE. The ash floor is dark (measured mean luminance ~50), so a
+ // near-black monster vanishes into it — the first pass used char #241f1e and
+ // measured meanL 48 against a 50-luminance floor, i.e. literally invisible.
+ // Every Forge body therefore sits two steps LIGHTER than the floor: weathered
+ // iron and pale ash-grey plating (meanL 95-120) carrying dark shading, with the
+ // ember colours as the accent. Dark stays available, but as SHADOW ON a light
+ // form rather than as the form itself.
+ // The names below describe the ROLE, and every builder draws its body in
+ // `char`. So `char` is the LIGHT plate tone and `charD` is the shade — the
+ // other way round would turn every monster into a silhouette. (First pass had
+ // char = #241f1e; measured meanL 48 on a 50-luminance floor: invisible.)
+ const FORGE = {
+  char:"#8a8078", charD:"#5a524c", clink:"#b3a89f",
+  ash:"#b3a89f", ashL:"#cfc5bb", iron:"#6b625b",
+  hot:"#ff6a00", ember:"#ffb347", white:"#ffe9b0"
+ };
+
+ // ── Ash Tick (frail, fast; scuttles) ─────────────────────────
+ // A low, flattened body like a woodlouse with a glowing seam down its back.
+ function buildAshTick(){
+  const c=mk(24,24),x=gx(c),F=FORGE;
+  // legs: six thin, splayed
+  x.strokeStyle=F.charD; x.lineWidth=1.2; x.lineCap="round";
+  for(let i=0;i<3;i++){
+   const ly=13+i*2.6;
+   x.beginPath(); x.moveTo(8,ly); x.lineTo(4,ly+2.4); x.stroke();
+   x.beginPath(); x.moveTo(16,ly); x.lineTo(20,ly+2.4); x.stroke();
+  }
+  // carapace: overlapping plates
+  R(x,6,10,12,6,F.char);
+  R(x,6,10,12,1.4,F.clink);
+  R(x,7,13.6,10,1,F.charD);
+  R(x,7,16.4,10,1,F.charD);
+  // the seam: heat escaping between the plates
+  R(x,7,12.4,10,1.2,F.hot);
+  R(x,9,12.5,3,0.7,F.white);
+  // head, small and forward
+  R(x,17,11.5,4,4,F.char);
+  R(x,18,12.6,1,1,F.ember); R(x,20.6,12.6,1,1,F.ember);
+  // antennae
+  x.strokeStyle=F.clink; x.lineWidth=0.8;
+  x.beginPath(); x.moveTo(20,11.5); x.lineTo(23,9.5); x.stroke();
+  x.beginPath(); x.moveTo(20,14); x.lineTo(23.4,14.6); x.stroke();
+  return c;
+ }
+
+ // ── Slag Hound (fast, bleeds) ────────────────────────────────
+ // Four-legged, head low, a crusted slag ridge along its spine.
+ function buildSlagHound(){
+  const c=mk(24,24),x=gx(c),F=FORGE;
+  // legs
+  R(x,5,17,2.6,5,F.charD); R(x,9.4,18,2.4,4,F.charD);
+  R(x,14,18,2.4,4,F.charD); R(x,18,17,2.6,5,F.charD);
+  // body
+  R(x,4,11,16,7,F.char);
+  R(x,4,11,16,1.3,F.clink);
+  R(x,4,17,16,1,F.charD);
+  // slag ridge: jagged teeth of cooled rock along the spine
+  x.fillStyle=F.clink;
+  for(let i=0;i<5;i++){
+   const bx=6+i*3;
+   x.beginPath(); x.moveTo(bx,11); x.lineTo(bx+1.4,7.6); x.lineTo(bx+2.8,11); x.closePath(); x.fill();
+  }
+  // a hot seam under the ridge
+  R(x,6,12.4,12,0.9,F.hot);
+  R(x,9,12.5,4,0.5,F.white);
+  // head, thrust forward and down
+  R(x,17.5,12,5.5,5,F.char);
+  R(x,17.5,12,5.5,1,F.clink);
+  R(x,20,14,1.4,1.4,F.ember);       // eye
+  // jaw with glinting teeth
+  R(x,19,16.4,4,1.2,F.charD);
+  x.fillStyle=F.white;
+  for(let i=0;i<3;i++) x.fillRect(19.4+i*1.2,16.4,0.5,1.1);
+  // tail, whipping up
+  x.strokeStyle=F.char; x.lineWidth=2; x.lineCap="round";
+  x.beginPath(); x.moveTo(4,13); x.quadraticCurveTo(1,11,1.6,7.6); x.stroke();
+  x.fillStyle=F.hot; x.fillRect(1.2,7.2,1.4,1.4);
+  return c;
+ }
+
+ // ── Cinder Wretch (burns you) ────────────────────────────────
+ // A stooped humanoid, ribs cracked open with fire inside.
+ function buildCinderWretch(){
+  const c=mk(24,24),x=gx(c),F=FORGE;
+  // legs, thin and bent
+  R(x,8,17,2.4,6,F.charD); R(x,13.5,17,2.4,6,F.charD);
+  // hunched torso
+  R(x,7,8,10,10,F.char);
+  R(x,7,8,10,1.2,F.clink);
+  // the cracked-open chest: bright core behind blackened ribs
+  R(x,9,10,6,6,F.hot);
+  R(x,10,11,4,4,F.white);
+  R(x,9,10,6,0.8,F.charD); R(x,9,12,6,0.8,F.charD); R(x,9,14,6,0.8,F.charD);
+  // arms: one dragging, one raised; both too long
+  R(x,3,9,4,3,F.char); R(x,3,11.5,2.6,7,F.char);
+  R(x,17,9,4,3,F.char); R(x,18.4,11.5,2.6,7,F.char);
+  x.fillStyle=F.ember; x.fillRect(3,18,2.6,1.6); x.fillRect(18.4,18,2.6,1.6);
+  // head: a lump above the fire, mostly jaw
+  R(x,9,3,6,5,F.char);
+  R(x,9,3,6,1,F.clink);
+  R(x,10,5.4,1.2,1.2,F.ember); R(x,12.8,5.4,1.2,1.2,F.ember);
+  R(x,10,7,4,1.4,F.charD);
+  // ash drifting off it
+  x.globalAlpha=0.5; x.fillStyle=F.ash;
+  x.fillRect(6,4,0.8,0.8); x.fillRect(17,3,0.7,0.7); x.fillRect(15,7,0.6,0.6);
+  x.globalAlpha=1;
+  return c;
+ }
+
+ // ── Furnace Guard (slow, weakens) ────────────────────────────
+ // A squat iron-plated thing with a furnace grate for a face.
+ function buildFurnaceGuard(){
+  const c=mk(24,24),x=gx(c),F=FORGE;
+  // heavy legs
+  R(x,6,18,5,5,F.charD); R(x,13,18,5,5,F.charD);
+  R(x,6,21.5,5,1.5,F.clink); R(x,13,21.5,5,1.5,F.clink);
+  // barrel torso
+  R(x,4,7,16,12,F.char);
+  R(x,4,7,16,1.4,F.clink);
+  R(x,4,7,1.6,12,F.charD); R(x,18.4,7,1.6,12,F.charD);
+  // riveted bands
+  R(x,4,11,16,0.9,F.charD); R(x,4,15.4,16,0.9,F.charD);
+  x.fillStyle=F.clink;
+  for(let i=0;i<5;i++){ x.fillRect(5+i*3.4,10.2,0.9,0.9); x.fillRect(5+i*3.4,14.6,0.9,0.9); }
+  // the grate face: vertical bars with fire behind
+  R(x,8,8.4,8,5.4,F.charD);
+  R(x,8.6,9,6.8,4.2,F.hot);
+  R(x,9.4,9.6,2.4,3,F.white);
+  R(x,8,8.4,8,0.6,F.clink);
+  for(let i=0;i<4;i++) R(x,8.6+i*1.8,9,0.7,4.2,F.charD);
+  // arms and fists
+  R(x,1,9,3,4,F.char); R(x,20,9,3,4,F.char);
+  R(x,0.6,12,3.4,3,F.clink); R(x,20,12,3.4,3,F.clink);
+  return c;
+ }
+
+ // ── Emberfiend (burns) ───────────────────────────────────────
+ // A floating cinder wraith: a hood of ash with two burning eyes.
+ function buildEmberfiend(){
+  const c=mk(24,24),x=gx(c),F=FORGE;
+  // trailing robe, ragged at the bottom
+  x.fillStyle=F.char;
+  x.beginPath();
+  x.moveTo(12,3); x.lineTo(18,8); x.lineTo(19.5,18); x.lineTo(16,16);
+  x.lineTo(14,20); x.lineTo(11,16.6); x.lineTo(8.5,20); x.lineTo(6,16);
+  x.lineTo(4.5,18); x.lineTo(6,8); x.closePath(); x.fill();
+  // hood interior: darker
+  R(x,8,5,8,7,F.charD);
+  // eyes: two hot points, the whole read at a glance
+  R(x,9,8,2.2,1.8,F.hot); R(x,13,8,2.2,1.8,F.hot);
+  R(x,9.6,8.5,1,0.9,F.white); R(x,13.6,8.5,1,0.9,F.white);
+  // ember motes rising
+  x.fillStyle=F.ember;
+  x.fillRect(10,2,0.9,0.9); x.fillRect(14,1,0.7,0.7); x.fillRect(17,4,0.8,0.8);
+  x.fillRect(6,3,0.7,0.7);
+  // glowing hem
+  R(x,7,15.4,10,0.8,F.hot);
+  R(x,9,15.5,4,0.5,F.white);
+  return c;
+ }
+
+ // ── Molten Brute (slow, hits hard) ───────────────────────────
+ // A hulking mass of slag with cracks of liquid rock running through it.
+ function buildMoltenBrute(){
+  const c=mk(24,24),x=gx(c),F=FORGE;
+  // thick legs
+  R(x,5,18,5,5,F.char); R(x,14,18,5,5,F.char);
+  R(x,5,21.6,5,1.4,F.charD); R(x,14,21.6,5,1.4,F.charD);
+  // enormous shoulders and torso
+  R(x,2,6,20,13,F.char);
+  R(x,2,6,20,1.6,F.clink);
+  // the cracks: bright forks down the body
+  x.strokeStyle=F.hot; x.lineWidth=1.4; x.lineCap="round";
+  x.beginPath();
+  x.moveTo(9,7); x.lineTo(10.6,11); x.lineTo(8.6,14); x.lineTo(10,18);
+  x.moveTo(10.6,11); x.lineTo(14,9.6);
+  x.moveTo(17,7.6); x.lineTo(15.4,12); x.lineTo(17.6,15);
+  x.stroke();
+  x.strokeStyle=F.white; x.lineWidth=0.6;
+  x.beginPath(); x.moveTo(9.4,7.6); x.lineTo(10.4,10.6); x.stroke();
+  // head: a small sunken thing between the shoulders
+  R(x,9,2,6,5,F.char);
+  R(x,9,2,6,1,F.clink);
+  R(x,10,4,1.4,1.4,F.ember); R(x,12.8,4,1.4,1.4,F.ember);
+  // arms: boulder fists
+  R(x,0.4,8,3.4,9,F.char); R(x,20.2,8,3.4,9,F.char);
+  R(x,0,15,4,5,F.clink); R(x,20,15,4,5,F.clink);
+  // heat shimmer at the knuckles
+  x.globalAlpha=0.5; x.fillStyle=F.ember;
+  x.fillRect(1,14,2,1); x.fillRect(21,14,2,1); x.globalAlpha=1;
+  return c;
+ }
+
+ // ── Smog Stalker (poisons) ───────────────────────────────────
+ // Tall and thin, wrapped in fume, face hidden.
+ function buildSmogStalker(){
+  const c=mk(24,24),x=gx(c),F=FORGE;
+  // long legs
+  R(x,9,15,2.4,8,F.charD); R(x,13,15,2.4,8,F.charD);
+  // narrow torso
+  R(x,8,6,8,10,F.char);
+  R(x,8,6,8,1,F.clink);
+  // fume wrap: bands of haze across the body
+  x.globalAlpha=0.55; x.fillStyle=F.ash;
+  x.beginPath(); x.ellipse(12,9,7,2.2,0,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(12,13,6,1.8,0,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(12,17,5.4,1.6,0,0,Math.PI*2); x.fill();
+  x.globalAlpha=1;
+  // hood: no face, one sickly green-yellow glow
+  R(x,8.6,2,6.8,5.4,F.charD);
+  R(x,10.4,4,1.4,1.4,"#b8d84a"); R(x,13,4,1.4,1.4,"#b8d84a");
+  // long arms hanging
+  R(x,4.6,7,3,10,F.charD); R(x,16.4,7,3,10,F.charD);
+  // fume trails
+  x.globalAlpha=0.35; x.fillStyle="#9aa84a";
+  x.beginPath(); x.ellipse(4,18,2.6,1.2,0.3,0,Math.PI*2); x.fill();
+  x.beginPath(); x.ellipse(20,17,2.4,1.1,-0.3,0,Math.PI*2); x.fill();
+  x.globalAlpha=1;
+  return c;
+ }
+
+ // ── The Reforged (splits on death) ───────────────────────────
+ // Humanoid, seamless, with a bright seam where it will break in half.
+ function buildReforged(){
+  const c=mk(24,24),x=gx(c),F=FORGE;
+  // legs
+  R(x,8,17,3,6,F.char); R(x,13,17,3,6,F.char);
+  // torso, broad, smooth — forged rather than scavenged
+  R(x,6,5,12,13,F.char);
+  R(x,6,5,12,1.3,F.clink);
+  // the split seam: a vertical line of heat down the exact middle
+  R(x,11.4,6,1.2,11,F.hot);
+  R(x,11.6,8,0.7,3,F.white);
+  // horizontal segment lines, like a casting
+  R(x,6,9,12,0.7,F.charD); R(x,6,13,12,0.7,F.charD);
+  // head: smooth wedge, no face but a visor slit
+  R(x,8,1.4,8,4.4,F.char);
+  R(x,8,1.4,8,1,F.clink);
+  R(x,9,3.4,6,1.2,F.hot);
+  R(x,10,3.6,2,0.7,F.white);
+  // arms
+  R(x,3,6,3,9,F.char); R(x,18,6,3,9,F.char);
+  R(x,2.6,14,3.4,3,F.clink); R(x,18,14,3.4,3,F.clink);
+  return c;
+ }
+
+ // ── Reforged Shard (the split half; smaller, same language) ──
+ function buildReforgedShard(){
+  const c=mk(24,24),x=gx(c),F=FORGE;
+  // a chopped-off half: one leg, one arm, a broken edge along one side
+  R(x,10,15,2.6,8,F.char);
+  R(x,11,6,7,10,F.char);
+  R(x,11,6,7,1,F.clink);
+  // the broken edge, still molten
+  R(x,10.6,6,0.9,10,F.hot);
+  R(x,10.8,9,0.5,3,F.white);
+  // the remaining arm
+  R(x,18,7,2.6,8,F.char);
+  R(x,18,13.6,2.8,2.6,F.clink);
+  // broken head
+  R(x,12,2,5,4,F.char);
+  R(x,13,3.2,2.6,1,F.ember);
+  return c;
+ }
+
  // ── REGISTRATIONS (kind = the roster's `kind` / sprite key) ──
+ reg("ash_tick",        buildAshTick,        [[19,10,4,2,"#ffb347"],[6,10,5,2,"#3a3230"]]);
+ reg("slag_hound",      buildSlagHound,      [[18,12,6,2,"#ffb347"],[2,6,3,3,"#ff6a00"]]);
+ reg("cinder_wretch",   buildCinderWretch,   [[2,9,5,3,"#ff6a00"],[17,9,5,3,"#ff6a00"],[9,10,6,5,"#ffe9b0"]]);
+ reg("furnace_guard",   buildFurnaceGuard,   [[0,11,4,4,"#ffb347"],[20,11,4,4,"#ffb347"],[8,8,8,6,"#ffe9b0"]]);
+ reg("emberfiend",      buildEmberfiend,     [[8,5,9,8,"#ff6a00"],[6,16,12,3,"#ffb347"]]);
+ reg("molten_brute",    buildMoltenBrute,    [[0,14,5,6,"#ff6a00"],[19,14,5,6,"#ff6a00"],[8,6,8,3,"#ffe9b0"]]);
+ reg("smog_stalker",    buildSmogStalker,    [[4,7,4,10,"#9aa84a"],[16,7,4,10,"#9aa84a"],[8,2,8,5,"#b8d84a"]]);
+ reg("reforged",        buildReforged,       [[11,5,2,13,"#ffe9b0"],[3,6,3,9,"#ff6a00"],[18,6,3,9,"#ff6a00"]]);
+ reg("reforged_shard",  buildReforgedShard,  [[10,6,1,10,"#ffe9b0"],[18,7,3,8,"#ff6a00"]]);
+
  reg("bone_rat",        buildBoneRat,        [[16,12,4,2,"#e8dcc0"],[15,10,2,2,"#e8dcc0"],[21,12,3,2,"#2a2216"]]);
  reg("grave_skitter",   buildGraveSkitter,   [[0,6,2,2,"#e8dcc0"],[22,6,2,2,"#e8dcc0"],[8,22,2,2,"#e8dcc0"],[14,22,2,2,"#e8dcc0"]]);
  reg("marrow_hound",    buildMarrowHound,    [[21,10,3,2,"#e8dcc0"],[20,8,2,2,"#e8dcc0"],[17,12,4,2,"#2a2216"]]);

@@ -64,6 +64,7 @@ window.Delve = window.Delve || {};
   "js/growth/mycelium.js",   // form "mycelium"  — the Blackvein's branching veins
   "js/growth/frost.js",      // form "frost"     — the Frosted Vault's hoarfrost ferns
   "js/growth/disturbed.js",  // form "disturbed" — the Bone Ossuary's dug earth + bones
+  "js/growth/forge.js",      // form "forge"     — the Ashen Forge's ember cracks + slag
   "js/puddles.js",
 
   // ── systems ────────────────────────────────────────────────

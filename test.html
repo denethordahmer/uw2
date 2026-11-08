@@ -469,7 +469,7 @@ try {
   // Every area must declare its decoration family. Without this a new ward
   // silently renders with the ruins' weeds — the same class of silent gap the
   // shard-tree check catches.
-  var CLUTTER_SETS = ["ruins", "blackvein", "frost", "ossuary"];
+  var CLUTTER_SETS = ["ruins", "blackvein", "frost", "ossuary", "forge"];
   var badBiomes = [];
   (cfg.BIOMES || []).forEach(function(bm, bi){
     var nm = bm.name || ("biome " + bi);
@@ -627,8 +627,8 @@ try {
   s6.innerHTML = '<div class="fail">Save check aborted: ' + err.message + '</div>';
 }
 
-/* ── 7. Floor generation (50 trials, floors 1–40) ─────────────── */
-var s7 = sec("7. Floor generation (50 trials, floors 1-40)");
+/* ── 7. Floor generation (50 trials, floors 1–50) ─────────────── */
+var s7 = sec("7. Floor generation (50 trials, floors 1-50)");
 try {
   if (typeof window.Delve.newRun !== "function") throw new Error("newRun missing");
   window.Delve.newRun();
@@ -639,7 +639,7 @@ try {
   var litByFloor = {};   // floor → lit-tile count, proving arena lighting is deterministic
   var decorSig = {};     // floor → prop layout, proving arena dressing is deterministic
   for (var t = 0; t < trials; t++){
-    G.floor = (t % 40) + 1;
+    G.floor = (t % 50) + 1;
     var ward = window.Delve.getWard(G.floor);
     if (!ward){ fails.push("trial " + t + ": no ward for floor " + G.floor); continue; }
     var biomeIdx = (ward.biome !== undefined) ? ward.biome : -1;

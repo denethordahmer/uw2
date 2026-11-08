@@ -17,12 +17,21 @@ Delve.flash = function(t){
  if(Delve.G){ Delve.G.msg = t; Delve.G.msgUntil = Date.now()+1400; }
 };
 
+// Out-of-range floors clamp to the NEAREST ward: below the first band you get
+// ward 1, above the last you get the DEEPEST ward. The old fallback always
+// returned wards[0], so anything past the final band would render and dress as
+// the Upper Ruins while the monster bands (which fall through to the deepest
+// set) spawned the deepest ward's enemies — a silent mismatch. The monster-band
+// lookup below is first-match, so it is deliberately left alone.
 Delve.getWard = function(floor){
  const wards = Delve.CONFIG.WARDS || [];
+ if(!wards.length) return { id:1, name:"Upper Ruins", floors:[1,10], biome:0 };
+ let deepest = wards[0];
  for(const w of wards){
   if(floor >= w.floors[0] && floor <= w.floors[1]) return w;
+  if(w.floors[1] > deepest.floors[1]) deepest = w;
  }
- return wards[0] || { id:1, name:"Upper Ruins", floors:[1,10], biome:0 };
+ return floor > deepest.floors[1] ? deepest : wards[0];
 };
 
 Delve.getMonsterBand = function(floor){

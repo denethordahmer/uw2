@@ -167,6 +167,54 @@ window.Delve = window.Delve || {};
   }
  }
 
+ // ── Consumables ──────────────────────────────────────────────
+ // One silhouette per FUNCTION, not one for all 24 potions. Before this, every
+ // consumable in the game drew the same "potionPile" world sprite, so a Small
+ // Draught and a Salve of the Deep were indistinguishable on the floor. Kind
+ // comes from the item def (`kind: heal|buff|cure|utility`), and a colour accent
+ // comes from what it actually does, so the art also hints at the effect.
+ const CONSUMABLE_KINDS = {
+  heal:    { glass:"#cfe8f2", liquid:"#d23b4a", dark:"#8e1f2c", bubble:"#ff9aa4" },
+  buff:    { glass:"#f2e6cf", liquid:"#e0a13a", dark:"#9c6a14", bubble:"#ffe08a" },
+  cure:    { glass:"#d8f0e2", liquid:"#3fa86a", dark:"#1f6b3f", bubble:"#9ef0c0" },
+  utility: { glass:"#dfe3ea", liquid:"#6f7f95", dark:"#3d4a5c", bubble:"#c2d2e6" }
+ };
+ function paintConsumable(x, kind, band){
+  const k = CONSUMABLE_KINDS[kind] || CONSUMABLE_KINDS.heal;
+  const cork = "#8a5a33", corkD = "#5d3c20";
+  if(kind === "utility"){
+   // A little satchel/tool bundle rather than a bottle: torches, rope, maps and
+   // whetstones are not drinks.
+   R(x,6,10,12,11,"#6b4a2a"); R(x,6,10,12,1,"#8a6338");
+   R(x,8,7,8,4,"#7d5730"); R(x,8,7,8,1,"#a07a46");
+   R(x,11,4,2,4,"#c9a343"); R(x,10,3,4,1,"#e8c86a");
+   R(x,6,14,12,1,"#4d3622"); R(x,13,15,3,4,"#c9a343");
+   R(x,9,19,2,1,"#4d3622");
+   if(band >= 3){ R(x,16,11,1,1,"#ffe08a"); R(x,7,18,1,1,"#ffe08a"); }
+   return;
+  }
+  // Bottle: neck, shoulders, body, and a liquid line that rises with the band.
+  R(x,10,3,4,4,k.glass); R(x,10,3,4,1,"#ffffff");
+  R(x,9,2,2,1,cork); R(x,13,2,2,1,corkD);
+  R(x,8,6,8,2,k.glass); R(x,8,6,8,1,"#ffffff");
+  R(x,6,8,12,13,k.glass); R(x,6,8,12,1,"#ffffff");
+  R(x,6,20,12,1,k.dark);
+  // liquid: fills more of the bottle at a higher band
+  const top = band >= 3 ? 9 : band === 2 ? 11 : 13;
+  R(x,7,top,10,20-top,k.liquid);
+  R(x,7,top,10,1,k.bubble);
+  R(x,7,top,2,20-top,k.dark);
+  R(x,8,top+2,1,3,"#ffffff");
+  // a bubble or two
+  R(x,11,top+3,1,1,k.bubble);
+  if(band >= 2) R(x,13,top+5,1,1,k.bubble);
+  // rare/lock: a stopper seal and a glint
+  if(band >= 3){
+   R(x,8,4,8,1,"#e8dcc0");
+   R(x,16,10,1,1,"#fff8d0"); R(x,6,17,1,1,"#fff8d0");
+  }
+ }
+
  function build(slot, band, style){
   const c = mk(24,24);
   const x = gx(c);
@@ -174,6 +222,11 @@ window.Delve = window.Delve || {};
   if(slot === "weapon") paintWeapon(x, style || "sword", m);
   else paintSlot(x, slot, m);
   ornament(x, m);
+  return c;
+ }
+ function buildConsumable(kind, band){
+  const c = mk(24,24);
+  paintConsumable(gx(c), kind, band);
   return c;
  }
 
@@ -192,6 +245,14 @@ window.Delve = window.Delve || {};
   });
  });
 
+ // consumable:<kind>:<tier> — one silhouette per function, at four fill levels.
+ ["heal","buff","cure","utility"].forEach(function(kind){
+  [1,2,3,4].forEach(function(b){
+   Delve.registerItemSprite("consumable:" + kind + ":" + b,
+     function(){ return buildConsumable(kind, b); });
+  });
+ });
+
  // ── Accessor ─────────────────────────────────────────────────
  // Uniques reuse their slot/family silhouette and get an accent wash + aura,
  // so all twelve are distinct without twelve more painters.
@@ -205,11 +266,21 @@ window.Delve = window.Delve || {};
   return ACCENTS[0];
  };
 
+ // Generated items carry a BASE slot ("ring"), while the equip map uses ring1 /
+ // ring2. Mapping the equip keys back here keeps the lookup correct if an item
+ // is ever drawn straight off G.equip (the inventory does exactly that), rather
+ // than relying on the generic fallback.
+ const SPRITE_SLOT = { ring1:"ring", ring2:"ring" };
+ const CONSUMABLE_FN = { heal:"heal", buff:"buff", cure:"cure", utility:"utility" };
  Delve.itemSpriteKey = function(item){
   if(!item) return "weapon:sword:1";
-  if(item.slot === "consumable") return "consumable";
+  if(item.slot === "consumable"){
+   const kind = CONSUMABLE_FN[item.kind] || "heal";
+   return "consumable:" + kind + ":" + (item.tier || 1);
+  }
   if(item.slot === "weapon") return "weapon:" + (item.style || "sword") + ":" + (item.tier || 1);
-  return (item.slot || "body") + ":" + (item.tier || 1);
+  const slot = SPRITE_SLOT[item.slot] || item.slot || "body";
+  return slot + ":" + (item.tier || 1);
  };
 
  Delve.itemSprite = function(item){
@@ -219,11 +290,14 @@ window.Delve = window.Delve || {};
   if(cache[ck] !== undefined) return cache[ck];
 
   let cv = null;
-  if(key === "consumable"){
-   cv = (Delve.SPR && Delve.SPR.potionPile) ? Delve.SPR.potionPile : null;
-  } else {
-   const b = (Delve._itemSpriteBuilders || {})[key];
-   if(b){ try { cv = b(); } catch(_e){ cv = null; } }
+  const b = (Delve._itemSpriteBuilders || {})[key];
+  if(b){ try { cv = b(); } catch(_e){ cv = null; } }
+  // Fallbacks are last-resort only. They read from SPR.world: the old consumable
+  // path looked at Delve.SPR.potionPile, which does not exist (the sprite lives
+  // at SPR.world.potionPile), so every potion silently drew the generic itemPile.
+  if(!cv && Delve.SPR && Delve.SPR.world){
+   cv = (item && item.slot === "consumable" && Delve.SPR.world.potionPile)
+      || Delve.SPR.world.itemPile || null;
   }
   if(!cv && Delve.SPR && Delve.SPR.itemPile) cv = Delve.SPR.itemPile;
   if(cv && uid && U.tint) cv = U.tint(cv, Delve.uniqueAccent(uid));
