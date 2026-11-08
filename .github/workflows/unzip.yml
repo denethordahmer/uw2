@@ -107,18 +107,43 @@ jobs:
           # folders, and pick the SHALLOWEST index.html. A wrapper folder name
           # never matters, and stray siblings are ignored because we no longer
           # require the level to contain a single entry.
+          # Locate the game root. Two independent markers are tried, because
+          # requiring index.html and js/ to sit in the SAME directory is what
+          # rejected a real upload:
+          #
+          #   1. js/manifest.js — unique to this project. Its grandparent is the
+          #      game root. This is the strongest signal and is tried first.
+          #   2. index.html with a sibling js/ — the general case.
+          #
+          # No depth limit: an export can wrap the folder any number of times,
+          # and a depth cap turns "wrapped deeper than expected" into the
+          # indistinguishable "no game here". The search is still bounded by the
+          # archive's own size, and the junk paths are excluded.
           SRC=""
-          if [ -f /tmp/payload/index.html ]; then
+          if [ -f /tmp/payload/index.html ] && [ -d /tmp/payload/js ]; then
             SRC=/tmp/payload
-          else
-            # Bounded search: a depth limit keeps this cheap and makes a
-            # pathological archive (node_modules, a nested git checkout)
-            # impossible to pick up by accident.
-            # Depth 6 rather than 3: exports sometimes wrap more than once
-            # ("underward-main/" then "underward/"), and a wrapper deeper than
-            # the search limit used to look identical to "no game here".
-            # `|| true` keeps a missing match from tripping `set -e`.
-            BEST=$(find /tmp/payload -maxdepth 6 -name index.html -type f \
+          fi
+
+          if [ -z "$SRC" ]; then
+            MANIFEST=$(find /tmp/payload -name manifest.js -type f \
+                        -path '*/js/manifest.js' \
+                        -not -path '*/__MACOSX/*' \
+                        -not -path '*/node_modules/*' \
+                        -not -path '*/.git/*' \
+                        -printf '%d\t%h\n' 2>/dev/null | sort -n | head -1 | cut -f2- || true)
+            if [ -n "${MANIFEST:-}" ]; then
+              # MANIFEST is the DIRECTORY holding manifest.js (find -printf %h),
+              # i.e. ".../js". The game root is its parent, so go up twice from
+              # the file: dirname(js) = root. Getting this wrong pointed SRC at
+              # the js folder itself and the copy step then had no index.html.
+              SRC=$(dirname "$MANIFEST")
+              echo "Found js/manifest.js in: $MANIFEST"
+              echo "Game root: $SRC"
+            fi
+          fi
+
+          if [ -z "$SRC" ]; then
+            BEST=$(find /tmp/payload -name index.html -type f \
                      -not -path '*/__MACOSX/*' \
                      -not -path '*/node_modules/*' \
                      -not -path '*/.git/*' \
@@ -134,28 +159,58 @@ jobs:
             echo "::error::No game found in the archive (need index.html AND js/ together) - refusing to copy anything."
             echo ""
             echo "=== WHY THIS FAILED ==="
-            echo "The job searched the archive for a folder containing BOTH index.html"
-            echo "and js/. Neither was found together. The full listing is above under"
-            echo "'Entries in archive'; here is what is actually in the payload:"
+            echo "Searched the whole archive for js/manifest.js, then for an"
+            echo "index.html with a sibling js/."
             echo ""
-            echo "--- top level ---"
-            find /tmp/payload -mindepth 1 -maxdepth 1 -printf '%y %p\n' | sort | head -30
+            # Name the specific missing piece rather than repeating "no game".
+            # A js/ folder with no index.html beside it is the classic
+            # "only part of the project was zipped" case, and saying so beats a
+            # generic refusal.
+            if [ -n "$SRC" ]; then
+              echo "A candidate root WAS found at: $SRC"
+              [ ! -f "$SRC/index.html" ] && echo "  ...but it has NO index.html."
+              [ ! -d "$SRC/js" ] && echo "  ...and no js/ folder."
+              echo ""
+            fi
+            if [ -n "$(find /tmp/payload -name '*.js' -type f 2>/dev/null | head -1)" ] \
+               && [ -z "$(find /tmp/payload -name 'index.html' -type f 2>/dev/null | head -1)" ]; then
+              echo "DIAGNOSIS: the archive contains JavaScript but no index.html at"
+              echo "any level. That means only PART of the project was zipped - most"
+              echo "likely just the js/ folder. The zip must contain the whole game"
+              echo "folder: index.html, js/, css/, music/, fonts/ and icons/."
+              echo ""
+            fi
+            if [ -n "$(find /tmp/payload -name '*.zip' -type f 2>/dev/null | head -1)" ] \
+               && [ -z "$(find /tmp/payload -name 'index.html' -type f 2>/dev/null | head -1)" ]; then
+              echo "DIAGNOSIS: the archive contains a NESTED .zip and no unpacked"
+              echo "game. Upload the game zip directly instead of a zip of the zip."
+              echo ""
+            fi
+            echo "--- COMPLETE CONTENTS OF THE ARCHIVE (first 200 entries) ---"
+            find /tmp/payload -mindepth 1 -printf '%y %p\n' 2>/dev/null | sort | head -200
+            echo "--- end of listing ---"
             echo ""
-            echo "--- every index.html anywhere in it (if any) ---"
-            find /tmp/payload -name index.html -type f 2>/dev/null | head -10
+            echo "Total entries extracted: $(find /tmp/payload -mindepth 1 | wc -l)"
+            echo "Total files:             $(find /tmp/payload -type f | wc -l)"
             echo ""
-            echo "--- every directory that has a js/ in it (if any) ---"
-            find /tmp/payload -name js -type d 2>/dev/null | head -10
+            echo "--- any index.html at all? ---"
+            find /tmp/payload -name 'index.html' -type f 2>/dev/null | head -10 || true
+            echo "--- any manifest.js at all? ---"
+            find /tmp/payload -name 'manifest.js' -type f 2>/dev/null | head -10 || true
+            echo "--- any .js file at all? ---"
+            find /tmp/payload -name '*.js' -type f 2>/dev/null | head -10 || true
             echo ""
             echo "Most likely causes:"
-            echo "  * The zip contains only PART of the project (e.g. just js/, or just"
-            echo "    a folder of screenshots) instead of the whole game folder."
-            echo "  * index.html landed inside a subfolder other than a plain wrapper."
+            echo "  * The zip holds only PART of the project (e.g. just js/, or a"
+            echo "    folder of screenshots) instead of the whole game folder."
+            echo "  * The zip is a nested archive (a .zip inside the .zip)."
             echo "  * The upload was truncated, so only some entries extracted."
             exit 1
           fi
 
           echo "Content root: $SRC"
+          echo "  js/ files:   $(find "$SRC/js" -maxdepth 1 -name '*.js' 2>/dev/null | wc -l)"
+          echo "  total files: $(find "$SRC" -type f | wc -l)"
           echo "SRC=$SRC" >> "$GITHUB_ENV"
 
       - name: Copy payload over the working tree
