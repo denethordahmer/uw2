@@ -8,9 +8,10 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="theme-color" content="#0b0f14">
-<link rel="preload" href="fonts/title.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="fonts/ui-500.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="fonts/display-700.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="fonts/title.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="preload" href="fonts/sub.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="preload" href="fonts/buttons.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
@@ -174,8 +175,14 @@
 
   <!-- Victory -->
   <div id="victoryScreen" class="overlay">
-    <h1 class="overlay-title">WARD CLEARED</h1>
-    <p class="sub">The Warden lies broken at your feet. The way deeper yawns open.</p>
+    <!-- These two carry ids because showVictory rewrites them: the final ward
+         gets its own heading and closing text, and the old static "The Warden
+         lies broken at your feet" was shown after every ward including the
+         Forge Titan, where "the way deeper yawns open" is simply untrue. -->
+    <div id="victoryBadge" class="ward-badge">WARD 1 · UPPER RUINS</div>
+    <h1 class="overlay-title" id="victoryTitle">WARD CLEARED</h1>
+    <p class="sub" id="victorySub">The Warden</p>
+    <p id="victoryBody" class="victory-body">The way deeper yawns open.</p>
     <div class="walletbar">💎 +<span id="victoryShards">0</span> shards banked</div>
     <div id="victorySummary"></div>
     <div id="victoryButtons">
@@ -190,8 +197,29 @@
        those ids here would bind ui.js to this panel and kill the pause menu. -->
   <div id="titleScreen" class="overlay">
     <div id="titleInner">
+      <div id="titleCrest" aria-hidden="true">
+        <!-- A torch-lit archway. Pure CSS (no image), so it scales to any phone
+             and costs nothing to load. -->
+        <div class="tc-arch"><div class="tc-flame"></div></div>
+        <div class="tc-ground"></div>
+      </div>
       <h1 id="titleWord" data-text="underward">underward</h1>
       <p id="titleTagline">Earn shards. Spend them. Go deeper.</p>
+
+      <!-- The entry used to be a wordmark and two buttons over a large empty
+           void. This panel gives the front door an actual introduction: what the
+           game is, what a run costs you, and — once progress exists — how far
+           you have been. All three lines are filled by js/menu.js. -->
+      <div id="titlePanel">
+        <p id="titleLore">A stairwell descends further than the maps admit. Below the ruins, below the vaults, something has been burning for a thousand years.</p>
+        <div id="titleStats">
+          <div class="ts-cell"><span class="ts-num" id="tsBest">1</span><span class="ts-lbl">deepest</span></div>
+          <div class="ts-cell"><span class="ts-num" id="tsShards">0</span><span class="ts-lbl">shards</span></div>
+          <div class="ts-cell"><span class="ts-num" id="tsWards">1</span><span class="ts-lbl">wards found</span></div>
+        </div>
+        <p id="titleCleared" hidden>⚔ THE FORGE IS SILENT — you have finished the descent.</p>
+      </div>
+
       <div id="titleButtons">
         <button class="btn big" id="titleContinueBtn">CONTINUE</button>
         <button class="btn" id="titleHubBtn" style="display:none">HUB</button>
@@ -223,6 +251,23 @@
       </div>
       <p id="titleResetDone"></p>
       <button class="btn" id="titleSettingsClose">↩ Back</button>
+    </div>
+  </div>
+
+  <!-- First-run tutorial. Shown once, gated on save.seenTutorial — a flag that
+       was written to the save in three places and read nowhere, so new players
+       were dropped onto a floor with no explanation of the controls. Three
+       steps, one idea each. -->
+  <div id="tutorialOverlay" class="overlay">
+    <div id="tutorialCard">
+      <div id="tutorialStep">1 / 3</div>
+      <h2 id="tutorialTitle">TAP TO MOVE</h2>
+      <p id="tutorialBody">Tap any floor tile and you walk there. Tap a distant one and you follow the path automatically — you do not have to walk it tile by tile.</p>
+      <div id="tutorialDots"><i class="on"></i><i></i><i></i></div>
+      <div id="tutorialButtons">
+        <button class="btn" id="tutorialNext">NEXT</button>
+        <button class="btn-ghost" id="tutorialSkip">SKIP</button>
+      </div>
     </div>
   </div>
 

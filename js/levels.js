@@ -1,5 +1,13 @@
 window.Delve = window.Delve || {};
 (function(){
+
+ // How often an enrage-capable species actually spawns enraged. Read at CALL
+ // time, not load time: `C()` is the config accessor and is not initialised when
+ // this file is evaluated, so capturing it in a const here threw
+ // "Cannot access 'C' before initialization" on load.
+ function enrageChance(){
+  return (C().secondaries || {}).enrageChance || 0.40;
+ }
  const T = function(){ return Delve.T; };
  const C = function(){ return Delve.CONFIG; };
 
@@ -128,7 +136,22 @@ window.Delve = window.Delve || {};
    // Roster flags the kill path reads off the INSTANCE must be carried across.
    // `reassembleOnce` (the Ossuary's Reassembled) was read from m but never
    // copied from the row, so its gimmick could never fire — it just died.
+   // `splitOnDeath` (the Forge's Reforged) is the same trap: killMonster gates
+   // the split on m.splitOnDeath, so without this line the whole branch is dead
+   // code and The Reforged dies like any other monster.
    reassembleOnce: !!row.reassembleOnce,
+   splitOnDeath: row.splitOnDeath || null,
+   // Combat texture the damage path reads off the INSTANCE. Same trap as the
+   // two flags above: a roster field that is not copied here simply never
+   // fires, and nothing errors to tell you.
+   armour: row.armour || 0,
+   // Enrage is rolled per INSTANCE, not granted to every copy of the species.
+   // Measured before this: floor 45 had 15 of 22 enemies able to enrage, so the
+   // worst-case burst reached 85% of max HP — a floor that could kill you
+   // through volume rather than bad positioning. At the configured roll rate the
+   // same floor carries roughly 3, which keeps "some hounds frenzy" as a
+   // warning without turning the ward into a damage race.
+   enrageAt: (row.enrageAt && Math.random() < enrageChance()) ? row.enrageAt : 0,
    effects: [], elite: false, hasActed: false
   };
   m.hp = m.maxHp;
@@ -752,7 +775,22 @@ window.Delve = window.Delve || {};
    // Roster flags the kill path reads off the INSTANCE must be carried across.
    // `reassembleOnce` (the Ossuary's Reassembled) was read from m but never
    // copied from the row, so its gimmick could never fire — it just died.
+   // `splitOnDeath` (the Forge's Reforged) is the same trap: killMonster gates
+   // the split on m.splitOnDeath, so without this line the whole branch is dead
+   // code and The Reforged dies like any other monster.
    reassembleOnce: !!row.reassembleOnce,
+   splitOnDeath: row.splitOnDeath || null,
+   // Combat texture the damage path reads off the INSTANCE. Same trap as the
+   // two flags above: a roster field that is not copied here simply never
+   // fires, and nothing errors to tell you.
+   armour: row.armour || 0,
+   // Enrage is rolled per INSTANCE, not granted to every copy of the species.
+   // Measured before this: floor 45 had 15 of 22 enemies able to enrage, so the
+   // worst-case burst reached 85% of max HP — a floor that could kill you
+   // through volume rather than bad positioning. At the configured roll rate the
+   // same floor carries roughly 3, which keeps "some hounds frenzy" as a
+   // warning without turning the ward into a damage race.
+   enrageAt: (row.enrageAt && Math.random() < enrageChance()) ? row.enrageAt : 0,
    effects: [], elite: false, hasActed: false
   };
   m.hp = m.maxHp;

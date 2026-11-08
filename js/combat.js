@@ -219,9 +219,25 @@ window.Delve = window.Delve || {};
 
  // Boss shield (the Bonefather's ribs): damage eats the shield first; only the
  // remainder reaches HP. absorbBossShield floats/logs the absorbed part itself.
- const dealt = (m.isBoss && Delve.absorbBossShield) ? Delve.absorbBossShield(m, dmg) : dmg;
+ let dealt = (m.isBoss && Delve.absorbBossShield) ? Delve.absorbBossShield(m, dmg) : dmg;
+ // Flat monster armour, applied after the shield and after all trait/buff maths,
+ // so a heavy plated enemy reads as "needs a heavier hit" at every depth.
+ if(Delve.applyMonsterArmour) dealt = Delve.applyMonsterArmour(m, dealt);
 
  if(dealt > 0){
+ // Enrage: a monster with `enrageAt` (a HP fraction) gets faster and hits
+ // harder once it drops below that line. It exists so kill ORDER matters — a
+ // room with two enraging enemies is a different problem from a room with one,
+ // and the player can choose to burst one down before it flips.
+ if(m.enrageAt > 0 && !m.enraged && m.maxHp > 0 && (m.hp - dealt) / m.maxHp <= m.enrageAt){
+  m.enraged = true;
+  m.atk = Math.round(m.atk * 1.4);
+  m.speed = (m.speed || 1) * 1.3;
+  if(Delve.addFloater) Delve.addFloater("ENRAGED", m.x, m.y - 0.7, "#ff6b5e", 1.4);
+  if(Delve.addShake) Delve.addShake(3);
+  if(Delve.sfx) Delve.sfx("elite_kill", { monster: m.kind });
+  if(Delve.logSystem) Delve.logSystem((m.name || "It") + " is enraged!");
+ }
  Delve.addFloater(isCrit ? ("CRIT " + dealt) : ("-" + dealt), m.x, m.y, isCrit ? "#ff9d3d" : "#ffd75e", isCrit ? 1.5 : 1);
  if(isCrit) Delve.addShake(2);   // a crit should be felt, not just read (§Batch 15)
  if(!isCrit && Delve.sfx) Delve.sfx("hit", { weapon: weaponStyle });
@@ -287,8 +303,35 @@ window.Delve = window.Delve || {};
   return dmg - absorbed;
  };
 
+ // ── Monster armour ───────────────────────────────────────────
+ // A flat damage reduction per hit, carried on the roster row (`armour`). Unlike
+ // the boss shield this never breaks, so the answer is not "keep hitting it" but
+ // "hit it harder or differently" — it rewards the player who reads the room and
+ // swaps to a heavier weapon, and it makes a Furnace Guard feel like a wall
+ // rather than a slow rat.
+ //
+ // Capped so armour can never make a monster unkillable: it always leaves at
+ // least 1 damage, and it is a flat subtraction applied AFTER the trait and buff
+ // maths, not a percentage, so its effect is predictable at every depth.
+ Delve.applyMonsterArmour = function(m, dmg){
+  if(!m || !(m.armour > 0)) return dmg;
+  const after = Math.max(1, dmg - m.armour);
+  if(after < dmg && Delve.addFloater) Delve.addFloater("armour " + (dmg - after), m.x, m.y, "#9fb3c5");
+  return after;
+ };
+
  // helper for trait buffs inside combat tick
  const tb = () => Delve.traitBuffs ? Delve.traitBuffs() : {};
+
+ // Test hook: monsterSwing runs off an interval timer, so a headless test cannot
+ // step it one swing at a time without waiting real time. Exposing it lets the
+ // suite verify the boss chain blow directly (it is otherwise only reachable
+ // through a running auto-combat).
+ Delve._swingForTest = function(m){ return monsterSwing(m); };
+ // The same hook for the player's swing, so the suite can drive a hit (and the
+ // monster-side reactions it triggers: armour, enrage, split, rebirth) without
+ // waiting on the 600ms auto-combat timer.
+ Delve._playerSwingForTest = function(m){ return playerSwing(m); };
 
  // ── Monster swing (DOTs tick at start of its cycle) ──────────
  function monsterSwing(m){
@@ -303,19 +346,45 @@ window.Delve = window.Delve || {};
  m.hasActed = true;
  m.attackFlash = Date.now();   // render.js telegraphs this as a lunge
 
+ // Set when this swing was the boss's chain blow. The normal-hit block below is
+ // skipped in that case (the chain IS the hit for this turn — running both
+ // would deal 52 + 26 in one swing), but the death-save checks still run,
+ // which is the whole point of routing the chain through this path.
+ let chainLanded = false;
  if(m.isBoss && m.chainHitEvery){
  m.chainHitCount = (m.chainHitCount || 0) + 1;
  if(m.chainHitCount % m.chainHitEvery === 0){
- const chainDmg = m.atk * 2;
+ // The chain hit used to be raw `G.hp -= m.atk * 2`: no armour, no dodge, and
+ // it called Delve.die() directly, so it killed straight through Second Wind,
+ // Unbroken and Last Stand. On the Forge Titan (26 ATK -> 52 a chain) that is
+ // the difference between a hard fight and an unavoidable one. It keeps its
+ // identity — a heavier, telegraphed blow — but now travels the same
+ // mitigation route as a normal hit and respects the death saves.
+ //
+ // The dodge roll stays, but is applied here explicitly so a chain can still
+ // be slipped; the intent is "hard to survive", not "cannot be avoided".
+ if(Math.random() < Delve.dodge()){
+  Delve.addFloater("dodged", G.px, G.py, "#c2ff4d");
+  if(Delve.sfx) Delve.sfx("dodge");
+  if(Delve.logDodge) Delve.logDodge(m.name || "enemy");
+  return;
+ }
+ let chainDmg = Math.max(1, Math.round((m.atk * 2) * (1 - Delve.dmgRed())) - Delve.flatRed());
+ if(G.stoneSkin > 0) chainDmg = Math.round(chainDmg * 0.4);
+ if(Delve.hasBulwark()) chainDmg = Math.min(chainDmg, Delve.hitCap());
  G.hp -= chainDmg;
+ G.playerHit = Date.now();
  Delve.addFloater("CHAIN -" + chainDmg, G.px, G.py, "#c98aff");
  Delve.addShake(4);
+ if(Delve.sfx) Delve.sfx("hurt", { monster: m.kind });
  if(Delve.logEnemyAtk) Delve.logEnemyAtk(m.name + " (chain)", chainDmg);
- if(G.hp <= 0){ Delve.die(); Delve.endCombat(false); return; }
- return;
+ // Fall through to the shared death-save checks below rather than calling
+ // Delve.die() here: Second Wind, Unbroken and Last Stand all live there.
+ chainLanded = true;
  }
  }
 
+ if(!chainLanded){
  if(Math.random() < Delve.dodge()){
  Delve.addFloater("dodged", G.px, G.py, "#c2ff4d");
  if(Delve.sfx) Delve.sfx("dodge");
@@ -342,6 +411,7 @@ window.Delve = window.Delve || {};
  const ed = C().STATUS_EFFECTS[effectId];
  if(ed) Delve.addFloater(ed.name.toUpperCase(), G.px, G.py - 0.6, ed.color);
  }
+ }   // end of the normal-hit block (skipped when the chain blow landed)
 
  const swTrigger = (Delve.secondWindTriggerPct && Delve.secondWindTriggerPct() > 0)
  ? Delve.secondWindTriggerPct() : sec.secondWindTrigger;
@@ -484,6 +554,49 @@ window.Delve = window.Delve || {};
     // their own tiles.
     if(G.grid[m.y] && G.grid[m.y][m.x] === T().MONSTER) G.grid[m.y][m.x] = m.tile || T().FLOOR;
     G.monsters = G.monsters.filter(function(x){ return x !== m; });
+
+    // PAY THE PARENT. Returning here skips every payout below in this function
+    // (kills stat, gold, drops, shards, XP, energy, death fade), so without this
+    // block killing The Reforged would be worth LESS than killing nothing: the
+    // halves pay only their own small rows. Award the parent's row now, through
+    // the SAME helpers the normal path uses, so the split is a change of shape
+    // rather than a loss of value.
+    //
+    // Delve.killRewards(m) is the single source of truth for the value of a
+    // kill (base row + depth curve + elite multiplier + luck). Using it here
+    // means an elite Reforged pays its 3x, and the numbers can never drift from
+    // the normal path.
+    const parentRew = Delve.killRewards ? Delve.killRewards(m) : { gold:0, shards:0, xp:0 };
+    const pGold = Math.round(parentRew.gold || 0);
+    const pShards = Math.round(parentRew.shards || 0);
+    const pXp = Math.round(parentRew.xp || 0);
+
+    Delve.recordStat("kills", 1);
+    if(m.elite) Delve.recordStat("elitesKilled", 1);
+
+    if(pGold > 0){
+      G.gold += pGold;
+      Delve.recordStat("goldEarned", pGold);
+    }
+    if(pShards > 0){
+      G.runShards = (G.runShards || 0) + pShards;
+      Delve.recordStat("shardsEarned", pShards);
+    }
+    if(pXp > 0 && Delve.addXP) Delve.addXP(pXp);
+
+    // Death drops belong to the thing that died. Rolling them at the parent's
+    // tile (now free floor) keeps loot placement correct and matches what the
+    // player would have received had it simply died.
+    if(Delve.rollKillDrop) Delve.rollKillDrop(m.x, m.y, { name:m.name, elite:!!m.elite });
+    const splitPotionChance = ((C().ITEMS || {}).drop || {}).potion || 0;
+    if(Delve.dropPotion && Math.random() < splitPotionChance){
+      Delve.dropPotion(m.x, m.y, 2, { kind:"monster", name:m.name, elite:!!m.elite });
+    }
+    if(m.elite && C().elite.guaranteedPotion && Delve.dropPotion){
+      Delve.dropPotion(m.x, m.y, 2, { kind:"monster", name:m.name, elite:true });
+    }
+    if(Delve.logKill) Delve.logKill(m.name || m.kind || "enemy", pGold, pShards, false);
+
     Delve.flash("IT SPLITS!");
     Delve.addShake(3);
     if(Delve.sfx) Delve.sfx("status_burn");
@@ -639,7 +752,21 @@ window.Delve = window.Delve || {};
  // Data-driven — adding a biome no longer needs an edit here.
  const canContinue = (Delve.CONFIG.WARDS || []).some(function(w){ return w.id > idx; });
 
- if(Delve.showVictory) Delve.showVictory(totalBanked, canContinue);
+ // Finishing the deepest ward is the end of the run. Record it: the flag is
+ // purely a record today (there is no New Game+ yet), but it means a future
+ // endgame can read "already finished" without a save migration, and the hub
+ // can badge a completed save.
+ if(!canContinue){
+  if(!Delve.save) Delve.save = {};
+  Delve.save.clearedWard5 = true;
+  if(Delve.persist) Delve.persist();
+  if(Delve.recordStat) Delve.recordStat("gameCompleted", 1);
+ }
+
+ // wardIdx is passed so the cleared screen can pull that ward's own heading,
+ // boss name, paragraph and accent (CONFIG.WARDS[n].cleared) instead of
+ // showing one generic "WARD CLEARED" for all five.
+ if(Delve.showVictory) Delve.showVictory(totalBanked, canContinue, { wardIdx: idx });
  else Delve.flash("WARD CLEARED! +" + totalBanked + " shards");
 
  Delve.updateHUD();

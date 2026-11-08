@@ -39,6 +39,15 @@ window.Delve = window.Delve || {};
   if(G.floor < (c.minFloor || 1)) return null;
   if(G.floor % 10 === 0) return null;                       // boss arena: nothing else lives here
   if(Delve.isShopFloor && Delve.isShopFloor(G.floor)) return null;
+
+  // The chance roll comes BEFORE the tile scan on purpose: a floor that rolls
+  // "no event" must not pay for a scan of the whole grid.
+  //
+  // The rate is CORRECT — do not "fix" it. Measured two ways against the
+  // configured 45%: 44.0% over 200 direct calls on floor 13, and 46.7% over 240
+  // eligible floors across 50-floor sweeps. An earlier note here claimed it
+  // under-fired at 37.5%; that came from a sweep whose denominator counted boss
+  // and shop floors inconsistently, not from this function.
   if(Math.random() > (c.chance || 0)) return null;
 
   const free = [];

@@ -47,7 +47,33 @@ window.Delve = window.Delve || {};
   });
   return total;
  }
- // Sum of an owned flatStat node's `amount` for one stat id (TOU / LUC / ...).
+ // Ward-scaled node bonuses (type "atkWard" / "hpWard").
+//
+// Why these exist: the permanent tree used to top out at +3 Attack and +6
+// Health across every node, while monster attack rises about 1 per floor
+// (9 at floor 9 → 50 at floor 49). Buying out the whole tree therefore did not
+// measurably change how deep a run could go, which defeats the point of the
+// between-run loop.
+//
+// A scaling node pays `perWard` for each ward the player has REACHED (capped by
+// `max`), so the same node is worth more as the run goes deeper and as the
+// player's bestFloor rises across runs. It is deliberately linear and capped:
+// it narrows the gap without removing the need to also level during the run.
+function nodeWardSum(type, field){
+  const idx = nodeIndex();
+  const ward = Math.max(1, Math.min(5, (Delve.getWard ? Delve.getWard((Delve.G && Delve.G.floor) || 1).id : 1)));
+  let total = 0;
+  Object.keys(idx).forEach(function(id){
+   const node = idx[id];
+   if(!node || node.type !== type || !owns(id)) return;
+   const per = n(node[field]);
+   const cap = n(node.max) || Infinity;
+   total += Math.min(cap, per * ward);
+  });
+  return total;
+}
+
+// Sum of an owned flatStat node's `amount` for one stat id (TOU / LUC / ...).
  function nodeStatBonus(statId){
   const idx = nodeIndex();
   let total = 0;
@@ -67,7 +93,8 @@ window.Delve = window.Delve || {};
   // G.maxHpBonus is run-only health bought from a floor event (js/encounters.js).
   // It is intentionally not part of the save's permanent attributes.
   return Math.max(1, Math.round(Delve.baseMaxHp() + n(ib().hp) + lv + n(tb().maxHp) +
-   nodeTypeSum("flatHp", "hp") + n(Delve.G && Delve.G.maxHpBonus)));
+   nodeTypeSum("flatHp", "hp") + nodeWardSum("hpWard", "perWard") +
+   n(Delve.G && Delve.G.maxHpBonus)));
  };
 
  // ── Attack ─────────────────────────────────────────────────────
@@ -112,7 +139,8 @@ window.Delve = window.Delve || {};
  Delve.bonusAtk = function(){
   let a = 0;
   if(Delve.G) a += n(Delve.G.atkBuff);
-  a += n(ib().atk) + n(tb().atk) + nodeTypeSum("flatAtk", "atk");
+  a += n(ib().atk) + n(tb().atk) + nodeTypeSum("flatAtk", "atk")
+     + nodeWardSum("atkWard", "perWard");
   const I = C().ITEMS || {};
   a += n(I.levelAtk) * Math.max(0, ((Delve.G && Delve.G.level) || 1) - 1);
   return a;

@@ -53,12 +53,19 @@ one global namespace (`Delve`).
    `localStorage`. Nothing is banked before the run ends.
 
 ### Content that exists
-- Four wards: **Upper Ruins** (floors 1–10), **The Blackvein** (11–20),
-  **The Frosted Vault** (21–30) and **The Bone Ossuary** (31–40).
-- Nothing beyond floor 40 yet. The plan is ~10 wards / 100 floors; loot and
-  difficulty scale with depth, with no ward count baked into the engine.
-- ~100 items, a roster of monsters, 6 progression trees, **12 passive lines in 4 tags**
-  (three ranks each, with set bonuses), 4 uniques and **16 abilities**.
+- Five wards: **Upper Ruins** (floors 1–10), **The Blackvein** (11–20),
+  **The Frosted Vault** (21–30), **The Bone Ossuary** (31–40) and
+  **The Ashen Forge** (41–50).
+- **The dungeon currently ends at floor 50.** `Delve.descend` caps at the last
+  ward's final floor — before that guard existed, floors 51+ generated the Forge
+  forever and floor 60 asked `BOSS_DEFS[6]` for a boss, got nothing, and fell
+  back to `BOSS_DEFS[1]`, reviving The Warden in the Forge arena. Adding a sixth
+  ward lifts the cap automatically, because the cap is derived from
+  `CONFIG.WARDS` rather than hardcoded. The long-term plan is ~10 wards / 100
+  floors.
+- ~100 items, a roster of **34 monsters**, 6 progression trees, **12 passive
+  lines in 4 tags** (three ranks each, with set bonuses), **12 uniques** (each
+  with its own lore, mechanics and a bespoke sprite mark) and **16 abilities**.
 
 ---
 
@@ -935,7 +942,12 @@ Other facts:
   `G.stairs` null. Without the restore the tile stays `T.BOSS` and `tryAct` refuses to
   walk onto it — an invisible one-tile hole mid-arena.
 - The run continues or ends from the victory screen, not from a staircase.
-- `canContinue` on the victory screen is hardcoded true only for ward 1.
+- `canContinue` on the victory screen is data-driven, not hardcoded: it is true
+  whenever some ward has a higher id than the one just cleared. After ward 5
+  (the current deepest) it is therefore false and the run ends. Each ward also
+  supplies its own cleared screen — heading, boss name, paragraph and accent —
+  from `CONFIG.WARDS[n].cleared`, so the five clears do not read as one screen
+  repeated.
 
 ### 6.7 Shop layout
 `index.html` carries a second `<style>` block making `#shopScreen` a scrollable flex
@@ -1012,7 +1024,22 @@ swaps one of them for an unused unique.
   `uiBlocked()`. Miss either one and the screen either won't close or will leak taps to the map.
 
 #### 6.11.1 Fonts (Batch 12)
-Three files the owner uploaded into `fonts/`: `title.ttf` (the wordmark), `sub.ttf` (the tagline), `buttons.ttf` (the title's buttons). `title.ttf` is *Isometra* and `buttons.ttf` is *Jacquard 12*, both SIL Open Font Licence. Each is registered with `@font-face` under a
+> **Correction (finish-up pass).** The internal family names were read from the
+> TTF `name` tables: `title.ttf` = *Isometra*, `sub.ttf` = *Unkempt*, and
+> `buttons.ttf` = *Amatic SC* — not "Jacquard 12" as this section previously
+> claimed, which is why the title buttons were hard to read at 15px. `buttons.ttf`
+> has since been removed along with its `@font-face` and preload, because after
+> the title menu moved to the UI face nothing referenced it.
+>
+> The in-game faces are now **UwUI** (`fonts/ui-500/700/800.ttf`, *Alegreya
+> Sans*) and **UwDisplay** (`fonts/display-700.ttf`, *Cinzel*), both SIL OFL 1.1
+> with the licence texts beside them in `fonts/`. `UwUI` replaces `system-ui` as
+> the body font because the HUD, log and item cards are set at 11-13px, where a
+> humanist face with a tall x-height stays legible and the system default does
+> not. Note that `.btn` previously set **no** `font-family` at all, so every
+> primary button rendered in the browser's UA button face.
+
+Three files the owner uploaded into `fonts/`: `title.ttf` (the wordmark), `sub.ttf` (the tagline), `buttons.ttf` (the title's buttons). Each is registered with `@font-face` under a
 neutral internal name — `UwTitle` / `UwSub` / `UwBtn` — so a font already installed on the
 phone can never shadow it, and with `font-weight:400 900` declared so the browser uses the
 font's **real glyphs** at any weight instead of synthesising a fake bold, which goes muddy

@@ -4,7 +4,7 @@
 html,body{ height:100%; }
 body{
   background:#0b0f14;color:#d7e3ee;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  font-family:"UwUI", system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;font-size:16px;
 }
 /* The app box is the VISIBLE viewport, not the layout viewport. With `inset:0`
@@ -85,16 +85,22 @@ body{
   bottom:calc(8px + env(safe-area-inset-bottom,0px));
   display:none;gap:6px;z-index:6;
 }
+/* The action cluster. The glyphs are emoji, so `color` does not tint them — they
+   arrived dark grey on a dark panel and read as empty buttons. The fill is
+   lifted a step, the border brightened, and the size raised to 22px so the
+   icons are legible at thumb distance. */
 #statsBtn,#minimapBtn,#gearBtn,#invBtn{
-  background:#141b23;border:1px solid #7ee0ff44;border-radius:12px;
-  font-size:18px;line-height:1;color:#7ee0ff;
+  background:linear-gradient(180deg,#1d2833,#141b23);
+  border:1px solid #7ee0ff66;border-radius:12px;
+  font-size:22px;line-height:1;color:#cfeaff;
   font-family:inherit;cursor:pointer;flex-shrink:0;touch-action:manipulation;
 }
 #hudActions > button{
-  width:44px;height:44px;padding:0;
+  width:46px;height:46px;padding:0;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 6px 18px rgba(0,0,0,.40), inset 0 1px 0 rgba(255,255,255,.05);
+  box-shadow:0 6px 18px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.10);
 }
+#hudActions > button:active{ transform:translateY(1px); background:#22303c; }
 #statsBtn:active,#minimapBtn:active,#gearBtn:active,#invBtn:active{ background:#1a2a3a; }
 /* tapping the map used to look inert: the button now shows whether its panel is up */
 #minimapBtn.active{ background:#1a2a3a;border-color:#7ee0ff; }
@@ -194,8 +200,10 @@ body{
   display:flex;flex-direction:column;align-items:center;
   text-align:center;background:rgba(8,11,15,.97);
 }
-.overlay h1{ font-size:clamp(36px,10vw,58px);letter-spacing:2px;margin:4px 0 0;line-height:1; }
-.overlay h2{ font-size:clamp(22px,6vw,30px);color:#ff9a9a;margin:0; }
+.overlay h1{ font-family:"UwDisplay", "UwTitle", serif;
+  font-size:clamp(36px,10vw,58px);letter-spacing:.06em;margin:4px 0 0;line-height:1.05; }
+.overlay h2{ font-family:"UwDisplay", "UwTitle", serif;
+  font-size:clamp(22px,6vw,30px);letter-spacing:.05em;color:#ff9a9a;margin:0; }
 .sub{ color:#a9bccd;font-size:16px;line-height:1.45;max-width:420px; }
 /* Character sheet — the stats that used to crowd the HUD */
 #statsOverlay{
@@ -229,14 +237,41 @@ body{
 .upgrade .name{ font-weight:800;font-size:18px;text-align:left; }
 .upgrade .desc{ font-size:13px;line-height:1.4;color:#9fb3c5;text-align:left;margin-top:3px; }
 .lvl{ color:#7f94a8;font-size:12px;font-weight:700;margin-left:4px; }
+/* PRIMARY BUTTON — was a flat #1f7a5c slab with no font-family at all (so it
+   rendered in the browser's default button face) at 17px. Now:
+     · UwUI at 19px, weight 800 — ~2px larger, which is what the complaint was;
+     · a vertical gradient (lit top to deeper base) instead of one flat fill, so
+       it reads as a raised key rather than a coloured rectangle;
+     · a warm inner highlight and a soft outer glow in the same green, which is
+       the "life" — the surface catches light instead of being a sticker;
+     · a thin green rim on top, the classic signal for a pressable control.
+   The :active state compresses the gradient and kills the glow, so the press
+   actually reads as a press. */
 .btn{
-  background:#1f7a5c;color:#eafff5;border:none;border-radius:14px;
-  padding:14px 16px;font-size:17px;font-weight:800;cursor:pointer;
-  min-width:90px;box-shadow:0 4px 0 #0e3d2e;flex-shrink:0;touch-action:manipulation;
+  background:linear-gradient(180deg,#2fa87a 0%,#1f7a5c 52%,#186349 100%);
+  color:#f2fff9;border:1px solid #3fbf8d;border-radius:14px;
+  padding:14px 18px;font-size:19px;font-weight:800;cursor:pointer;
+  min-width:90px;flex-shrink:0;touch-action:manipulation;
+  font-family:"UwUI", system-ui, sans-serif;
+  letter-spacing:.02em;
+  box-shadow:
+    0 4px 0 #0e3d2e,
+    0 6px 18px rgba(31,122,92,.34),
+    inset 0 1px 0 rgba(255,255,255,.28);
+  text-shadow:0 1px 2px rgba(0,0,0,.35);
+  transition:transform .06s ease, box-shadow .12s ease, filter .12s ease;
 }
-.btn:active{ transform:translateY(2px);box-shadow:0 2px 0 #0e3d2e; }
-.btn:disabled{ background:#2f3d48;color:#83939f;box-shadow:none;cursor:default; }
-.btn.big{ width:100%;max-width:460px;padding:18px;font-size:20px; }
+.btn:active{
+  transform:translateY(2px);
+  background:linear-gradient(180deg,#1f7a5c 0%,#186349 60%,#14513c 100%);
+  box-shadow:0 2px 0 #0e3d2e, 0 2px 6px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.14);
+  filter:brightness(.97);
+}
+.btn:disabled{
+  background:linear-gradient(180deg,#33434f,#26333d);color:#83939f;border-color:#3a4a56;
+  box-shadow:none;cursor:default;text-shadow:none;filter:none;transform:none;
+}
+.btn.big{ width:100%;max-width:460px;padding:19px;font-size:22px; }
 .btn-ghost{
   background:#141b23;color:#7ee0ff;border:1px solid #7ee0ff44;border-radius:14px;
   padding:14px 16px;font-size:17px;font-weight:800;cursor:pointer;
@@ -384,12 +419,12 @@ body{
 #icButtons{ display:flex;gap:10px; }
 #icPrimaryBtn{
   flex:1;background:#1f7a5c;color:#eafff5;border:none;border-radius:12px;
-  padding:14px;font-size:16px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:inherit;
+  padding:14px;font-size:17px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:"UwUI", system-ui, sans-serif;letter-spacing:.02em;
 }
 #icPrimaryBtn:disabled{ background:#2f3d48;color:#83939f;cursor:default; }
 #icSecondaryBtn{
   flex:1;background:#141b23;color:#ff9a9a;border:1px solid #ff9a9a44;border-radius:12px;
-  padding:14px;font-size:16px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:inherit;
+  padding:14px;font-size:17px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:"UwUI", system-ui, sans-serif;letter-spacing:.02em;
 }
 
 /* ── Log window ── */
@@ -412,8 +447,8 @@ body{
 #stairsCard h3{ font-size:20px;font-weight:900;color:#2ad0b0; }
 #stairsCard p{ font-size:14px;color:#a9bccd;line-height:1.5; }
 #stairsButtons{ display:flex;gap:10px; }
-#stairsYes{ flex:1;background:#1f7a5c;color:#eafff5;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:inherit; }
-#stairsNo{ flex:1;background:#141b23;color:#ff9a9a;border:1px solid #ff9a9a44;border-radius:12px;padding:14px;font-size:16px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:inherit; }
+#stairsYes{ flex:1;background:#1f7a5c;color:#eafff5;border:none;border-radius:12px;padding:14px;font-size:17px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:"UwUI", system-ui, sans-serif;letter-spacing:.02em; }
+#stairsNo{ flex:1;background:#141b23;color:#ff9a9a;border:1px solid #ff9a9a44;border-radius:12px;padding:14px;font-size:17px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:"UwUI", system-ui, sans-serif;letter-spacing:.02em; }
 
 /* ── Floor title card ── */
 #floorCard{
@@ -425,7 +460,8 @@ body{
   background:rgba(8,14,20,.88);backdrop-filter:blur(8px);
 }
 #floorCardNum{ font-size:clamp(28px,8vw,44px);font-weight:900;color:#2ad0b0;letter-spacing:2px; }
-#floorCardName{ font-size:clamp(14px,4vw,20px);color:#a9bccd;margin-top:4px;font-weight:700; }
+#floorCardName{ font-family:"UwDisplay", "UwTitle", serif;
+  letter-spacing:.06em; font-size:clamp(14px,4vw,20px);color:#a9bccd;margin-top:4px;font-weight:700; }
 
 /* ── Boss intro overlay ── */
 #bossIntroOverlay{
@@ -437,7 +473,8 @@ body{
   background:rgba(12,8,20,.92);backdrop-filter:blur(8px);
 }
 #bossIntroWarning{ font-size:14px;color:#c98aff;font-weight:800;letter-spacing:.1em;margin-bottom:10px; }
-#bossIntroName{ font-size:clamp(28px,8vw,42px);font-weight:900;color:#eafff5;line-height:1; }
+#bossIntroName{ font-family:"UwDisplay", "UwTitle", serif;
+  letter-spacing:.05em; font-size:clamp(28px,8vw,42px);font-weight:900;color:#eafff5;line-height:1; }
 #bossIntroTitle{ font-size:14px;color:#c98aff;font-weight:700;margin-top:4px; }
 #bossIntroFlavour{ font-size:13px;color:#9fb3c5;font-style:italic;margin-top:14px;line-height:1.6; }
 
@@ -455,7 +492,72 @@ body{
 
 /* ── Victory screen ── */
 #victoryScreen{ display:none;padding:22px 18px calc(22px + env(safe-area-inset-bottom)); }
-#victoryScreen .overlay-title{ color:#ffd75e; }
+/* ── First-run tutorial ───────────────────────────────────────────────────
+   One card, three steps, one idea per step. Everything it explains exists
+   already; the flag that gates it (save.seenTutorial) was written by save.js
+   from the beginning and never read, so this is the first thing that uses it. */
+#tutorialOverlay{ z-index:40; background:rgba(6,9,12,.96); }
+#tutorialCard{
+  width:100%;max-width:420px;margin:auto;
+  padding:26px 22px 20px;
+  background:linear-gradient(180deg,#161f28,#0d141a);
+  border:1px solid #2a3440;border-radius:18px;
+  box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.05);
+  text-align:center;
+}
+#tutorialStep{
+  font-family:"UwUI", system-ui, sans-serif;
+  font-size:10.5px;font-weight:800;letter-spacing:.20em;
+  color:#8dff2a;opacity:.8;
+}
+#tutorialTitle{
+  font-family:"UwDisplay", "UwTitle", serif;
+  font-size:clamp(20px,6vw,26px);letter-spacing:.08em;
+  color:#eafff5;margin:10px 0 0;
+}
+#tutorialBody{
+  font-family:"UwUI", system-ui, sans-serif;
+  font-size:14px;line-height:1.7;font-weight:500;
+  color:#a9bccd;margin:12px 0 0;
+}
+#tutorialDots{ display:flex;gap:7px;justify-content:center;margin:18px 0 0; }
+#tutorialDots i{
+  width:7px;height:7px;border-radius:50%;
+  background:#2a3440;transition:background .2s, transform .2s;
+}
+#tutorialDots i.on{ background:#8dff2a;transform:scale(1.25); }
+#tutorialButtons{ display:flex;flex-direction:column;gap:10px;margin-top:20px; }
+#tutorialButtons .btn-ghost{ font-size:15px;padding:12px 16px; }
+
+/* ── Ward-cleared screen ──────────────────────────────────────────────────
+   Each ward supplies its own heading, boss name, paragraph and accent
+   (CONFIG.WARDS[n].cleared), so the screen is a different moment every time
+   rather than the same panel recoloured. --ward-accent is set per clear from
+   js/ui.js and drives the badge, the rule and the glow. */
+.ward-badge{
+  margin:2px 0 10px;padding:5px 14px;
+  font-family:"UwUI", system-ui, sans-serif;
+  font-size:10.5px;font-weight:800;letter-spacing:.18em;
+  color:var(--ward-accent,#ffd75e);
+  border:1px solid var(--ward-accent,#ffd75e);
+  border-radius:999px;opacity:.85;
+  text-transform:uppercase;white-space:nowrap;
+}
+#victoryScreen .overlay-title{
+  color:var(--ward-accent,#ffd75e);
+  text-shadow:0 0 26px rgba(0,0,0,.5);
+}
+#victorySub{
+  margin:8px 0 0;font-family:"UwDisplay", serif;
+  font-size:15px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ward-accent,#ffd75e);opacity:.8;
+}
+.victory-body{
+  margin:14px auto 6px;max-width:400px;
+  font-family:"UwUI", system-ui, sans-serif;
+  font-size:14px;line-height:1.65;font-weight:500;
+  color:#a9bccd;text-align:center;
+}
 #victorySummary{
   width:100%;max-width:460px;display:flex;flex-direction:column;gap:6px;
   background:#141b23;border:1px solid #2a3440;border-radius:16px;padding:16px;
@@ -517,20 +619,20 @@ body{
 .pause-divider{ border:none;border-top:1px solid #1e2c38;margin:0; }
 #pauseRetreatBtn{
   background:#1a1020;border:1px solid #ff9a9a44;border-radius:12px;
-  color:#ff9a9a;font-size:15px;font-weight:800;padding:13px;
+  color:#ff9a9a;font-size:17px;font-weight:800;padding:13px;
   cursor:pointer;touch-action:manipulation;font-family:inherit;text-align:center;
 }
 #pauseRetreatBtn:active{ background:#28141a; }
 #pauseSaveBtn{
   background:#0f1a24;border:1px solid #7ee0ff44;border-radius:12px;
-  color:#7ee0ff;font-size:15px;font-weight:800;padding:13px;
+  color:#7ee0ff;font-size:17px;font-weight:800;padding:13px;
   cursor:pointer;touch-action:manipulation;font-family:inherit;text-align:center;
 }
 #pauseSaveBtn:active{ background:#16283a; }
 .pause-save-note{ font-size:11px;color:#7f94a8;text-align:center;line-height:1.4; }
 #pauseCloseBtn{
   background:#141b23;border:1px solid #2a3440;border-radius:12px;
-  color:#a9bccd;font-size:15px;font-weight:800;padding:13px;
+  color:#a9bccd;font-size:17px;font-weight:800;padding:13px;
   cursor:pointer;touch-action:manipulation;font-family:inherit;text-align:center;
 }
 #pauseCloseBtn:active{ background:#1a2530; }
@@ -646,18 +748,40 @@ body{
   box-shadow:0 2px 8px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.035);
 }
 
-/* ── Buttons: soft instead of a hard offset slab ── */
+/* ── Button geometry pass ──
+   This block used to REPLACE the .btn shadow with a flat soft drop, which threw
+   away the raised-key look and left the fill as one flat green. It now only
+   adjusts the radius and keeps the primary look defined above; the emerald
+   glow and the lit top edge are what give the button life. */
 .btn{
   border-radius:16px;
-  box-shadow:0 6px 18px rgba(0,0,0,.40), inset 0 1px 0 rgba(255,255,255,.10);
 }
 .btn:active{
-  transform:translateY(1px);
-  box-shadow:0 3px 10px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.06);
+  transform:translateY(2px);
 }
 .btn-ghost{
   border-radius:16px; border-color:#7ee0ff33;
   box-shadow:0 4px 14px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.04);
+  font-family:"UwUI", system-ui, sans-serif;
+  font-size:19px;font-weight:800;letter-spacing:.02em;
+}
+.btn-ghost:active{
+  transform:translateY(2px);
+  background:#1a2a3a;
+  box-shadow:0 2px 6px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.03);
+}
+.btn-ghost:disabled{ opacity:.5;cursor:default; }
+/* The ghost button had no :active or :disabled at all, so "Sell all carried" and
+   the disabled shop heal looked identical to live buttons. */
+#icPrimaryBtn, #stairsYes{
+  background:linear-gradient(180deg,#2fa87a 0%,#1f7a5c 52%,#186349 100%);
+  border:1px solid #3fbf8d;
+  box-shadow:0 4px 0 #0e3d2e, 0 6px 16px rgba(31,122,92,.30), inset 0 1px 0 rgba(255,255,255,.24);
+  font-family:"UwUI", system-ui, sans-serif;font-size:17px;
+}
+#icPrimaryBtn:active, #stairsYes:active{
+  transform:translateY(2px);
+  box-shadow:0 2px 0 #0e3d2e, inset 0 1px 0 rgba(255,255,255,.12);
 }
 #icPrimaryBtn, #icSecondaryBtn, #stairsYes, #stairsNo, #pauseSaveBtn, #pauseRetreatBtn, #pauseCloseBtn{
   border-radius:14px;
@@ -721,7 +845,19 @@ body{
    only by moving the file, never by trimming the "../". */
 @font-face{ font-family:"UwTitle"; src:url("../fonts/title.ttf") format("truetype"); font-weight:400; font-display:block; }
 @font-face{ font-family:"UwSub";   src:url("../fonts/sub.ttf") format("truetype"); font-weight:400; font-display:block; }
-@font-face{ font-family:"UwBtn";   src:url("../fonts/buttons.ttf") format("truetype"); font-weight:400; font-display:block; }
+
+/* In-game UI face. Replaces system-ui as the body font: a humanist serif with
+   tall x-height and open counters, which stays legible at 11-13px on a phone —
+   the sizes the HUD, log and item cards actually use. Three weights are shipped
+   as separate files because the static TTFs have no variable axis.
+   Licences: fonts/OFL-alegreya.txt, fonts/OFL-cinzel.txt (SIL OFL 1.1). */
+@font-face{ font-family:"UwUI"; src:url("../fonts/ui-500.ttf") format("truetype"); font-weight:500; font-display:swap; }
+@font-face{ font-family:"UwUI"; src:url("../fonts/ui-700.ttf") format("truetype"); font-weight:700; font-display:swap; }
+@font-face{ font-family:"UwUI"; src:url("../fonts/ui-800.ttf") format("truetype"); font-weight:800; font-display:swap; }
+/* Display face for screen headings (ward cleared, boss name, floor card).
+   Cinzel is a carved-roman capital face — it reads as "engraved stone", which
+   is the whole tone of the dungeon. Capitals only by design. */
+@font-face{ font-family:"UwDisplay"; src:url("../fonts/display-700.ttf") format("truetype"); font-weight:700; font-display:swap; }
 
 /* ── Title screen (owned by js/menu.js — see architecture.md §6.11) ────────
    Everything here is additive: it only names #titleScreen and its own
@@ -738,7 +874,12 @@ body{
     radial-gradient(100% 55% at 50% 100%, rgba(18,26,34,.95), rgba(0,0,0,0) 72%),
     #070b0e;
 }
-#titleInner{ display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:520px;flex:1;padding-bottom:5vh; }
+#titleInner{
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;
+  gap:12px;width:100%;max-width:520px;flex:1;
+  padding-bottom:2vh;
+}
 
 /* The wordmark. Black letters, thick acid-green outline, a fast, strong pulsing glow, and
    a second stroke that drifts a hair off-centre for the "moving outline". The
@@ -748,7 +889,11 @@ body{
 #titleWord{
   position:relative;margin:0;
   font-family:"UwTitle", system-ui, sans-serif;
-  font-size:clamp(36px,13vw,80px);font-weight:400;line-height:1;letter-spacing:0;
+  /* The clamp used 13vw, but Isometra sets wider than the viewport at that size:
+     at 430px wide the wordmark ran off both edges. 9.5vw keeps it inside with a
+     margin, and max-width guards very narrow phones. */
+  font-size:clamp(30px,9.5vw,64px);font-weight:400;line-height:1;letter-spacing:0;
+  max-width:100%;white-space:nowrap;
   color:#04080a;
   -webkit-text-stroke:2px #8dff2a;
   text-shadow:0 0 9px rgba(141,255,42,.70), 0 0 22px rgba(141,255,42,.40), 0 0 44px rgba(141,255,42,.20);
@@ -776,12 +921,102 @@ body{
 @media (prefers-reduced-motion: reduce){
   #titleWord, #titleWord::after{ animation:none; }
 }
-#titleTagline{ margin:10px 0 0;font-family:"UwSub", system-ui, sans-serif;font-size:14px;color:#7f94a8;text-align:center;letter-spacing:.02em; }
+#titleTagline{
+  margin:14px 0 0;font-family:"UwUI", system-ui, sans-serif;
+  font-size:15px;font-weight:500;line-height:1.5;
+  color:#9fb3c5;text-align:center;letter-spacing:.04em;
+}
+
+/* ── Entry: crest, lore panel, progress strip ─────────────────────────────
+   The screen used to be a wordmark and two buttons floating over a large empty
+   void. This gives it the shape of a proper front door: something to look at,
+   something to read, and a reason to press the button. */
+#titleCrest{
+  position:relative;width:min(190px,52vw);aspect-ratio:1/1.05;
+  margin-bottom:2px;filter:drop-shadow(0 10px 26px rgba(0,0,0,.7));
+  animation:crestRise .42s ease-out both;
+}
+/* An archway: a tall rounded opening, dark inside, with a lit rim. */
+.tc-arch{
+  position:absolute;left:50%;bottom:12%;transform:translateX(-50%);
+  width:64%;height:82%;
+  border-radius:52% 52% 6px 6px / 40% 40% 6px 6px;
+  background:
+    radial-gradient(60% 70% at 50% 92%, rgba(255,120,40,.30), rgba(0,0,0,0) 70%),
+    linear-gradient(180deg,#0a0d10 0%,#050709 70%,#0a0603 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(141,255,42,.20),
+    inset 0 0 26px rgba(0,0,0,.9),
+    0 0 22px rgba(141,255,42,.10);
+}
+/* The rim highlight, drawn as a second inset arch so the opening reads as stone. */
+.tc-arch::after{
+  content:"";position:absolute;inset:5px;
+  border-radius:52% 52% 4px 4px / 40% 40% 4px 4px;
+  border:1px solid rgba(141,255,42,.13);
+  border-bottom:none;
+}
+/* The glow at the bottom of the stairwell. */
+.tc-flame{
+  position:absolute;left:50%;bottom:6%;transform:translateX(-50%);
+  width:46%;height:34%;border-radius:50%;
+  background:radial-gradient(closest-side, rgba(255,150,60,.55), rgba(255,90,20,.18) 60%, rgba(0,0,0,0) 100%);
+  animation:emberBreathe 3.6s ease-in-out infinite;
+}
+/* The floor the arch stands on. */
+.tc-ground{
+  position:absolute;left:50%;bottom:8%;transform:translateX(-50%);
+  width:86%;height:2px;border-radius:2px;
+  background:linear-gradient(90deg, rgba(141,255,42,0), rgba(141,255,42,.35), rgba(141,255,42,0));
+}
+@keyframes crestRise{ from{ opacity:0;transform:translateY(10px) scale(.96); } to{ opacity:1;transform:none; } }
+@keyframes emberBreathe{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
+
+#titlePanel{
+  width:100%;margin-top:6px;padding:16px 18px;
+  background:linear-gradient(180deg, rgba(20,27,35,.92), rgba(12,17,22,.92));
+  border:1px solid #24303c;border-radius:16px;
+  box-shadow:0 14px 34px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.03);
+  animation:panelIn .38s ease-out .06s both;
+}
+@keyframes panelIn{ from{ opacity:0;transform:translateY(8px); } to{ opacity:1;transform:none; } }
+#titleLore{
+  margin:0;font-family:"UwUI", system-ui, sans-serif;
+  font-size:13.5px;line-height:1.65;font-weight:500;
+  color:#a9bccd;text-align:center;letter-spacing:.005em;
+}
+#titleStats{
+  display:flex;gap:8px;margin-top:14px;
+  padding-top:13px;border-top:1px solid #1e2c38;
+}
+.ts-cell{ flex:1;display:flex;flex-direction:column;align-items:center;gap:2px; }
+.ts-num{
+  font-family:"UwUI", system-ui, sans-serif;font-size:21px;font-weight:800;
+  color:#8dff2a;line-height:1;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 12px rgba(141,255,42,.30);
+}
+.ts-lbl{
+  font-size:10px;font-weight:700;letter-spacing:.14em;
+  color:#93a9bd;text-transform:uppercase;
+}
+#titleCleared{
+  margin:13px 0 0;padding-top:12px;border-top:1px solid #1e2c38;
+  font-size:11px;font-weight:800;letter-spacing:.10em;
+  color:#ffd75e;text-align:center;text-transform:uppercase;
+}
 #titleButtons{ display:flex;flex-direction:column;gap:14px;width:100%;margin-top:auto; }
-/* letter-spacing is deliberately 0 here: buttons.ttf is Jacquard 12, a pixel-grid font, and
-   tracking knocks it off the grid, which makes it render soft. For the same reason it looks
-   crispest at a size that is a multiple of its 12px design grid (12px or 24px). */
-#titleButtons .btn{ width:100%;max-width:none;margin:0;font-family:"UwBtn", system-ui, sans-serif;font-size:15px;letter-spacing:0;padding:14px 16px; }
+/* The old rule used UwBtn (buttons.ttf) at 15px. That file is in fact AMATIC SC —
+   a thin, condensed display face — not the "Jacquard 12 pixel-grid font" this
+   comment used to claim. At 15px it was the least legible text on the screen,
+   which is exactly the complaint. The menu now uses the same UwUI face as the
+   rest of the game at 19px, so the front door and the dungeon share one voice. */
+#titleButtons .btn{
+  width:100%;max-width:none;margin:0;
+  font-family:"UwUI", system-ui, sans-serif;
+  font-size:19px;font-weight:800;letter-spacing:.10em;padding:16px 16px;
+  text-transform:uppercase;
+}
+#titleButtons .btn.big{ font-size:22px;letter-spacing:.12em;padding:20px 16px; }
 #titleSettingsPane{
   display:none;flex-direction:column;gap:12px;width:100%;max-width:360px;
   background:#0e141a;border:1px solid #24303c;border-radius:14px;padding:16px;
@@ -834,3 +1069,14 @@ body{
   padding:9px 12px;cursor:pointer;
 }
 
+
+/* Section heading inside the hub list (starting gear, etc.) */
+.hub-section{
+  margin:18px 0 6px;padding-top:14px;
+  border-top:1px solid #24303c;
+  font-family:"UwUI", system-ui, sans-serif;
+  font-size:10px;font-weight:800;letter-spacing:.18em;
+  color:#7f94a8;text-transform:uppercase;
+}
+.upgrade.owned{ opacity:.62; }
+.upgrade.owned .btn{ background:linear-gradient(180deg,#2a3a33,#1d2a25); border-color:#33503f; color:#7fa88f; }

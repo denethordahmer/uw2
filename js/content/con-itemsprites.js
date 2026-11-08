@@ -266,6 +266,103 @@ window.Delve = window.Delve || {};
   return ACCENTS[0];
  };
 
+ // ── Bespoke unique marks ─────────────────────────────────────
+ // A flat 40% tint made all twelve uniques read as "the same item, in a
+ // different colour" — which undercut the whole point of hand-written lore and
+ // distinct mechanics. Each unique now gets a small ORNAMENT drawn over its
+ // silhouette, chosen to picture what the item actually DOES:
+ //
+ //   Thornbite        three poison barbs down the blade
+ //   Sunsplinter      a sunburst at the guard, a light streak up the blade
+ //   Gravemaker       a hammer-head crack widening down the haft
+ //   Bastion of Ash   an ash-grey chevron plate over a warm rim
+ //   Cartographer's Eye  an eye where the brow would be
+ //   Shroud of the Deep  a slow wave of shadow across the chest
+ //   Gravewright's Grips  soil crust at the knuckles
+ //   Silent Step      a footprint, faint
+ //   Mothlight Mantle a moth at the shoulder
+ //   The Ninth Coin   a coin face at the collar
+ //   Loop of Small Mercies  a small cross at the band
+ //   Band of the Ledger  tally marks around the band
+ //
+ // Each is 3-8 rects, in the same 24x24 language as everything else.
+ const MARKS = {
+  thornbite: function(x, a){
+   for(let i = 0; i < 3; i++){
+    const y = 4 + i * 3;
+    R(x, 14, y, 2, 1, a); R(x, 15, y - 1, 1, 1, "#9fe8b0");
+    R(x, 16, y, 1, 1, "#7ee08a");
+   }
+  },
+  sunsplinter: function(x, a){
+   R(x, 9, 12, 3, 1, "#ffe9a3"); R(x, 11, 10, 1, 3, "#ffe9a3");
+   R(x, 8, 11, 1, 1, a); R(x, 12, 14, 1, 1, a);
+   R(x, 13, 2, 1, 6, "#fff6cf");          // light up the blade
+  },
+  gravemaker: function(x, a){
+   R(x, 12, 4, 1, 8, "#2a1a14");          // crack down the haft
+   R(x, 12, 7, 2, 1, "#2a1a14");
+   R(x, 9, 3, 6, 1, a);                   // struck face
+  },
+  bastion_of_ash: function(x, a){
+   R(x, 8, 13, 8, 2, "#ff9d3d");          // warm rim — "still warm"
+   R(x, 10, 10, 4, 1, a); R(x, 9, 11, 6, 1, a);   // chevron
+   R(x, 11, 12, 2, 1, "#8d95a0");
+  },
+  cartographers_eye: function(x, a){
+   R(x, 9, 8, 6, 3, a); R(x, 10, 9, 4, 1, "#06121a");
+   R(x, 11, 9, 2, 1, "#7ee0ff");          // the pupil looks down
+   R(x, 11, 11, 1, 1, "#cfd8e0");
+  },
+  shroud_of_the_deep: function(x, a){
+   R(x, 7, 9, 10, 1, "#0b1120"); R(x, 8, 11, 8, 1, a); R(x, 7, 13, 10, 1, "#0b1120");
+   R(x, 9, 15, 6, 1, a);
+  },
+  gravewrights_grips: function(x, a){
+   R(x, 8, 12, 8, 2, "#5a4a34");          // soil
+   R(x, 9, 14, 2, 1, "#5a4a34"); R(x, 13, 14, 2, 1, "#5a4a34");
+   R(x, 10, 11, 4, 1, a);
+  },
+  silent_step: function(x, a){
+   R(x, 9, 13, 3, 4, a);                  // sole
+   R(x, 10, 11, 2, 1, a); R(x, 10, 17, 2, 1, a);
+   R(x, 12, 14, 1, 1, "#0b1120");
+  },
+  mothlight_mantle: function(x, a){
+   R(x, 10, 8, 4, 2, "#fff6cf");          // wings
+   R(x, 8, 9, 2, 2, a); R(x, 14, 9, 2, 2, a);
+   R(x, 11, 7, 2, 5, "#3a3020");          // body
+   R(x, 12, 6, 1, 1, a);
+  },
+  ninth_coin: function(x, a){
+   R(x, 10, 8, 4, 4, a); R(x, 11, 9, 2, 2, "#3a2f10");
+   R(x, 11, 10, 1, 1, "#fff6cf");
+  },
+  small_mercies: function(x, a){
+   R(x, 10, 11, 4, 1, a); R(x, 11, 10, 2, 3, a);   // a small cross
+  },
+  ledger_band: function(x, a){
+   for(let i = 0; i < 4; i++) R(x, 8 + i * 2, 11, 1, 2, a);
+   R(x, 8, 10, 7, 1, "#3a2f10");
+  }
+ };
+
+ // The ids that HAVE a mark. Exposed so the test suite can assert that every
+ // unique in the pool is covered — a pixel comparison cannot do that, because a
+ // headless canvas stub records no pixels through drawImage.
+ Delve.uniqueMarkIds = function(){ return Object.keys(MARKS); };
+
+ // Apply a unique's mark over its silhouette. Kept separate from the tint so the
+ // mark keeps its own colours (a poison barb should stay green on a gold sword).
+ function drawUniqueMark(cv, uid, accent){
+  const fn = MARKS[uid];
+  if(!fn) return cv;
+  const out = mk(cv.width, cv.height), x = gx(out);
+  x.drawImage(cv, 0, 0);
+  try { fn(x, accent); } catch(_e){ return cv; }
+  return out;
+ }
+
  // Generated items carry a BASE slot ("ring"), while the equip map uses ring1 /
  // ring2. Mapping the equip keys back here keeps the lookup correct if an item
  // is ever drawn straight off G.equip (the inventory does exactly that), rather
@@ -300,7 +397,10 @@ window.Delve = window.Delve || {};
       || Delve.SPR.world.itemPile || null;
   }
   if(!cv && Delve.SPR && Delve.SPR.itemPile) cv = Delve.SPR.itemPile;
+  // Order matters: tint first (so the base reads as "unique material"), then the
+  // bespoke mark on top, so the mark's own colours survive.
   if(cv && uid && U.tint) cv = U.tint(cv, Delve.uniqueAccent(uid));
+  if(cv && uid) cv = drawUniqueMark(cv, uid, Delve.uniqueAccent(uid));
 
   cache[ck] = cv;
   return cv;

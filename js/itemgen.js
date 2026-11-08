@@ -240,7 +240,12 @@ window.Delve = window.Delve || {};
   if(!slot) slot = Delve.rollSlot();
   const fl = (floor === undefined || floor === null) ? ((Delve.G && Delve.G.floor) || 1) : floor;
   const luck = (opts.luck === undefined) ? (Delve.luckPts ? Delve.luckPts() : 1) : opts.luck;
-  let quality = Delve.qualityOf(fl, luck);
+  // `opts.quality` pins the roll exactly. Shard-bought starting gear needs this:
+  // an item sold as "Rare" must actually BE rare, not hope the noise falls that
+  // way. Everything else keeps the normal floor-and-luck roll.
+  let quality = (typeof opts.quality === "number")
+   ? Math.max(1, Math.min(100, opts.quality))
+   : Delve.qualityOf(fl, luck);
   if(opts.qualityBonus) quality = Math.min(100, quality + opts.qualityBonus);
   const band = Delve.bandOf(quality);
   const wantedTier = opts.tier || band;

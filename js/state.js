@@ -36,6 +36,20 @@ Delve.getWard = function(floor){
 
 Delve.getMonsterBand = function(floor){
  const bands = Delve.CONFIG.MONSTER_BANDS || [];
+ // No band covers the boss floors (10, 20, 30, 40, 50) because a boss arena
+ // spawns no wandering monsters, so the first-match loop fell through to the
+ // LAST band — the [51,999] Ashen Forge overflow. `genBossFloor` never consulted
+ // the result, so nothing broke in play, but any code that asked "what lives on
+ // floor 10?" got floor-50 monsters at atk 8.7. Clamp a boss floor to the band
+ // immediately BELOW it instead: that is the truth about the ward the player is
+ // standing in.
+ if(floor > 0 && floor % 10 === 0){
+  let best = null;
+  for(const b of bands){
+   if(b.floors[1] < floor && (!best || b.floors[1] > best.floors[1])) best = b;
+  }
+  if(best) return best;
+ }
  for(const b of bands){
   if(floor >= b.floors[0] && floor <= b.floors[1]) return b;
  }
@@ -84,6 +98,53 @@ Delve.newRun = function(){
   px:0, py:0, gridW:0, gridH:0, grid:[]
  };
   Delve.G.hp = Delve.maxHp();
+
+ // ── Shard-bought starting gear ───────────────────────────────
+ // Every owned `startGear` node equips one item into its slot at the start of
+ // the run. These are PERMANENT purchases, so this is where between-run progress
+ // becomes something you can feel on floor 1: before this, a player could own 25
+ // nodes and still walk in with a tier-1 sword.
+ //
+ // Built with the normal generator so the stats, affixes and sprite are the same
+ // ones an identical item would have anywhere else — no special-case numbers to
+ // drift. A slot that is later unlocked (second ring) can collide, so the higher
+ // tier wins.
+ if(Delve.save && Delve.save.nodes && Delve.makeGear){
+  const nodes = Delve.CONFIG.PROGRESSION.NODES || {};
+  const gear = [];
+  Object.keys(nodes).forEach(function(tree){
+   (nodes[tree] || []).forEach(function(nd){
+    if(nd.type !== "startGear" || !Delve.save.nodes[nd.id]) return;
+    if(nd.req && !Delve.save.nodes[nd.req]) return;
+    gear.push(nd);
+   });
+  });
+  // apply lowest tier first so a later, better item overwrites the same slot
+  gear.sort(function(a, b){ return (a.gearTier || 1) - (b.gearTier || 1); });
+  // `opts.tier` only picks the BASE (name/silhouette). An item's actual power
+  // comes from `quality`, which is rolled from the floor. Generating these at
+  // floor 1 therefore produced a "Legendary" sword with itemMax 0.1 — weaker
+  // than fists. Generate at a floor whose quality band matches the tier
+  // promised, so the item is as good as its name claims.
+  // Quality bands are [20, 40, 60]: below 20 is tier 1, 20-39 tier 2, 40-59
+  // tier 3, 60+ tier 4. `qualityBonus` is applied on top of a floor-derived
+  // roll, so aim at the MIDDLE of the wanted band and let the roll vary inside
+  // it rather than across it — otherwise a "Rare" starting item could land at
+  // tier 2 on an unlucky roll.
+  const QUALITY_TARGET = { 1:12, 2:30, 3:50, 4:70 };
+  gear.forEach(function(nd){
+   try {
+    const slot = nd.gearSlot === "weapon" ? "weapon" : nd.gearSlot;
+    const wantTier = nd.gearTier || 1;
+    // quality is pinned so the item is exactly the tier it is sold as
+    const it = Delve.makeGear(slot, 1, {
+      tier: wantTier, quality: QUALITY_TARGET[wantTier] || 12,
+      qualityBonus: 0, luck: 0, style: nd.gearStyle
+    });
+    if(it && Delve.G.equip[nd.gearSlot] !== undefined) Delve.G.equip[nd.gearSlot] = it;
+   } catch(_e){ /* a missing slot must never block a run */ }
+  });
+ }
 
  (Delve._hooks && Delve._hooks.runStart || []).forEach(function(fn){ fn(); });
 

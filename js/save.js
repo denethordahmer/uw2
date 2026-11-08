@@ -25,6 +25,10 @@ window.Delve = window.Delve || {};
       runTraitsSeen: [],
       heirloom: null,            // one item carried through death (js/items.js)
       seenTutorial: false,
+      // Set once the Forge Titan falls. Purely a record for now (the ending is
+      // the same every time), so a later New Game+ or a "completed" badge on the
+      // hub can read it without a save migration.
+      clearedWard5: false,
       run: null,                 // in-progress run checkpoint (§6.12); null = nothing to resume
       lastUpdated: Date.now()
     };
@@ -130,6 +134,7 @@ window.Delve = window.Delve || {};
     base.bestFloor = sanitizeNumber(src.bestFloor, 1);
     base.lastUpdated = sanitizeNumber(src.lastUpdated, Date.now());
     base.seenTutorial = !!src.seenTutorial;
+    base.clearedWard5 = !!src.clearedWard5;
     base.run = sanitizeRun(src.run);
 
     if(src.lvls && typeof src.lvls === "object"){
@@ -185,6 +190,7 @@ window.Delve = window.Delve || {};
         runTraitsSeen: sanitizeStringArray(saveData.runTraitsSeen),
         heirloom: sanitizeHeirloom(saveData.heirloom),
         seenTutorial: !!saveData.seenTutorial,
+        clearedWard5: !!saveData.clearedWard5,
         run: sanitizeRun(saveData.run),
         lastUpdated: Date.now()
       };

@@ -21,6 +21,11 @@ Delve.CONFIG = {
   critPerLuck: 0.01, critCap: 0.50, critMult: 1.5,
   dodgePerAgi: 0.04, dodgeCap: 0.40,
   firstStrikeUnlock: 3, firstStrikeDiv: 2,
+  // Odds that an enrage-capable species spawns enraged. Rolled per INSTANCE in
+  // js/levels.js, not granted to every copy: at 1.0 a deep floor carried enough
+  // enraged bodies that the worst-case burst hit 85% of max HP, which is a
+  // volume problem rather than a positioning one.
+  enrageChance: 0.40,
   baseInterval: 600,
   speedPerAgi: 0.05
  },
@@ -203,11 +208,20 @@ Delve.CONFIG = {
 
  // Family rhythm. Damage comes from quality, so these are shape/speed/cap only.
  // maxHit = min(itemMax + Strength, itemMax + strCeiling); minHit = shape*itemMax.
+ // strCeiling caps how much Strength a family can absorb, and it was the HARD
+ // CEILING on player damage: with sword strCeiling 16 and a best-roll itemMax of
+ // ~25, the strongest possible sword swing was ~41 damage at every depth from
+ // floor 25 onward. Monster attack, meanwhile, grows linearly (atkPerFloor ~1.0
+ // for the deep species, reaching 41-49 by floor 40), so incoming damage passed
+ // outgoing and each fight cost 59-123% of max HP by ward 4. Raising the
+ // ceilings lets the deep game keep pace without touching any per-hit numbers
+ // early: a floor-1 character cannot reach these values anyway, because they
+ // are bounded by Strength, which is bought with gold.
  WEAPON_FAMILIES: {
-  dagger: { shape:0.45, critBonus:0.05, strCeiling:10, speed:1.40, label:"Dagger" },
-  sword:  { shape:0.65, critBonus:0.00, strCeiling:16, speed:1.00, label:"Sword" },
-  spear:  { shape:0.75, critBonus:0.00, strCeiling:16, speed:0.95, label:"Spear" },
-  axe:    { shape:0.55, critBonus:0.00, strCeiling:18, speed:0.85, label:"Axe" },
-  hammer: { shape:0.70, critBonus:0.00, strCeiling:22, speed:0.70, label:"Hammer" }
+  dagger: { shape:0.45, critBonus:0.05, strCeiling:20, speed:1.40, label:"Dagger" },
+  sword:  { shape:0.65, critBonus:0.00, strCeiling:34, speed:1.00, label:"Sword" },
+  spear:  { shape:0.75, critBonus:0.00, strCeiling:34, speed:0.95, label:"Spear" },
+  axe:    { shape:0.55, critBonus:0.00, strCeiling:38, speed:0.85, label:"Axe" },
+  hammer: { shape:0.70, critBonus:0.00, strCeiling:46, speed:0.70, label:"Hammer" }
  }
 };

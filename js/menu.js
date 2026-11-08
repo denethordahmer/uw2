@@ -71,6 +71,48 @@ window.Delve = window.Delve || {};
   $("titleContinueBtn").textContent = isFreshSave() ? "BEGIN" : "CONTINUE";
  }
 
+ // Fill the entry panel from the save. Every value is derived, never stored
+ // twice: deepest floor is `bestFloor`, shards are the banked purse, and the ward
+ // count comes from CONFIG so adding a ward updates the front door for free.
+ function refreshTitlePanel(){
+  const s = Delve.save || {};
+  const cfg = Delve.CONFIG || {};
+  const wards = cfg.WARDS || [];
+  const best = Math.max(1, s.bestFloor || 1);
+  const shards = s.shards || 0;
+
+  // "Wards" counts how many the player has REACHED, not how many exist: a
+  // brand-new save showing "5 wards" leaks the whole map and reads as progress
+  // the player has not earned.
+  const reached = wards.filter(function(w){ return best >= w.floors[0]; }).length;
+  const bestEl = $("tsBest"), shEl = $("tsShards"), wEl = $("tsWards");
+  if(bestEl) bestEl.textContent = String(best);
+  if(shEl) shEl.textContent = String(shards);
+  if(wEl) wEl.textContent = String(Math.max(1, reached));
+
+  // The lore line changes once the player has actually been down there, so a
+  // veteran is not told what the dungeon is on every launch.
+  const lore = $("titleLore");
+  if(lore){
+   if(s.clearedWard5){
+    lore.textContent = "The Forge is silent. Whatever else moves under the stone has heard you now.";
+   } else if(best >= 41){
+    lore.textContent = "You have stood in the Ashen Forge. The heat there does not follow the rules of the wards above.";
+   } else if(best >= 31){
+    lore.textContent = "The ossuary smells of turned earth. Below it, an older heat is waiting.";
+   } else if(best >= 21){
+    lore.textContent = "You have broken the frost. Something further down is still burning.";
+   } else if(best > 1){
+    lore.textContent = "A stairwell descends further than the maps admit. You have already gone deeper than most.";
+   } else {
+    lore.textContent = "A stairwell descends further than the maps admit. Below the ruins, below the vaults, something has been burning for a thousand years.";
+   }
+  }
+
+  const cleared = $("titleCleared");
+  if(cleared) cleared.hidden = !s.clearedWard5;
+ }
+
  // ── Settings panel ───────────────────────────────────────────
  // The same four settings as the in-run pause menu, driven through the same
  // sfx.js functions. The ids are title*-prefixed ON PURPOSE: ui.js looks up
@@ -113,6 +155,7 @@ window.Delve = window.Delve || {};
   Delve.G = null;                       // no half-finished run left in memory
   closeResetConfirm();
   refreshTitleButton();                 // the main button becomes BEGIN
+  refreshTitlePanel();                  // the progress strip goes back to zero
   $("titleResetDone").textContent = "Progress erased. Everything is back to zero.";
   if(Delve.sfx) Delve.sfx("deny");
  }
@@ -133,7 +176,69 @@ window.Delve = window.Delve || {};
   if(Delve.sfxStopAmbience) Delve.sfxStopAmbience();
   closeSettings();
   refreshTitleButton();
+  refreshTitlePanel();
   $("titleScreen").style.display = "flex";
+ };
+
+ // ── First-run tutorial ───────────────────────────────────────
+ // Three steps, one idea each. Gated on save.seenTutorial, which save.js has
+ // carried since the beginning and nothing ever read — so until now a new player
+ // was dropped onto a floor with no explanation of the controls at all.
+ //
+ // Deliberately NOT a modal that traps input: tapping NEXT advances, SKIP closes
+ // it, and either one sets the flag. It never blocks the first floor for more
+ // than the player wants to read.
+ const TUTORIAL = [
+  { title:"TAP TO MOVE",
+    body:"Tap any floor tile and you walk there. Tap a distant one and you follow the path automatically — you do not have to walk it tile by tile." },
+  { title:"TAP A MONSTER TO FIGHT",
+    body:"Walk into an enemy, or tap it, and combat runs itself. Your weapon swings on its own; you choose where to stand and when to heal." },
+  { title:"THE BAG IS BOTTOM RIGHT",
+    body:"🎒 holds what you are carrying, 📊 your character sheet, 📍 the map of this floor, ☰ the menu. Gear you find is better than gear you start with." }
+ ];
+ let tutStep = 0;
+
+ function paintTutorial(){
+  const t = TUTORIAL[Math.min(tutStep, TUTORIAL.length - 1)];
+  $("tutorialStep").textContent = (Math.min(tutStep, TUTORIAL.length - 1) + 1) + " / " + TUTORIAL.length;
+  $("tutorialTitle").textContent = t.title;
+  $("tutorialBody").textContent = t.body;
+  $("tutorialNext").textContent = (tutStep >= TUTORIAL.length - 1) ? "GOT IT" : "NEXT";
+  const dots = $("tutorialDots");
+  if(dots && dots.children){
+   for(let i = 0; i < dots.children.length; i++){
+    dots.children[i].className = (i === tutStep) ? "on" : "";
+   }
+  }
+ }
+
+ function closeTutorial(){
+  $("tutorialOverlay").style.display = "none";
+  if(Delve.save){
+   Delve.save.seenTutorial = true;
+   if(Delve.persist) Delve.persist();
+  }
+ }
+
+ let tutWired = false;
+ function wireTutorial(){
+  if(tutWired) return;
+  tutWired = true;
+  $("tutorialNext").addEventListener("click", function(){
+   tutStep++;
+   if(tutStep >= TUTORIAL.length){ closeTutorial(); return; }
+   paintTutorial();
+  });
+  $("tutorialSkip").addEventListener("click", closeTutorial);
+ }
+
+ Delve.showTutorialIfNeeded = function(){
+  if(!Delve.save || Delve.save.seenTutorial) return false;
+  wireTutorial();
+  tutStep = 0;
+  paintTutorial();
+  $("tutorialOverlay").style.display = "flex";
+  return true;
  };
 
  Delve.hideTitle = function(){

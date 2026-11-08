@@ -921,6 +921,294 @@ console.log("\n-- ward 5: the Ashen Forge -----------------------------");
   D.G = prev;
 })();
 
+// ── Ward 5 mechanics + ending ──────────────────────────────────────────────
+console.log("\n-- ward 5: mechanics and ending -------------------------");
+(function(){
+  // The split flag must reach the instance, or killMonster's branch is dead
+  // code — the exact trap `reassembleOnce` fell into.
+  const prev = D.G;
+  D.G = { floor:47, grid:[], gridW:10, gridH:10, monsters:[], px:0, py:0,
+          puddles:[], chests:[], goldPiles:[], barrels:[], items:[], gold:0, runShards:0 };
+  for(let y = 0; y < 10; y++){ const r = []; for(let x = 0; x < 10; x++) r.push(D.T.FLOOR); D.G.grid.push(r); }
+  const m = D.spawnMonsterAt(5, 5, "reforged");
+  ok(!!m && !!m.splitOnDeath, "The Reforged carries splitOnDeath onto the instance");
+  ok(!m || (m.splitOnDeath && m.splitOnDeath.into === "reforged_shard"),
+     "the split names the shard it breaks into");
+
+  // It must be reachable: at least one band must be able to spawn it.
+  const bands = D.CONFIG.MONSTER_BANDS || [];
+  const placeable = bands.some(function(b){ return (b.weights || {}).reforged > 0; });
+  ok(placeable, "The Reforged appears in a monster band (it can actually spawn)");
+  const badShard = bands.some(function(b){ return (b.weights || {}).reforged_shard > 0; });
+  ok(!badShard, "reforged_shard is never placed by a band (split-only content)");
+
+  // Killing it splits into two halves and pays the parent.
+  if(m){
+    const goldBefore = D.G.gold, shardsBefore = D.G.runShards, xpBefore = D.G.xp || 0;
+    D.killMonster(m);
+    const halves = D.G.monsters.filter(function(x){ return x.kind === "reforged_shard"; });
+    ok(halves.length === 2, "killing The Reforged spawns two halves (" + halves.length + ")");
+    ok(D.G.gold > goldBefore, "the parent still pays gold (" + goldBefore + " -> " + D.G.gold + ")");
+    ok(D.G.runShards > shardsBefore, "the parent still pays shards");
+    ok((D.G.xp || 0) > xpBefore, "the parent still pays XP");
+    ok(halves.every(function(h){ return h.hasSplit === true; }), "halves cannot split again");
+    ok(halves.every(function(h){ return h.hp < h.maxHp + 1 && h.atk >= 1; }), "halves have sane stats");
+  }
+  D.G = prev;
+})();
+
+(function(){
+  // The boss chain blow must be mitigated and must not skip death saves: it used
+  // to be raw G.hp -= atk*2 with a direct Delve.die().
+  ok(typeof D._swingForTest === "function", "monsterSwing is reachable for testing");
+  const titan = D.CONFIG.BOSS_DEFS[5];
+  ok(!!titan && titan.chainHitEvery === 3, "the Forge Titan declares a chain every 3rd swing");
+  if(D._swingForTest){
+    const prev = D.G;
+    const boss = { id:"t", kind:"boss_titan", name:titan.name, x:5, y:5, maxHp:340, hp:340,
+                   atk:titan.atk, speed:1, isBoss:true, chainHitEvery:3, chainHitCount:0,
+                   effects:[], hasActed:false };
+    D.G = { floor:50, grid:[], gridW:10, gridH:10, monsters:[boss], px:5, py:6,
+            hp:10000, maxHp:10000, gold:0, runShards:0, effects:[], inCombat:true };
+    for(let y = 0; y < 10; y++){ const r = []; for(let x = 0; x < 10; x++) r.push(D.T.FLOOR); D.G.grid.push(r); }
+    D.dodge = function(){ return 0; };
+    D.dmgRed = function(){ return 0; };
+    D.flatRed = function(){ return 0; };
+    let hp = D.G.hp;
+    const dmg = [];
+    for(let i = 0; i < 6; i++){
+      const before = D.G.hp;
+      D._swingForTest(boss);
+      dmg.push(before - D.G.hp);
+    }
+    const chainTurn = dmg[2], normalTurn = dmg[0];
+    ok(chainTurn === normalTurn * 2,
+       "the chain is twice a normal hit (" + normalTurn + " then " + chainTurn + ")");
+    // The doubling bug: if the normal-hit block also ran, the chain turn would
+    // be 3x. Pin that it is exactly 2x.
+    ok(chainTurn < normalTurn * 3,
+       "the chain is not applied twice (" + chainTurn + " < " + (normalTurn * 3) + ")");
+    D.G = prev;
+  }
+})();
+
+(function(){
+  // The dungeon must end at the last ward's boss floor.
+  const maxFloor = (D.CONFIG.WARDS || []).reduce(function(m, w){
+    return Math.max(m, w.floors ? w.floors[1] : 0); }, 0);
+  ok(maxFloor === 50, "the last floor is 50");
+  const prev = D.G;
+  D.G = { floor:50, px:1, py:1, dead:false, runEnded:false, grid:[], gridW:4, gridH:4,
+          monsters:[], hp:100, effects:[] };
+  for(let y = 0; y < 4; y++){ const r = []; for(let x = 0; x < 4; x++) r.push(D.T.FLOOR); D.G.grid.push(r); }
+  const realPersist = D.persist; D.persist = function(){};
+  D.descend();
+  D.persist = realPersist;
+  ok(D.G.floor === 50, "descending from floor 50 does nothing (floor stays " + D.G.floor + ")");
+  D.G = prev;
+})();
+
+(function(){
+  // Ending: the final ward must not claim the way deeper is open, and the
+  // completion flag must be recorded. showVictory writes into DOM nodes; the
+  // stub records textContent, so read it back.
+  const s = D.save;
+  s.clearedWard5 = false;
+  const prev = D.G;
+  D.G = { floor:50, _victoriesProcessed:[], gold:0, runShards:0, monsters:[], effects:[] };
+  D.bankRunShards = function(){ return 0; };
+  D.recordStat = function(){};
+  D.updateHUD = function(){};
+  D.draw = function(){};
+  D.triggerVictory(5);
+  ok(D.save.clearedWard5 === true, "finishing ward 5 sets clearedWard5");
+  D.G = prev;
+  s.clearedWard5 = false;
+})();
+
+// ── Presentation: ward-cleared data and fonts ──────────────────────────────
+console.log("\n-- presentation ---------------------------------------");
+(function(){
+  // Every ward needs its own cleared screen, and the boss name it prints must be
+  // the real boss — not a guess. Two of the five were wrong when first written
+  // (The Blackvein Mother / The Rime Sovereign do not exist).
+  const wards = D.CONFIG.WARDS || [];
+  const missing = wards.filter(function(w){ return !w.cleared || !w.cleared.heading || !w.cleared.body; });
+  ok(missing.length === 0, "every ward has its own cleared screen text" +
+     (missing.length ? " (missing: " + missing.map(function(w){ return w.id; }).join(",") + ")" : ""));
+
+  const badBoss = [];
+  wards.forEach(function(w){
+    const def = (D.CONFIG.BOSS_DEFS || {})[w.id];
+    if(!w.cleared || !def) { badBoss.push(w.id + " (no boss def)"); return; }
+    if(w.cleared.boss !== def.name) badBoss.push(w.id + " says '" + w.cleared.boss + "' but BOSS_DEFS says '" + def.name + "'");
+  });
+  ok(badBoss.length === 0, "each cleared screen names the real boss" +
+     (badBoss.length ? ": " + badBoss.join("; ") : ""));
+
+  const headings = wards.map(function(w){ return w.cleared && w.cleared.heading; });
+  ok(new Set(headings).size === headings.length, "no two wards share a cleared heading");
+  const accents = wards.map(function(w){ return w.cleared && w.cleared.accent; });
+  ok(accents.every(function(a){ return /^#[0-9a-f]{6}$/i.test(a || ""); }),
+     "every ward supplies a valid accent colour");
+})();
+
+(function(){
+  // The fonts the CSS asks for must exist on disk, or the page silently falls
+  // back to system-ui and the whole pass is invisible.
+  const fs = require("fs"), path = require("path");
+  const root = __dirname;
+  const css = fs.readFileSync(path.join(root, "css/game.css"), "utf8");
+  const faces = [];
+  const re = /@font-face\{[^}]*font-family:\s*"([^"]+)"[^}]*?url\("\.\.\/([^"]+)"\)/g;
+  let m;
+  while((m = re.exec(css))) faces.push({ family: m[1], file: m[2] });
+  ok(faces.length >= 5, "the stylesheet declares its font faces (" + faces.length + ")");
+  const gone = faces.filter(function(f){ return !fs.existsSync(path.join(root, f.file)); });
+  ok(gone.length === 0, "every @font-face file exists on disk" +
+     (gone.length ? " (missing: " + gone.map(function(f){ return f.file; }).join(", ") + ")" : ""));
+
+  // And the body must actually use one of them — the old bug was .btn setting
+  // no font-family at all, so buttons used the UA default.
+  ok(/body\{[^}]*font-family:\s*"UwUI"/.test(css.replace(/\s+/g, " ")),
+     "the body font is the shipped UI face, not system-ui");
+  const btnBlock = css.match(/\.btn\{[^}]*\}/);
+  ok(!!btnBlock && /font-family:\s*"UwUI"/.test(btnBlock[0]),
+     "primary buttons set the UI font explicitly");
+  // The dead face must be gone.
+  ok(!/@font-face\{[^}]*"UwBtn"/.test(css), "the unused UwBtn face has been removed");
+})();
+
+// ── Combat texture: armour, enrage, floor density ─────────────────────────
+console.log("\n-- combat texture -------------------------------------");
+(function(){
+  const prev = D.G;
+  D.G = { floor:45, grid:[], gridW:10, gridH:10, monsters:[], px:0, py:0,
+          puddles:[], chests:[], goldPiles:[], barrels:[], items:[], gold:0, runShards:0, xp:0 };
+  for(let y = 0; y < 10; y++){ const r = []; for(let x = 0; x < 10; x++) r.push(D.T.FLOOR); D.G.grid.push(r); }
+  const g = D.spawnMonsterAt(5, 5, "furnace_guard");
+  ok(!!g && g.armour > 0, "armour reaches the instance (it is read off m, not the row)");
+  ok(D.applyMonsterArmour(g, 20) === 20 - g.armour, "armour subtracts flat damage");
+  ok(D.applyMonsterArmour(g, 1) >= 1, "armour can never reduce a hit below 1");
+  const plain = D.spawnMonsterAt(2, 2, "ash_tick");
+  ok(!plain || !plain.armour, "an unarmoured monster is unaffected");
+  D.G = prev;
+})();
+
+(function(){
+  const prev = D.G;
+  D.G = { floor:45, grid:[], gridW:10, gridH:10, monsters:[], px:0, py:0,
+          puddles:[], chests:[], goldPiles:[], barrels:[], items:[], gold:0, runShards:0,
+          xp:0, level:20, hp:500, maxHp:500, effects:[], equip:{ weapon:{ style:"sword", tier:4 } } };
+  for(let y = 0; y < 10; y++){ const r = []; for(let x = 0; x < 10; x++) r.push(D.T.FLOOR); D.G.grid.push(r); }
+  // Enrage is rolled per spawn (CONFIG.secondaries.enrageChance), so a single
+  // spawn is not guaranteed to carry it. Spawn until one does — that also
+  // proves the roll can produce both outcomes, which is the point of it.
+  let e = null, enragedSpawns = 0;
+  for(let i = 0; i < 60 && !e; i++){
+    const cand = D.spawnMonsterAt(2 + (i % 6), 8, "slag_hound");
+    if(cand){ if(cand.enrageAt > 0){ e = cand; enragedSpawns++; } }
+  }
+  ok(!!e, "enrageAt reaches the instance (and the roll fires sometimes)");
+  if(e && typeof D._playerSwingForTest === "function"){
+    e.hp = Math.ceil(e.maxHp * 0.40);
+    const atk0 = e.atk, spd0 = e.speed;
+    D.G.combatTarget = e;
+    D._playerSwingForTest(e);
+    ok(e.enraged === true, "crossing the threshold enrages the monster");
+    ok(e.atk > atk0 && e.speed > spd0, "enrage raises attack and speed (" + atk0 + "->" + e.atk + ")");
+    const atk1 = e.atk;
+    D._playerSwingForTest(e);
+    ok(e.atk === atk1, "enrage only fires once");
+  } else {
+    ok(false, "player swing is reachable for testing");
+  }
+  D.G = prev;
+})();
+
+(function(){
+  // Enrage must be a RATE, not a species-wide constant. It was originally
+  // granted to every copy, which put 15 of 22 bodies on floor 45 into a frenzy
+  // — a volume problem rather than a positioning one. This pins the roll.
+  const prev = D.G;
+  let enraged = 0, total = 0;
+  for(let round = 0; round < 8; round++){
+    D.G = { floor:45, grid:[], gridW:12, gridH:12, monsters:[], px:0, py:0,
+            puddles:[], chests:[], goldPiles:[], barrels:[], items:[], gold:0, runShards:0, xp:0 };
+    for(let y = 0; y < 12; y++){ const r = []; for(let x = 0; x < 12; x++) r.push(D.T.FLOOR); D.G.grid.push(r); }
+    for(let y = 1; y < 11; y++) for(let x = 1; x < 11; x++){
+      const m = D.spawnMonsterAt(x, y, "slag_hound");
+      if(m){ total++; if(m.enrageAt > 0) enraged++; }
+    }
+  }
+  D.G = prev;
+  const rate = enraged / Math.max(1, total);
+  const want = (D.CONFIG.secondaries.enrageChance || 0.40);
+  ok(rate > want * 0.5 && rate < want * 1.6,
+     "enrage fires at roughly the configured rate (" + (100*rate).toFixed(0) + "% vs " + (100*want).toFixed(0) + "%)");
+  ok(rate < 0.80, "not every copy of an enraging species spawns enraged");
+})();
+
+(function(){
+  // Floors must not be near-empty: the density pass raised the bands, and this
+  // pins a floor so a future edit cannot quietly halve it again.
+  const bands = D.CONFIG.MONSTER_BANDS || [];
+  const thin = bands.filter(function(b){ return (b.countMin || 0) < 12; });
+  ok(thin.length === 0, "no band spawns fewer than 12 monsters (" + thin.length + " thin bands)");
+  const f41 = bands.filter(function(b){ return b.floors && b.floors[0] === 41; })[0];
+  ok(!!f41 && f41.countMin >= 15, "the deep wards are denser than the early ones");
+})();
+
+// ── Uniques: art identity ─────────────────────────────────────────────────
+console.log("\n-- uniques: art identity -------------------------------");
+(function(){
+  const list = D.ITEM_UNIQUES || [];
+  ok(list.length >= 12, "the unique pool is populated (" + list.length + ")");
+
+  // Every unique must have its own mark. Pixel comparison is not usable here:
+  // the suite's canvas stub makes drawImage a no-op, so a tinted sprite records
+  // no pixels and a pixel-hash test would pass vacuously (it did — I verified
+  // this by deleting the mark pass and watching it stay green). So assert the
+  // COVERAGE of the mark table instead, which is the thing that actually broke:
+  // before this pass no unique had a mark at all.
+  const marks = (D.uniqueMarkIds && D.uniqueMarkIds()) || [];
+  const unmarked = list.filter(function(u){ return marks.indexOf(u.id) < 0; })
+                        .map(function(u){ return u.id; });
+  ok(unmarked.length === 0, "every unique has its own artwork mark" +
+     (unmarked.length ? " (missing: " + unmarked.join(", ") + ")" : ""));
+  ok(marks.length >= list.length, "the mark table covers the whole pool (" +
+     marks.length + " marks for " + list.length + " uniques)");
+  list.forEach(function(u){
+    const uniq = D.itemSprite({ slot: u.slot, style: u.style, tier: 4, unique: true, id: u.id });
+    ok(!!uniq, "unique '" + u.id + "' has a sprite");
+  });
+
+  const accents = list.map(function(u){ return D.uniqueAccent(u.id); });
+  ok(new Set(accents).size === accents.length,
+     "every unique has its own accent colour (" + new Set(accents).size + "/" + accents.length + ")");
+})();
+
+// ── Docs must not contradict the code ─────────────────────────────────────
+console.log("\n-- docs accuracy --------------------------------------");
+(function(){
+  const fs = require("fs"), path = require("path");
+  const doc = fs.readFileSync(path.join(__dirname, "docs/architecture.md"), "utf8");
+  const wardCount = (D.CONFIG.WARDS || []).length;
+  const lastFloor = (D.CONFIG.WARDS || []).reduce(function(m, w){
+    return Math.max(m, w.floors ? w.floors[1] : 0); }, 0);
+
+  ok(doc.indexOf("Nothing beyond floor 40") < 0,
+     "the doc no longer claims the dungeon stops at floor 40");
+  ok(doc.indexOf("hardcoded true only for ward 1") < 0,
+     "the doc no longer claims canContinue is hardcoded");
+  // The stated ward count must match the config.
+  const words = { 1:"one", 2:"two", 3:"three", 4:"four", 5:"five", 6:"six", 7:"seven" };
+  const word = words[wardCount];
+  ok(!!word && new RegExp("\\b" + word + " wards", "i").test(doc),
+     "the doc states the real ward count (" + wardCount + ")");
+  ok(lastFloor === 50, "the dungeon ends at floor 50");
+})();
+
 ctx.document.createElement = realCreate;
 Math.random = realRandom;
 D.G = null;

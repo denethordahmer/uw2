@@ -49,7 +49,7 @@ window.Delve = window.Delve || {};
  function hideAll(){
   ["titleScreen","hubScreen","deathScreen","inventoryScreen","shopScreen","victoryScreen",
    "stairsPrompt","bossIntroOverlay","itemCardOverlay","logWindow","pauseMenu",
-   "statsOverlay","eventScreen"].forEach(function(id){
+   "statsOverlay","eventScreen","tutorialOverlay"].forEach(function(id){
    const el = $(id); if(el) el.style.display = "none";
   });
  }
@@ -511,6 +511,82 @@ window.Delve = window.Delve || {};
    shop.appendChild(row);
   });
 
+  // ── Items bought with shards ──────────────────────────────────
+  // The attribute list above buys STATS. This panel buys GEAR — permanent
+  // starting items that equip on floor 1 of every future run. They are the
+  // clearest expression of "I improved between runs", so they sit in their own
+  // section with a heading rather than buried in the attribute list.
+  if(!locked){
+   const nodes = Delve.CONFIG.PROGRESSION.NODES || {};
+   const gearNodes = [];
+   Object.keys(nodes).forEach(function(tree){
+    (nodes[tree] || []).forEach(function(nd){
+     if(nd.type === "startGear") gearNodes.push(nd);
+    });
+   });
+   gearNodes.sort(function(a, b){ return (a.cost || 0) - (b.cost || 0); });
+   if(gearNodes.length){
+    const h = document.createElement("div");
+    h.className = "hub-section";
+    h.textContent = "STARTING GEAR";
+    shop.appendChild(h);
+    gearNodes.forEach(function(nd){
+     const owned = !!(Delve.save.nodes && Delve.save.nodes[nd.id]);
+     const reqMet = !nd.req || (Delve.save.nodes && Delve.save.nodes[nd.req]);
+     const row = document.createElement("div");
+     row.className = "upgrade" + (owned ? " owned" : "");
+     const info = document.createElement("div");
+     const name = document.createElement("div");
+     name.className = "name";
+     name.textContent = nd.name;
+     if(owned){
+      const tag = document.createElement("span");
+      tag.className = "lvl"; tag.textContent = " OWNED";
+      name.appendChild(tag);
+     }
+     const desc = document.createElement("div");
+     desc.className = "desc";
+     if(reqMet){
+      desc.textContent = nd.desc;
+     } else {
+      // Find the required node by id across every tree. The previous version
+      // chained an object lookup through `.name` before the fallback, so a
+      // missing requirement made the whole expression yield undefined and the
+      // row rendered with no description.
+      let reqName = "an earlier item";
+      Object.keys(nodes).forEach(function(t){
+       (nodes[t] || []).forEach(function(n){ if(n.id === nd.req) reqName = n.name; });
+      });
+      desc.textContent = "Requires " + reqName;
+     }
+     info.appendChild(name); info.appendChild(desc);
+     if(!owned && reqMet && Delve.save.shards < nd.cost){
+      const need = document.createElement("div");
+      need.className = "desc"; need.style.color = "#c9971f";
+      need.textContent = "Need " + (nd.cost - Delve.save.shards) + " more ◇";
+      info.appendChild(need);
+     }
+     const btn = document.createElement("button");
+     btn.className = "btn";
+     btn.textContent = owned ? "OWNED" : String(nd.cost);
+     btn.disabled = owned || !reqMet || Delve.save.shards < nd.cost;
+     btn.addEventListener("click", function(){
+      if(Delve.runInProgress && Delve.runInProgress()) return;
+      const n2 = (Delve.CONFIG.PROGRESSION.NODES.kit || []).filter(function(n){ return n.id === nd.id; })[0];
+      if(!n2 || Delve.save.shards < n2.cost) return;
+      Delve.save.shards -= n2.cost;
+      Delve.save.nodes = Delve.save.nodes || {};
+      Delve.save.nodes[n2.id] = true;
+      if(Delve.sfx) Delve.sfx("levelup");
+      Delve.persist();
+      Delve.refreshHub();
+     });
+     row.appendChild(info); row.appendChild(btn);
+     shop.appendChild(row);
+    });
+   }
+  }
+
   // The footer button follows the same rule: with a run parked it is the way BACK INTO that
   // run, not the way to start a second one — starting a fresh run here would overwrite the
   // checkpoint without a word (§6.12.2). The title button appears for the same reason: with
@@ -548,6 +624,10 @@ window.Delve = window.Delve || {};
   if(Delve.resize) Delve.resize();
   Delve.draw();
   Delve.showFloorCard(Delve.G.floor);
+  // First run only. showTutorialIfNeeded() is defined in js/menu.js and reads
+  // save.seenTutorial, which save.js has persisted since the beginning without
+  // anything ever reading it. Guarded so a missing file cannot block a run.
+  if(Delve.showTutorialIfNeeded) Delve.showTutorialIfNeeded();
  };
 
   // Carrying on from the title screen's FLOOR n button (§6.12). The checkpoint is restored,
@@ -809,12 +889,61 @@ window.Delve = window.Delve || {};
   }).join("");
  }
 
- Delve.showVictory = function(shards, canContinue){
+ Delve.showVictory = function(shards, canContinue, opts){
   hideAll();
   $("victoryShards").textContent = shards || 0;
   $("victorySummary").innerHTML = summaryRows().replace(/death-row/g,"victory-row").replace(/dr-label/g,"vr-label").replace(/dr-value/g,"vr-value");
+
+  // Ward clear vs. finishing the game. `canContinue === false` means there is no
+  // deeper ward, i.e. this was the last one — so the screen changes from "a ward
+  // cleared, onward" to "the dungeon is done". The old text was static HTML
+  // saying "The Warden lies broken at your feet. The way deeper yawns open.",
+  // which is wrong after the Forge Titan on both counts.
+  // Per-ward cleared text (CONFIG.WARDS[n].cleared). Each ward has its own
+  // heading, boss name and closing paragraph, so four clears do not read as the
+  // same screen four times. Falls back to the generic copy if a ward has no
+  // `cleared` block, so adding a ward can never break the screen.
+  const wardIdx = opts && opts.wardIdx;
+  const wards = (Delve.CONFIG && Delve.CONFIG.WARDS) || [];
+  const ward = (wardIdx && wards.filter(function(w){ return w.id === wardIdx; })[0]) || null;
+  const cl = (ward && ward.cleared) || null;
+
+  const finished = (canContinue === false);
+  const titleEl = $("victoryTitle");
+  const subEl = $("victorySub");
+
+  const heading = cl ? cl.heading : (finished ? "THE DEEPEST WARD IS SILENT" : "WARD CLEARED");
+  if(titleEl) titleEl.textContent = heading;
+
+  const bodyEl = $("victoryBody");
+  if(bodyEl){
+   // The body is the ward's own paragraph; the generic line is only a fallback.
+   bodyEl.textContent = cl ? cl.body : (opts && opts.sub) || "The way deeper yawns open.";
+   bodyEl.style.display = "";
+  }
+  if(subEl) subEl.textContent = cl ? ("— " + cl.boss) : "";
+
+  // Tint the screen with the ward's own accent, so each clear has its own colour
+  // signature (violet ruins, cyan vault, ember forge).
+  // Guard the CSS-variable calls: setProperty/removeProperty exist on a real
+  // CSSStyleDeclaration but not on every stub (and older WebViews). A missing
+  // accent is cosmetic; throwing here would take down the whole victory screen.
+  const scr = $("victoryScreen");
+  if(scr && scr.style && typeof scr.style.setProperty === "function"){
+   if(cl && cl.accent) scr.style.setProperty("--ward-accent", cl.accent);
+   else if(typeof scr.style.removeProperty === "function") scr.style.removeProperty("--ward-accent");
+  }
+  const badge = $("victoryBadge");
+  if(badge){
+   if(ward){ badge.textContent = "WARD " + ward.id + " · " + ward.name.toUpperCase(); badge.style.display = ""; }
+   else badge.style.display = "none";
+  }
+  // The "Return to Hub" button reads differently once the run is over.
+  const hubBtn = $("victoryHub");
+  if(hubBtn) hubBtn.textContent = finished ? "Return to the surface" : "Return to Hub";
+
   const contBtn = $("victoryContinue");
-  if(contBtn) contBtn.style.display = (canContinue === false) ? "none" : "";
+  if(contBtn) contBtn.style.display = finished ? "none" : "";
   $("victoryScreen").style.display = "flex";
  };
 

@@ -19,6 +19,41 @@ window.Delve = window.Delve || {};
 
   NODES: {
    kit: [
+    // ── SHARD-BOUGHT STARTING GEAR ───────────────────────────────
+    // Items bought permanently with shards and equipped at the start of every
+    // run. They exist because the permanent tree was all utility: a player could
+    // own 25 nodes and still start floor 1 with a tier-1 sword. These are the
+    // "I got stronger between runs" items — each one visibly upgrades what you
+    // walk in with, and each is gated behind the previous so the ladder reads as
+    // a ladder.
+    //
+    // `tier` is the ITEM tier handed to makeGear; `gearSlot` is where it goes.
+    // Prices climb steeply because these are permanent power, not consumables.
+    { id:"kit_blade", tier:1, name:"Whetted Blade",
+      desc:"Start every run with an Uncommon sword.", cost:120,
+      type:"startGear", gearSlot:"weapon", gearTier:2, gearStyle:"sword" },
+    { id:"kit_armour", tier:1, name:"Boiled Leather",
+      desc:"Start every run with an Uncommon body armour.", cost:120,
+      type:"startGear", gearSlot:"body", gearTier:2 },
+    { id:"kit_blade_ii", tier:2, name:"Forged Blade",
+      desc:"Upgrade the starting sword to Rare.", cost:280,
+      type:"startGear", gearSlot:"weapon", gearTier:3, gearStyle:"sword", req:"kit_blade" },
+    { id:"kit_armour_ii", tier:2, name:"Riveted Plate",
+      desc:"Upgrade the starting armour to Rare.", cost:280,
+      type:"startGear", gearSlot:"body", gearTier:3, req:"kit_armour" },
+    { id:"kit_ring", tier:2, name:"Inherited Ring",
+      desc:"Start every run with an Uncommon ring.", cost:220,
+      type:"startGear", gearSlot:"ring1", gearTier:2 },
+    { id:"kit_amulet", tier:3, name:"Founder's Charm",
+      desc:"Start every run with a Rare amulet.", cost:360,
+      type:"startGear", gearSlot:"amulet", gearTier:3 },
+    { id:"kit_blade_iii", tier:3, name:"Masterwork Blade",
+      desc:"Upgrade the starting sword to Legendary.", cost:600,
+      type:"startGear", gearSlot:"weapon", gearTier:4, gearStyle:"sword", req:"kit_blade_ii" },
+    { id:"kit_armour_iii", tier:4, name:"Warden's Plate",
+      desc:"Upgrade the starting armour to Legendary.", cost:600,
+      type:"startGear", gearSlot:"body", gearTier:4, req:"kit_armour_ii" },
+
     { id:"offhand", tier:1, name:"Off-hand Training", desc:"Unlock the Off-hand equipment slot.", cost:80, type:"slotUnlock", slot:"offhand" },
     { id:"field_pack", tier:1, name:"Field Pack", desc:"Increase bag capacity to 20.", cost:50, type:"inventory", cap:20 },
     { id:"quartermaster", tier:1, name:"Quartermaster", desc:"Start every run with one random Common armour.", cost:60, type:"startItem" },
@@ -35,6 +70,23 @@ window.Delve = window.Delve || {};
     { id:"footwork", tier:1, name:"Footwork", desc:"+2% permanent Dodge.", cost:25, type:"flatDodge", dodge:0.02 },
     { id:"cleave", tier:1, name:"Cleave", desc:"Learn the Cleave ability.", cost:50, type:"ability", ability:"cleave" },
     { id:"weapon_drill_2", tier:2, name:"Weapon Drill II", desc:"+2 permanent Attack Power. Requires Weapon Drill I.", cost:60, type:"flatAtk", atk:2, req:"weapon_drill_1" },
+
+    // ── DEPTH-SCALED POWER ───────────────────────────────────────
+    // The tree used to top out at +3 Attack, +6 Health and +1 flat Damage
+    // Reduction across all 49 nodes and 5,030 shards, while monster attack grows
+    // by about 1 per floor (9 at floor 9 → 50 at floor 49). Between-run progress
+    // is the point of the game, so the deepest martial/survival nodes now scale
+    // with the ward you are in. They are gated behind the flat nodes, so a new
+    // save cannot buy them and the early game is untouched.
+    { id:"steel_discipline", tier:3, name:"Steel Discipline",
+      desc:"+2 Attack Power per ward reached (up to +10).",
+      cost:280, type:"atkWard", perWard:2, max:10, req:"weapon_drill_2" },
+    { id:"iron_constitution", tier:4, name:"Iron Constitution",
+      desc:"+12 Maximum Health per ward reached (up to +60).",
+      cost:320, type:"hpWard", perWard:12, max:60, req:"hardened_bones" },
+    { id:"mastery", tier:4, name:"Mastery",
+      desc:"+3 Attack Power per ward reached (up to +15). Requires Steel Discipline.",
+      cost:420, type:"atkWard", perWard:3, max:15, req:"steel_discipline" },
     { id:"lunge", tier:2, name:"Lunge", desc:"Learn the Lunge ability.", cost:45, type:"ability", ability:"lunge" },
     { id:"cleave_ii", tier:2, name:"Cleave II", desc:"Cleave deals +4 damage. Requires Cleave.", cost:110, type:"abilityRank", ability:"cleave", req:"cleave" },
     { id:"overkill_mastery", tier:2, name:"Overkill Mastery", desc:"Overkill heals 75% of excess damage instead of 50%.", cost:120, type:"overkillPct", healPct:0.75 },

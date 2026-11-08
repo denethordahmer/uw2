@@ -219,6 +219,17 @@ window.Delve = window.Delve || {};
  Delve.addFloater("+" + stew + " stew", G.px, G.py, "#ffd75e");
  if(Delve.logSystem) Delve.logSystem("The stew warms you. +" + stew + " HP.");
  }
+ // The dungeon ends at the last ward's boss floor. Without this guard a save
+ // file (or any stray descent) could walk past floor 50, where getWard clamps to
+ // ward 5 and the monster bands fall through to the overflow row — so floors
+ // 51+ generated endless Ashen Forge. Worse, floor 60 asked BOSS_DEFS[6] for a
+ // boss, got nothing, and fell back to BOSS_DEFS[1]: The Warden, in the Forge
+ // arena. The last floor is the last floor.
+ const maxFloor = (Delve.CONFIG.WARDS || []).reduce(function(m, w){
+  return Math.max(m, w.floors ? w.floors[1] : 0);
+ }, 0);
+ if(maxFloor && G.floor >= maxFloor) return;
+
  G.floor++;
  if(Delve.sfx) Delve.sfx("stairs");
  if(Delve.sfxSetWard) Delve.sfxSetWard((Delve.getWard(G.floor)||{}).id || 1);

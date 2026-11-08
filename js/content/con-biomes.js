@@ -6,6 +6,15 @@ window.Delve = window.Delve || {};
 
  C.WARDS = [
   { id:1, name:"Upper Ruins", floors:[1,10], biome:0,
+    // Shown on the ward-cleared screen. One per ward: the run summary is the
+    // same shape every time, but the paragraph and heading must be specific to
+    // what the player just killed, or four clears read as one repeated screen.
+    cleared:{
+      heading:"THE RUINS FALL SILENT",
+      boss:"The Warden",
+      body:"Its armour is still warm. The stair behind it goes down further than the map admits.",
+      accent:"#c98aff"
+    },
     // Organic patches (layer1 port): cellular-automaton GRASS blobs painted over
     // the floor after the doors are cut. type "grass"; seed = starting density,
     // nGen = smoothing passes, amount = max fraction of floor claimed.
@@ -29,6 +38,12 @@ window.Delve = window.Delve || {};
     lootRarityMult:1 },
 
   { id:2, name:"The Blackvein", floors:[11,20], biome:1,
+    cleared:{
+      heading:"THE VEIN RUNS DRY",
+      boss:"The Thorn Sovereign",
+      body:"The mycelium dims from the edges inward, like a lamp losing its oil. The dark below is wetter than this.",
+      accent:"#9d6bff"
+    },
     // Organic patches (layer1 port) — scraggly tufts; water comes from
     // wall-fed puddles now (js/puddles.js).
     patches:[
@@ -61,6 +76,12 @@ window.Delve = window.Delve || {};
     } },
 
   { id:3, name:"The Frosted Vault", floors:[21,30], biome:2,
+    cleared:{
+      heading:"THE VAULT THAWS",
+      boss:"The Pale Tempest",
+      body:"The frost cracks off the stone in sheets. Under it, the rock is warm — warmer than it should be.",
+      accent:"#7ee0ff"
+    },
     // No grass-style patches: the old snow drifts stamped a rounded white tile +
     // little blades on whole tiles, which read as a repeated grid. The seamless
     // "ice" floor (BIOMES[2].floorStyle) carries the surface instead; pale ice
@@ -88,6 +109,12 @@ window.Delve = window.Delve || {};
     } },
 
   { id:4, name:"The Bone Ossuary", floors:[31,40], biome:3,
+    cleared:{
+      heading:"THE OSSUARY IS STILL",
+      boss:"The Bonefather",
+      body:"What was buried here stays buried. Below the last grave, something is breathing heat.",
+      accent:"#e8dcc0"
+    },
     // Organic patches (layer1 port) — bone-dust drifts; murky pools come from
     // wall-fed puddles (js/puddles.js), tinted by patchWater below.
     // No patch tiles any more: 22% of the floor was bone-dust GRASS, which read
@@ -118,6 +145,12 @@ window.Delve = window.Delve || {};
     } },
 
   { id:5, name:"The Ashen Forge", floors:[41,50], biome:4,
+    cleared:{
+      heading:"THE FORGE IS SILENT",
+      boss:"The Forge Titan",
+      body:"The heart of the foundry cools at last. Nothing below is left to burn.",
+      accent:"#ff6a00"
+    },
     // A foundry that has been burning for centuries. No patch tiles: the whole
     // surface is one continuous ash-and-obsidian sheet (BIOMES[4].floorStyle),
     // and the blood comes from wall-fed pools (js/puddles.js) in its own

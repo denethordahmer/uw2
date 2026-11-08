@@ -11,6 +11,161 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Changed — unique item art, and docs brought back in line
+
+- **Every unique has its own artwork mark.** Twelve hand-written uniques with
+  distinct lore and mechanics all rendered as their base silhouette under a 40%
+  tint, so Thornbite and Gravemaker differed only in hue. Each now draws a small
+  ornament chosen to picture what the item DOES: poison barbs down Thornbite's
+  blade, a sunburst and light streak on Sunsplinter, a widening crack on
+  Gravemaker, a chevron over a warm rim on Bastion of Ash, an eye looking down
+  for the Cartographer's Eye, a wave of shadow on the Shroud, soil at the
+  knuckles of the Grips, a footprint for Silent Step, a moth on the Mantle, a
+  coin face on the Ninth Coin, a cross on Small Mercies, tally marks on the
+  Ledger. The mark is applied AFTER the tint so its own colours survive (a green
+  poison barb on a gold sword). All twelve accent colours are distinct.
+- **Docs corrected.** `docs/architecture.md` still claimed "Four wards … nothing
+  beyond floor 40 yet" and that `canContinue` "is hardcoded true only for ward
+  1". Both were false after Ward 5. The content summary now states five wards,
+  floor 50 as the current end, 34 monsters and 12 uniques, and explains that the
+  floor cap is derived from `CONFIG.WARDS` so a sixth ward lifts it for free.
+  A test now fails if the doc contradicts the config.
+
+### Changed — playability pass: density, events, onboarding, combat texture
+
+Measured first, then changed. I simulated all 45 non-boss floors and recomputed
+the loop by route length rather than by guesswork.
+
+- **Correction to my own first measurement.** I initially reported the loop as
+  "63% walking, 37% fighting" using a crude `floor tiles × 1.6` estimate. That was
+  wrong. Measuring the actual route — a nearest-neighbour tour from the spawn
+  through every monster to the stairs — gives **~99 tiles, or 11 seconds of
+  auto-walk per floor**. The honest split is **85% fighting, 15% walking**, and an
+  average floor is **~1.2 minutes**. Walking is not the problem; the earlier number
+  made it look like one.
+- **Floor density raised.** Average monsters per floor 15.7 → 19.5, scaled by
+  depth (12-17 on floors 1-9 up to 19-26 on 46-49) so early floors stay gentle
+  and the deep wards, where the player has more tools, carry more.
+- **Combat texture: monster armour.** New `armour` roster field, applied as flat
+  damage reduction after the boss shield and all trait maths, floored at 1 so a
+  plated enemy can never become unkillable. Assigned to the wall-shaped enemies
+  (Furnace Guard 4, Molten Brute 5, Ribcage Brute 3, Ossuary Sentry 2, Frostbound
+  3, Treant 2). It rewards swapping to a heavier weapon rather than mashing.
+- **Combat texture: enrage.** New `enrageAt` field: below that HP fraction the
+  monster gains +40% attack and +30% speed, once. Assigned to the fast, fragile
+  enemies (Slag Hound, Cinder Wretch, Marrow Hound, Glacial Stalker).
+  **Rolled per instance at `CONFIG.secondaries.enrageChance` (0.40), not granted
+  to every copy.** Measured before that change: floor 45 had 15 of 22 bodies able
+  to enrage, which turns a warning into a damage race. Emberfiend was also
+  dropped from the enrage list — at 55% of Forge spawns able to frenzy, the
+  ward's hardest hit reached 30% of max HP before the player had any say.
+- **Difficulty verified, not assumed.** Two of my early models were wrong, and
+  measuring properly changed the conclusion each time:
+  1. I first modelled a "3 adjacent enemies" burst, then a "4 adjacent" one,
+     concluding the deep floors were lethal (up to 123% of max HP). **Combat is
+     1v1** — only `G.combatTarget` swings (`js/combat.js` `startCombat`), so
+     adjacent monsters do nothing while you fight something else. That model was
+     measuring a situation that cannot occur.
+  2. Measured correctly (hardest enemy on the floor, enraged if capable), the
+     curve holds across the whole run: a hit costs **24-30% of max HP** and the
+     player survives **3.3-4.4 hits** from floor 9 to floor 49, with DR rising
+     25% → 40% as TOU is bought. Worst single hit at floor 49: 39 damage on a
+     129 HP pool.
+- **Both new fields had to be copied by the spawners.** They are read off `m`,
+  not the roster row, so — exactly like `reassembleOnce` and `splitOnDeath`
+  before them — a field that is not carried across simply never fires, silently.
+  Both spawners now copy them, and a test fails if that copy is removed.
+- **Onboarding.** `save.seenTutorial` has been written by `save.js` since the
+  beginning and read **nowhere**, so a new player was dropped onto a floor with
+  no explanation of the controls. A three-step overlay (tap to move / tap a
+  monster to fight / the bag is bottom right) now shows on the first run, with
+  SKIP, and sets the flag on either path. Verified end to end in the browser:
+  three steps advance, the last reads "GOT IT", the flag persists, and it never
+  shows again.
+- **Floor events: checked, and NOT broken.** I first reported a bug here — that
+  the chance roll happened after the tile scan and so under-fired. That was
+  wrong: the roll was already first, and my 37.5% figure came from a sweep whose
+  denominator excluded boss and shop floors inconsistently. Calling
+  `placeFloorEvent` directly 200 times on floor 13 gives **44.0%**, and a
+  50-floor sweep over 240 eligible floors gives **46.7%**, both against a
+  configured 45% — so the rate is correct. No change was warranted; the comment
+  in `js/encounters.js` now records both measurements so the next reader does not
+  "fix" it again. (Only three event kinds are defined and reachable: altar,
+  wager, shrine.)
+
+### Changed — presentation pass: fonts, buttons, entry, ward clears
+
+- **A proper in-game font.** The body stack was `system-ui`, and `.btn` set **no
+  `font-family` at all**, so every primary button rendered in the browser's
+  default UA button face. The interface now uses **Alegreya Sans** (`UwUI`,
+  weights 500/700/800) and headings use **Cinzel** (`UwDisplay`). Both are SIL
+  OFL 1.1, shipped in `fonts/` with their licence texts — no runtime network
+  dependency. Alegreya was chosen because the HUD, log and item cards run at
+  11-13px, where its tall x-height and open counters stay readable.
+- **Buttons have a font and some life.** The flat `#1f7a5c` fill and 17px text
+  are replaced by a lit-to-deep green gradient, a warm inner highlight, a green
+  rim, a soft emerald glow and a 19px (22px for `.big`) label. `:active` now
+  compresses the gradient and drops the glow so the press reads; `:disabled`
+  loses both. `.btn-ghost` gained the `:active` and `:disabled` states it never
+  had — previously a disabled "Sell all carried" looked identical to a live one.
+- **The entry is an introduction.** It used to be a wordmark and two buttons over
+  a large empty void, and the buttons used `buttons.ttf` at 15px — that file is
+  *Amatic SC*, a thin condensed face, so the menu was the least legible text on
+  the screen. Now: a CSS-only torch-lit archway, a lore panel that changes with
+  how deep you have been, and a three-cell progress strip (deepest floor, banked
+  shards, wards found) read from the save. The tagline is the UI face at 15px.
+- **A ward-cleared screen unique to each ward.** `CONFIG.WARDS[n].cleared`
+  supplies a heading, boss name, closing paragraph and accent colour per ward
+  (violet Ruins, Blackvein, cyan Vault, bone Ossuary, ember Forge), and
+  `showVictory` builds the screen from it: a ward badge, the display-face
+  heading, the boss name, the ward's own paragraph, and a `--ward-accent` that
+  tints the whole screen. The old static "WARD CLEARED / The Warden lies broken
+  at your feet" is gone.
+- **Layout made measurable, not guessed.** The wordmark's `clamp` was reduced to
+  9.5vw after measuring: at 430px the old 13vw setting ran off both edges.
+  Verified at 320/360/390/430px — fits with margin at every one.
+- **Contrast fixed.** The progress labels were 4.19:1 on the panel (below WCAG AA
+  for small text); lifted to 7.14:1. The title panel animations were also
+  shortened so a first frame no longer catches them mid-fade.
+- **Removed 143 KB of dead weight:** `fonts/buttons.ttf` plus its `@font-face`
+  and preload, which nothing referenced after the menu moved to the UI face.
+  `js/ui.js` now guards its `--ward-accent` writes so a stub without
+  `removeProperty` cannot take down the victory screen.
+
+### Added — Ward 5 mechanics, and the ending
+
+- **The Reforged now exists and splits.** It was in no monster band, so it could
+  never spawn, and `killMonster`'s `splitOnDeath` branch was dead code for the
+  same reason `reassembleOnce` once was: neither spawner copied the row flag onto
+  the instance. All three are fixed — it appears in the floor 46-49 band, both
+  spawners carry `splitOnDeath`, and killing it produces two 25%-HP halves.
+  The split branch also **pays the parent** before returning: it used to return
+  before every payout, so killing The Reforged was worth less than nothing (the
+  halves paid only their own small rows). It now goes through
+  `Delve.killRewards`, so an elite Reforged keeps its 3x. Verified: gold 22,
+  shards 4, XP 9, two 12/3 halves.
+- **The boss chain blow is no longer a death-save bypass.** `chainHitEvery` dealt
+  raw `atk * 2` with no armour, no dodge, and called `Delve.die()` directly, so
+  it killed straight through Second Wind, Unbroken and Last Stand. On the Forge
+  Titan that is 52 unmitigated damage. It now takes the same mitigation route as
+  a normal hit (armour, flat reduction, stone skin, Bulwark cap), keeps its own
+  dodge roll, and falls through to the shared death-save checks. Measured at
+  floor 50: 26, 26, 52 — a clean 2x, and Unbroken now saves you from it.
+- **The run ends at floor 50.** `descend()` had no upper bound: past 50,
+  `getWard` clamped to ward 5 and the bands fell through to the overflow row, so
+  the Ashen Forge generated forever — and floor 60 asked `BOSS_DEFS[6]` for a
+  boss, got nothing, and fell back to `BOSS_DEFS[1]`, reviving **The Warden** in
+  the Forge arena. Descent is now capped at the last ward's final floor.
+- **A real ending.** The victory screen's heading and subtitle were static HTML
+  with no ids, so every ward clear said "The Warden lies broken at your feet. The
+  way deeper yawns open" — wrong after the Titan on both counts. Both now carry
+  ids and `showVictory` rewrites them from `canContinue`: the final ward reads
+  "THE FORGE IS SILENT / The Titan's heart cools. Nothing below is left to
+  burn.", the continue button stays hidden, and the hub button reads "Return to
+  the surface". `clearedWard5` is recorded in the save (default, migration and
+  write-whitelist) as a plain completion flag — nothing reads it yet, so a future
+  New Game+ or hub badge needs no migration.
+
 ### Added — Ward 5: The Ashen Forge (floors 41-50)
 
 The fifth ward, built to the hellscape brief: a foundry that has been burning for
