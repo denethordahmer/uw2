@@ -36,6 +36,18 @@ window.Delve = window.Delve || {};
   return t === T().FLOOR || t === T().GRASS || t === T().DOOR;
  }
 
+ // Dropped loot does NOT set a tile: the ground stays FLOOR and only G.items
+ // records the drop. A monster that stepped onto one would hide it under its
+ // body until it moved again, so those tiles are refused outright.
+ function hasLoot(G, x, y){
+  const items = G.items || [];
+  for(let i = 0; i < items.length; i++){
+   if(items[i].x === x && items[i].y === y) return true;
+  }
+  if(G.floorEvent && !G.floorEvent.used && G.floorEvent.x === x && G.floorEvent.y === y) return true;
+  return false;
+ }
+
  // For the distance field only: another monster's tile is passable, because it
  // is expected to move. Occupancy is checked again at the moment of the step,
  // which is what actually prevents two bodies sharing a tile.
@@ -131,6 +143,7 @@ window.Delve = window.Delve || {};
    if(nx === G.px && ny === G.py) continue;
    if(!steppable(G, nx, ny)) continue;
    if(tileAt(G, nx, ny) === T().MONSTER) continue;
+   if(hasLoot(G, nx, ny)) continue;   // never stand on a drop and hide it
    if(Delve.mdist(nx, ny, m.spawnX, m.spawnY) > c.leash) continue;
    const nd = f.dist[ny * w + nx];
    if(nd === -1) continue;

@@ -68,6 +68,35 @@ first), exit 0. `node tools/check-order.js`
     (130 ms) with a small bob and forward lean — **no walk frames exist, and none are
     needed**; that easing is what keeps the square grid invisible. `mobEase()` +
     `animating()` keep repainting until the monster lands, so a step never shows as a jump.
+11. **Loot was invisible, not missing (owner report: two floors, one potion each).**
+    Measured against the real code: a cleared floor 1 drops **2.6 gear + 1.1 potions** on
+    average, so the roll was never the problem. Two drawing faults hid the result:
+    **(a)** `killMonster` puts the gold pile AND the item on the dead monster's tile, and
+    `render.js` drew items *before* gold — the pile painted over most of every drop. Gold is
+    now drawn first, and the item sits 0.10 / 0.16 of a tile up-left so the pile stays
+    visible beside it. **(b)** A stepping monster could stand on a drop and hide it, because
+    floor loot sets no tile — only `G.items` records it. `hasLoot()` in `pursuit.js` now
+    refuses those tiles. Verified: 0 of 61 drops under a monster after 30 steps each.
+    **There is still no fog of war** — `markVisited` only tracks the minimap. If a fog pass
+    is wanted it has to be built; nothing was regressed.
+12. **Fog of war (new, `js/fog.js`).** Owner's rule: a room is DARK until the player sets
+    foot in it, then the whole room lights at once — no fade, no radius reveal. Entering is
+    detected in `fogReveal()`, which marks the room whose interior holds the player's tile
+    in `G.fogSeen` (an array indexed to `G.rooms`). A revealed room stays revealed for the
+    floor; `genFloor` resets both `G.fogSeen` and `G.fogTrail` and clears `G.rooms` (a boss
+    floor returns before rooms are rebuilt, so a stale list would light the wrong places).
+    **No grid may show**, so the mask is one offscreen canvas: a full-screen dark sheet,
+    then `destination-out` cut-outs — one rounded blob per revealed room (8 quadratic
+    corners, blurred `FOG.soften` px), a round lantern pool at the player, and a corridor
+    trail of overlapping circles. Nothing is ever punched as a per-tile square.
+    `G.rooms` is exported from `levels.js` for this. The mask is cached and rebuilt only
+    when the player tile, camera, tile size, revealed-room count or trail length changes —
+    measured: 1 build per step, 0 on idle redraws. `lantern` (4) is deliberately equal to
+    `PURSUIT.radius` (4, was 5) so you are never hit by something outside your light.
+    Boss floors and `G.fogAll` skip fog entirely, and `CONFIG.FOG.enabled = false` turns it
+    off. `Delve.tileLit(x, y)` answers "is this lit" for tests. **The minimap follows the
+    same rule**: `markVisited` now skips any tile `tileLit` says is dark, so an unentered
+    room is blank on the map as well as dark on screen.
 
 **To ship, the owner must upload:** the whole tree, **plus `music/`** (currently
 untracked), and the updated `.github/workflows/syntax-check.yml` (copies in

@@ -80,6 +80,7 @@ window.Delve = window.Delve || {};
 
   // ── presentation ───────────────────────────────────────────
   "js/render/tiles.js",
+  "js/fog.js",               // per-room fog of war: soft blobs, never a tile grid
   "js/render.js",
 
   // ── input, ui, boot ────────────────────────────────────────

@@ -430,6 +430,10 @@ const DEATH_LIFE = 460;
    if(Math.abs(dx)+Math.abs(dy) > R) continue;
    const ux=x+dx, uy=y+dy;
    if(ux<0||uy<0||ux>=w||uy>=h) continue;
+   // With fog on, the minimap must not reveal more than the map does: a tile is
+   // only recorded once it is lit, so an unentered room stays blank on the map
+   // exactly as it stays dark on screen.
+   if(Delve.tileLit && !Delve.tileLit(ux, uy)) continue;
    if(!G.visited[uy]) G.visited[uy] = [];
    G.visited[uy][ux] = 1;
   }
@@ -580,16 +584,20 @@ const DEATH_LIFE = 460;
     (G.floorEvent.x-camX)*ts+ts/2, (G.floorEvent.y-camY)*ts+ts/2, ts);
   }
 
-  // items
-  (G.items||[]).forEach(it=>{
-   if(it.x<camX||it.y<camY||it.x>=camX+vw||it.y>=camY+vh) return;
-   drawItem(ctx, it, (it.x-camX)*ts+ts/2, (it.y-camY)*ts+ts/2, ts);
-  });
-
-  // gold piles
+  // gold piles — drawn BEFORE items. Every dropped item lands on the tile the
+  // monster died on, which is also the tile its gold pile occupies, so drawing
+  // gold last painted it straight over the loot and made drops look like they
+  // had not happened at all. Gold underneath, loot on top, and the item is
+  // nudged up-left a little so the pile stays visible beside it.
   (G.goldPiles||[]).forEach(p=>{
    if(p.x<camX||p.y<camY||p.x>=camX+vw||p.y>=camY+vh) return;
    drawTreasure(ctx,"gold",(p.x-camX)*ts+ts/2,(p.y-camY)*ts+ts/2,ts);
+  });
+
+  // items
+  (G.items||[]).forEach(it=>{
+   if(it.x<camX||it.y<camY||it.x>=camX+vw||it.y>=camY+vh) return;
+   drawItem(ctx, it, (it.x-camX)*ts+ts/2 - ts*0.10, (it.y-camY)*ts+ts/2 - ts*0.16, ts);
   });
 
   // barrels
@@ -637,6 +645,11 @@ const DEATH_LIFE = 460;
   drawPlayer(ctx,pSX+ts/2,pSY+ts/2,ts,pHurt,ro.x+lo.x,ro.y+lo.y,pAtk);
 
   if(Delve.markVisited) Delve.markVisited(G.px,G.py);
+
+  // Fog of war last of the world layers, so it covers monsters, loot and props
+  // in rooms the player has not entered. Floaters stay on top of it.
+  if(Delve.fogReveal) Delve.fogReveal();
+  if(Delve.drawFog) Delve.drawFog(ctx, camX, camY, ts, vw, vh);
 
   drawFloaters(ctx,camX,camY,ts);
 

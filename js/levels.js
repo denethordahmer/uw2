@@ -322,6 +322,12 @@ window.Delve = window.Delve || {};
   // FIX: floorData used to persist across floors, so a secret room found on
   // floor 9 could leave a phantom false-wall pulse on floor 10.
   G.floorData = {};
+  // Fog of war state is per floor: revealed rooms, corridor trail.
+  G.fogSeen = [];
+  G.fogTrail = [];
+  // Cleared here too: a boss floor returns before the room list is rebuilt, and
+  // a stale list from the previous floor would light the wrong places.
+  G.rooms = [];
   const cfg = C();
   const ward = Delve.getWard(G.floor);
 
@@ -513,6 +519,10 @@ window.Delve = window.Delve || {};
   };
   pushRoom(entrance);
   all.forEach(function(r){ if(r.painted && r !== entrance) pushRoom(r); });
+
+  // Keep the room list on G so fog of war (js/fog.js) can ask which room a tile
+  // belongs to. Interiors only; it is never saved and never drawn.
+  G.rooms = rooms;
 
   // player spawn: centre of the entrance room
   G.px = rooms[0].cx; G.py = rooms[0].cy;

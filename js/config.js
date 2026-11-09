@@ -34,12 +34,20 @@ Delve.CONFIG = {
  bossEvery: 10,
  healOnDescendPct: 0.5,
 
- // ---------- PURSUIT (js/pursuit.js) ----------
- // A monster that noticed you takes one step per player action. radius is how
+ // ---------- FOG OF WAR (js/fog.js) ----------
+ // A room is dark until the player enters it, then that whole room stays lit for
+ // the rest of the floor. `lantern` is the radius, in tiles, of the soft pool
+ // around the player that keeps a corridor walkable; `soften` is the blur in
+ // pixels on a room's edge, since a hard edge would draw the grid back in.
+ // lantern (4) is set to match PURSUIT.radius below: anything that has noticed
+ // you is inside your light, so you are never hit by something you cannot see.
+ FOG: { enabled:true, darkness:0.95, lantern:4, soften:18, trail:true },
+
+ // ---------- PURSUIT (js/pursuit.js) ---------- // A monster that noticed you takes one step per player action. radius is how
  // close it must be, with line of sight, to notice; leash caps how far it will
  // stray from where it woke, so nothing follows you across the floor or stands
  // on the stairs. wakeOnDamage: hitting one from across the room wakes it.
- PURSUIT: { radius:5, leash:9, wakeOnDamage:true },
+ PURSUIT: { radius:4, leash:9, wakeOnDamage:true },
 
  // ---------- REST MECHANIC ----------
  restHealPct: 0.06,
