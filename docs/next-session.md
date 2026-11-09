@@ -97,6 +97,33 @@ first), exit 0. `node tools/check-order.js`
     off. `Delve.tileLit(x, y)` answers "is this lit" for tests. **The minimap follows the
     same rule**: `markVisited` now skips any tile `tileLit` says is dark, so an unentered
     room is blank on the map as well as dark on screen.
+    **Browser fix (owner reported fog "didn't work again"):** the first version
+    feathered room edges with `ctx.filter = "blur(...)"`. Chromium on Android ignores
+    `filter` together with `destination-out`, so every cut-out vanished and the screen
+    went fully black. `filter` is now gone; the soft edge is three nested shapes at
+    0.55 / 0.75 / 1.0 alpha, which is plain compositing and works everywhere. Verified
+    by rendering a real frame with `@napi-rs/canvas`, not a stub.
+13. **Opening floor is a teaching floor (`CONFIG.openingFloor`).** Floor 1 spawns 8
+    monsters instead of 12–17, at 75% HP and 75% ATK, and drops one guaranteed
+    **starter weapon and body armour** within 3 tiles of the spawn (`genFloor`, end of
+    the function; skipped when `G.equip.weapon` already exists). `openScale()` applies
+    the percentages and returns the value untouched on every other floor.
+14. **Loot roughly doubled (`CONFIG.ITEMS.drop`).** Gear 15.5% → **30%** per kill
+    (+3pp/Luck, cap 0.85), potions 7% → **14%**, and chests now appear on ~90% of
+    floors (base 0.75, cap 0.95) instead of ~35%. Measured per cleared floor:
+    **floor 1 ≈ 4.5 gear + 1.2 potions (was ~2.5 total)**; floor 15 ≈ 6.7 + 2.9.
+    The old per-ward `treasureChance*` overrides in `con-biomes.js` were raised to match.
+15. **Item pickup is now a decision.** Tapping a floor item (or a path arriving on it)
+    opens the existing item card instead of auto-collecting; **Pick Up** moves you onto
+    the tile and takes it, **Leave** walks away. Walking over loot no longer collects it
+    silently. `Delve.itemAt(x, y)` (items.js) is the lookup, because floor loot sets no
+    tile. The card leads with the **base name** on the floor ("Short Spear") and shows
+    the full affixed name underneath ("Keen Short Spear of the Fox"); in the inventory
+    the full name leads. New `#icNameSub` in `index.html`, `test.html` and `game.css`.
+16. **Two dead item stats made live.** `dropBonus` ("Item Find") is now added to the
+    kill drop chance in `rollKillDrop`; `shardBonus` ("Bonus Shards") multiplies a kill's
+    shard payout in `killRewards`. Both used to roll on gear and be summed into
+    `itemBuffs` with nothing reading the total.
 
 **To ship, the owner must upload:** the whole tree, **plus `music/`** (currently
 untracked), and the updated `.github/workflows/syntax-check.yml` (copies in

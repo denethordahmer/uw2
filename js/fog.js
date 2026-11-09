@@ -154,16 +154,32 @@ window.Delve = window.Delve || {};
   m.fillStyle = "rgba(3,5,8," + f.darkness + ")";
   m.fillRect(0, 0, W, H);
 
-  // `filter` is the clean way to feather an edge. Where it is unsupported the
-  // nested-alpha fallback below gives the same soft boundary.
+  // `filter` blurs the edge cleanly on desktop, but Chromium on Android does not
+  // honour it together with `destination-out` — the cut-outs silently vanish and
+  // the player sees an all-black screen (the owner hit exactly this twice). So
+  // the blur is never used; the soft edge comes from three nested shapes at
+  // decreasing alpha, which is plain compositing and behaves everywhere.
   m.globalCompositeOperation = "destination-out";
-  const canFilter = typeof m.filter === "string";
-  if(canFilter) m.filter = "blur(" + (f.soften || 18) + "px)";
+  const SOFT_STEPS = [
+   { grow: 1.00, alpha: 0.55 },
+   { grow: 0.55, alpha: 0.75 },
+   { grow: 0.22, alpha: 1.00 }
+  ];
 
-  const punch = function(x, y, w, h, r){
+  const punchShape = function(x, y, w, h, r){
    roundRect(m, x, y, w, h, r);
    m.fillStyle = "#000";
    m.fill();
+  };
+
+  // Three nested alpha steps read as a feathered edge without any filter.
+  const punchSoft = function(x, y, w, h, r, pad){
+   for(const s of SOFT_STEPS){
+    const gx = pad * s.grow;
+    m.globalAlpha = s.alpha;
+    punchShape(x - gx, y - gx, w + gx * 2, h + gx * 2, r + gx);
+   }
+   m.globalAlpha = 1;
   };
 
   // Corridor trail first, so rooms sit on top of it without a seam.
@@ -191,7 +207,7 @@ window.Delve = window.Delve || {};
    const w = r.w * ts + pad * 2;
    const h = r.h * ts + pad * 2;
    if(x > W + pad || y > H + pad || x + w < -pad || y + h < -pad) continue;
-   punch(x, y, w, h, Math.min(w, h) * 0.14);
+   punchSoft(x, y, w, h, Math.min(w, h) * 0.14, ts * 0.55);
   }
 
   // The pool around the player. Round, never square, so a corridor bends
@@ -208,7 +224,7 @@ window.Delve = window.Delve || {};
   m.arc(pcx, pcy, rad, 0, Math.PI * 2);
   m.fill();
 
-  if(canFilter) m.filter = "none";
+  m.globalAlpha = 1;
   m.globalCompositeOperation = "source-over";
  }
 

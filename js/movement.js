@@ -41,6 +41,16 @@ window.Delve = window.Delve || {};
  else G.lastDir = "up";
 
  const cell = g[ty][tx];
+ // A floor item is a decision, not a pickup: tapping it shows what it is, and
+ // the card's Pick Up button moves you onto the tile and takes it. This also
+ // stops any path, so walking over loot never silently hoovers it up.
+ if(Delve.itemAt && Delve.showItemCard && !G.inCombat && Delve.itemAt(tx, ty)){
+  G._path = null;
+  if(G._pathTimer){ clearInterval(G._pathTimer); G._pathTimer = null; }
+  Delve.showItemCard(Delve.itemAt(tx, ty), "floor");
+  Delve.updateHUD();
+  return;
+ }
  if(cell === T().MONSTER){
  const m = G.monsters.find(m => m.x===tx && m.y===ty);
  if(m) Delve.startCombat(m);
@@ -113,6 +123,16 @@ window.Delve = window.Delve || {};
  else G.lastDir = "up";
 
  const cell = g[ty][tx];
+ // A floor item is a decision, not a pickup: tapping it shows what it is, and
+ // the card's Pick Up button moves you onto the tile and takes it. This also
+ // stops any path, so walking over loot never silently hoovers it up.
+ if(Delve.itemAt && Delve.showItemCard && !G.inCombat && Delve.mdist(tx, ty, G.px, G.py) === 1 && Delve.itemAt(tx, ty)){
+  G._path = null;
+  if(G._pathTimer){ clearInterval(G._pathTimer); G._pathTimer = null; }
+  Delve.showItemCard(Delve.itemAt(tx, ty), "floor");
+  Delve.updateHUD();
+  return;
+ }
  if(cell === T().MONSTER){
  const m = G.monsters.find(m => m.x===tx && m.y===ty);
  if(m){ G._path = null; Delve.startCombat(m); }
@@ -210,8 +230,7 @@ window.Delve = window.Delve || {};
  Delve.descend = function(){
  const G = Delve.G, cfg = C();
  if(!G || G.dead || G.runEnded) return; // C-017 guard
- G.hp = Math.min(Delve.maxHp(), G.hp + Math.round(Delve.maxHp() * cfg.healOnDescendPct * (Delve.healMult ? Delve.healMult() : 1)));
- // Hearty Stew / floorHeal: consume one charge on descend.
+ G.hp = Math.min(Delve.maxHp(), G.hp + Math.round(Delve.maxHp() * cfg.healOnDescendPct * (Delve.healMult ? Delve.healMult() : 1))); // Hearty Stew / floorHeal: consume one charge on descend.
  if(G.floorHealLeft > 0){
  G.floorHealLeft--;
  const stew = Math.round(3 * (Delve.healMult ? Delve.healMult() : 1));

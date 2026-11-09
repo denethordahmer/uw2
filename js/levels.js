@@ -129,8 +129,8 @@ window.Delve = window.Delve || {};
    kind: row.kind, name: row.name,
    x:x, y:y,
    tile: G.grid[y][x],
-   maxHp: row.hp + Math.floor((G.floor-1) * row.hpPerFloor),
-   atk: row.atk + Math.floor(G.floor * row.atkPerFloor),
+   maxHp: openScale(G, row.hp + Math.floor((G.floor-1) * row.hpPerFloor), "monsterHpPct"),
+   atk: openScale(G, row.atk + Math.floor(G.floor * row.atkPerFloor), "monsterAtkPct"),
    speed: row.speed,
    xp: row.xp, shards: row.shards, gold: row.gold,
    // Roster flags the kill path reads off the INSTANCE must be carried across.
@@ -158,6 +158,17 @@ window.Delve = window.Delve || {};
   G.monsters.push(m);
   G.grid[y][x] = T().MONSTER;
   return m;
+ }
+
+ // Floor-1 softening (CONFIG.openingFloor): a percentage applied to a spawned
+ // monster's HP or ATK on the teaching floor only. Any later floor is untouched,
+ // so the depth curve below floor 2 is exactly what it was.
+ function openScale(G, v, key){
+  if(!G || G.floor !== 1) return v;
+  const o = C().openingFloor || {};
+  const pct = o[key];
+  if(!pct) return v;
+  return Math.max(1, Math.round(v * pct));
  }
 
  // Public seam for js/encounters.js: ambient ambushes must spawn the exact same
@@ -567,9 +578,12 @@ window.Delve = window.Delve || {};
    G.grid[pick.y][pick.x] = T().BARREL;
   }
 
-  // chests
+  // chests — the per-biome numbers now live in CONFIG.ITEMS.drop so one place
+  // controls "how much loot does a floor hold".
+  const DC = (C().ITEMS || {}).drop || {};
   const chestChance = (Delve.hasProgression && Delve.hasProgression("sealed_cache")) ? 1
-   : Math.min(ward.treasureChanceCap || 0.45, (ward.treasureChanceBase || 0.14) + (ward.treasureChanceLuck || 0.018) * Delve.luckPts());
+   : Math.min(ward.treasureChanceCap || DC.chestChanceCap || 0.60,
+              (DC.chestChanceBase || 0.30) + (DC.chestChanceLuck || 0.02) * Delve.luckPts());
   if(prob(chestChance) && openTiles.length !== 0){
    const s = openTiles.splice(Math.floor(Math.random()*openTiles.length), 1)[0];
    if(G.grid[s.y][s.x] === T().FLOOR){
@@ -580,7 +594,11 @@ window.Delve = window.Delve || {};
 
   // normal monsters: distribute across rooms (skip spawn room) for even density
   const band = Delve.getMonsterBand(G.floor);
-  const count = Delve.rng(band.countMin || 10, band.countMax || 14);
+  // Floor 1 is the teaching floor: fewer, weaker bodies (CONFIG.openingFloor),
+  // so the first minute is "this is how a fight works", not an attrition test.
+  const open = (G.floor === 1) ? (C().openingFloor || {}) : {};
+  let count = Delve.rng(band.countMin || 10, band.countMax || 14);
+  if(open.monsters) count = Math.min(count, open.monsters);
   let placed = 0;
   // The entrance room stays clear so the player never lands in a pack. If the BSP
   // collapsed to a single room, use it anyway — an empty floor is worse than a
@@ -751,6 +769,38 @@ window.Delve = window.Delve || {};
   } catch (e) {
     if (Delve.logSystem) Delve.logSystem("Growth skipped: " + e.message);
   }
+  // Starter gear (CONFIG.openingFloor.starterGear): on floor 1 only, drop one
+  // weapon and one armour piece near the player so the first fight happens with
+  // a real weapon in hand rather than fists. Placed at the end so it lands on
+  // clear floor, and only if the player is not already carrying a weapon (a
+  // resumed run or a purchased starting kit must not get a second free set).
+  try {
+    const openCfg = C().openingFloor || {};
+    if(G.floor === 1 && openCfg.starterGear && !(G.equip && G.equip.weapon)){
+      const spots = [];
+      for(let y = 1; y < G.gridH - 1 && spots.length < 2; y++){
+        for(let x = 1; x < G.gridW - 1 && spots.length < 2; x++){
+          if(G.grid[y][x] !== T().FLOOR) continue;
+          if(x === G.px && y === G.py) continue;
+          if(Delve.mdist(x, y, G.px, G.py) > 3) continue;
+          if(Delve.eventAt && Delve.eventAt(x, y)) continue;
+          if(G.items.some(function(i){ return i.x === x && i.y === y; })) continue;
+          spots.push({ x:x, y:y });
+        }
+      }
+      const wantSlots = ["weapon", "body"];
+      for(let i = 0; i < spots.length && i < wantSlots.length; i++){
+        const it = Delve.makeGear ? Delve.makeGear(wantSlots[i], 1, { tier:1 }) : null;
+        if(!it) continue;
+        it.x = spots[i].x; it.y = spots[i].y;
+        if(Delve.stampProvenance) Delve.stampProvenance(it, { kind:"starter" });
+        G.items.push(it);
+      }
+    }
+  } catch (e) {
+    if (Delve.logSystem) Delve.logSystem("Starter gear skipped: " + e.message);
+  }
+
   // One optional floor event (js/encounters.js), placed last: it only chooses a
   // plain walkable tile, so it can never displace a chest, a monster or the stairs.
   try {
@@ -778,8 +828,8 @@ window.Delve = window.Delve || {};
    kind: row.kind, name: row.name,
    x:x, y:y,
    tile: tile,
-   maxHp: row.hp + Math.floor((G.floor-1) * row.hpPerFloor),
-   atk: row.atk + Math.floor(G.floor * row.atkPerFloor),
+   maxHp: openScale(G, row.hp + Math.floor((G.floor-1) * row.hpPerFloor), "monsterHpPct"),
+   atk: openScale(G, row.atk + Math.floor(G.floor * row.atkPerFloor), "monsterAtkPct"),
    speed: row.speed,
    xp: row.xp, shards: row.shards, gold: row.gold,
    // Roster flags the kill path reads off the INSTANCE must be carried across.

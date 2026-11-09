@@ -95,6 +95,14 @@ window.Delve = window.Delve || {};
  gold *= r; shards *= r; xp *= r;
  }
 
+ // "Bonus Shards" gear. Same story as Item Find: the stat rolled, was summed into
+ // itemBuffs.shardBonus, and nothing ever paid it. It is a percentage of the
+ // kill's shard value, so it scales with depth like everything else and cannot
+ // be farmed on floor 1.
+ let shardPct = 0;
+ if(!m.isBoss && Delve.itemBuffs){ shardPct = Delve.itemBuffs().shardBonus || 0; }
+ if(shardPct) shards *= (1 + shardPct);
+
  return {
  gold: Math.round(gold * luckMult),
  shards: Math.round(shards),

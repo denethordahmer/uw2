@@ -34,6 +34,14 @@ Delve.CONFIG = {
  bossEvery: 10,
  healOnDescendPct: 0.5,
 
+ // ---------- OPENING FLOOR ----------
+ // The first floor is a teaching floor, not a test. Fewer, weaker monsters and a
+ // bigger heal on the way down, so a new player meets the loop — walk, tap a
+ // monster, watch it die, find gear — before anything can kill them.
+ // `starterGear` drops one guaranteed weapon and one armour piece on floor 1.
+ openingFloor: { monsters: 8, monsterHpPct: 0.75, monsterAtkPct: 0.75,
+                 healOnDescendPct: 0.75, starterGear: true },
+
  // ---------- FOG OF WAR (js/fog.js) ----------
  // A room is dark until the player enters it, then that whole room stays lit for
  // the rest of the floor. `lantern` is the radius, in tiles, of the soft pool
@@ -193,9 +201,16 @@ Delve.CONFIG = {
   pointCost: { atk:2.0, str:1.0, hp:0.6, crit:0.4, red:3.8, dodge:0.7, speed:0.7, luck:1.2,
                goldBonus:0.16, dropBonus:0.2667, bossAtk:0.5, shardBonus:1.0, healOnKill:1.8 },
 
-  // Gear and potions roll separately (L5). Gear: 15.5% + 2.5pp per Luck = 18%
-  // at Luck 1. Potions: flat 7%.
-  drop: { gearBase:0.155, gearPerLuck:0.025, potion:0.07, cap:0.60 },
+  // Gear and potions roll separately (L5).
+  // Owner's call: roughly DOUBLE the items a floor produces. Gear was 15.5% and
+  // a floor yielded ~2.5 items, which read as barren next to 14 kills. Now 30%
+  // base + 3pp per Luck, and potions double too. `chestMin` guarantees at least
+  // one chest-bearing floor in that many, so a dry streak cannot run long.
+  // A chest every floor: it is the one guaranteed piece of loot a floor holds, and
+ // the player should be able to count on it. Later wards used to make chests
+ // rarer, which is exactly backwards — depth should not make a floor emptier.
+ drop: { gearBase:0.30, gearPerLuck:0.03, potion:0.14, cap:0.85,
+         chestChanceBase:0.75, chestChanceLuck:0.02, chestChanceCap:0.95 },
 
   // Slot weights (L6). Weapon drops less often than it used to, rings and
   // amulets are genuinely rare.

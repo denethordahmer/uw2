@@ -194,7 +194,9 @@ D.qualityOf = savedQualityOf;
 newRun(5,3);
 const kills = 20000; let gear = 0;
 for(let i=0;i<kills;i++) if(D.rollKillDrop(1,1,{name:"x"})) gear++;
-ok(gear/kills > 0.15 && gear/kills < 0.21, "gear drop rate ~18% (got " + (100*gear/kills).toFixed(1) + "%)");
+// Owner's call: roughly double the old 18%. Floor 5 with Luck 1 now sits near
+// 30% + luck, so the window is 0.28..0.36.
+ok(gear/kills > 0.28 && gear/kills < 0.36, "gear drop rate ~33% (got " + (100*gear/kills).toFixed(1) + "%)");
 const slotShare = {};
 for(let i=0;i<30000;i++){ const s = D.rollSlot(); slotShare[s] = (slotShare[s]||0)+1; }
 ok(Math.abs(slotShare.weapon/30000 - 0.23) < 0.03, "weapon ~23% of gear (got " + (100*slotShare.weapon/30000).toFixed(1) + "%)");

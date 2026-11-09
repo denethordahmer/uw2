@@ -32,7 +32,8 @@ window.Delve = window.Delve || {};
     roomMin:6, roomMax:9,
     roomWMin:4, roomWMax:9, roomHMin:4, roomHMax:9,
     roomMaxDuplicateSize:2, roomSplitArea:80, dungeonSize:26,
-    treasureChanceBase:0.14, treasureChanceLuck:0.018, treasureChanceCap:0.45,
+    // Chest chances are tuned in CONFIG.ITEMS.drop; a ward may still override.
+    treasureChanceBase:0.75, treasureChanceLuck:0.02, treasureChanceCap:0.95,
     secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
     // Per-biome nudge to the rare + legendary weights (1 = neutral).
     lootRarityMult:1 },
@@ -60,7 +61,7 @@ window.Delve = window.Delve || {};
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
-    treasureChanceBase:0.10, treasureChanceLuck:0.018, treasureChanceCap:0.35,
+    treasureChanceBase:0.70, treasureChanceLuck:0.02, treasureChanceCap:0.95,
     secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
     // Per-biome nudge to the rare + legendary weights (1 = neutral).
     lootRarityMult:1,
@@ -96,7 +97,7 @@ window.Delve = window.Delve || {};
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
-    treasureChanceBase:0.10, treasureChanceLuck:0.018, treasureChanceCap:0.35,
+    treasureChanceBase:0.70, treasureChanceLuck:0.02, treasureChanceCap:0.95,
     secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
     // Per-biome nudge to the rare + legendary weights (1 = neutral).
     lootRarityMult:1,
@@ -133,7 +134,7 @@ window.Delve = window.Delve || {};
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:28,
-    treasureChanceBase:0.10, treasureChanceLuck:0.018, treasureChanceCap:0.35,
+    treasureChanceBase:0.70, treasureChanceLuck:0.02, treasureChanceCap:0.95,
     secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
     // Per-biome nudge to the rare + legendary weights (1 = neutral).
     lootRarityMult:1,
@@ -168,7 +169,7 @@ window.Delve = window.Delve || {};
     roomMin:6, roomMax:10,
     roomWMin:4, roomWMax:10, roomHMin:4, roomHMax:10,
     roomMaxDuplicateSize:2, roomSplitArea:85, dungeonSize:30,
-    treasureChanceBase:0.10, treasureChanceLuck:0.018, treasureChanceCap:0.35,
+    treasureChanceBase:0.70, treasureChanceLuck:0.02, treasureChanceCap:0.95,
     secretRoomChanceBase:0.20, secretRoomChanceLuck:0.04, secretRoomChanceCap:0.70,
     lootRarityMult:1,
     special:{

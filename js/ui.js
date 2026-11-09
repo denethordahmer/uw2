@@ -317,8 +317,23 @@ window.Delve = window.Delve || {};
    if(img){ sctx.imageSmoothingEnabled = false; sctx.drawImage(img, 0, 0, 72, 72); }
   }
 
-  $("icName").textContent = item.name;
+  // On the floor the card leads with the BASE name ("Short Spear"), so the
+  // question "do I want a weapon?" is answerable at a glance; the full affixed
+  // name ("Keen Short Spear of the Fox") is shown underneath once it is yours.
+  // In the inventory, and on the floor for uniques, the full name leads.
+  const isFloor = (source === "floor");
+  const fullName = item.name;
+  const baseName = item.baseName || item.name;
+  const showFullFirst = !isFloor || item.unique;
+  $("icName").textContent = showFullFirst ? fullName : baseName;
   $("icName").style.color = tierCol;
+  // A second line carries whichever name is not already on top.
+  const sub = $("icNameSub");
+  if(sub){
+   const second = showFullFirst ? "" : fullName;
+   sub.textContent = second;
+   sub.style.display = second ? "block" : "none";
+  }
   $("icTier").textContent = tierName;
   $("icTier").style.color = tierCol;
   $("icFlavour").textContent = item.lore || item.flavour || "";
@@ -357,11 +372,27 @@ window.Delve = window.Delve || {};
     if(full) return;
     const it = Object.assign({}, pendingItemAction.item);
     const x = it.x, y = it.y; delete it.x; delete it.y;
+    // Picking up moves you onto the tile, so the card and the world agree: the
+    // item is gone from the floor AND from under your feet. Only step if the
+    // tile is adjacent and walkable — a ranged pickup from across the room would
+    // skip the walking the game is made of.
+    const G = Delve.G;
+    if(G && x !== undefined && y !== undefined && Delve.mdist(x, y, G.px, G.py) === 1){
+     const cell = G.grid[y] && G.grid[y][x];
+     const walkable = cell === Delve.T.FLOOR || cell === Delve.T.GRASS || cell === Delve.T.DOOR;
+     if(walkable){
+      G.px = x; G.py = y;
+      if(Delve.sfx) Delve.sfx("footstep");
+      Delve.collectGold(x, y);
+     }
+    }
     Delve.G.items = Delve.G.items.filter(function(i){ return !(i.x === x && i.y === y); });
     it.isNew = true;
     Delve.G.inventory.push(it);
     if(Delve.logPickup) Delve.logPickup(it.name, it.tier);
     Delve.flash("Picked up " + it.name);
+    // Walking onto the tile is a turn like any other.
+    if(Delve.enemiesTurn) Delve.enemiesTurn();
     Delve.updateHUD(); Delve.draw(); closeItemCard();
    };
   } else {

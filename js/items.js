@@ -71,6 +71,17 @@ window.Delve = window.Delve || {};
  };
 
  // ── Provenance ────────────────────────────────────────────────
+ // The item lying on a tile, or null. Floor loot does not set a tile, so this is
+ // the only way to ask; js/movement.js uses it to turn a tap into an item card.
+ Delve.itemAt = function(x, y){
+  const G = Delve.G;
+  if(!G || !G.items) return null;
+  for(let i = 0; i < G.items.length; i++){
+   if(G.items[i].x === x && G.items[i].y === y) return G.items[i];
+  }
+  return null;
+ };
+
  Delve.stampProvenance = function(item, source){
  const G = Delve.G;
  const floor = G ? G.floor : "?";
@@ -110,7 +121,11 @@ window.Delve = window.Delve || {};
  const L = Delve.CONFIG.loot;
  // Gear rolls on its own (L5); potions are a separate roll in combat.js.
  const D = IT().drop || {};
- let chance = Math.min(D.cap || 0.60, (D.gearBase || 0.155) + Delve.luckPts() * (D.gearPerLuck || 0.025));
+ let chance = Math.min(D.cap || 0.85, (D.gearBase || 0.30) + Delve.luckPts() * (D.gearPerLuck || 0.03));
+ // "Item Find" gear now actually finds items. Before this it rolled on items and
+ // was summed into itemBuffs.dropBonus, but nothing read the total — the stat
+ // was a line of text on the card. It is a flat addition to the kill chance.
+ if(Delve.itemBuffs){ chance += (Delve.itemBuffs().dropBonus || 0); }
  if(opts.elite) chance += (L.eliteDropBonus || 0);
  if(opts.guaranteed) chance = 1;
  if(Math.random() > chance) return false;
