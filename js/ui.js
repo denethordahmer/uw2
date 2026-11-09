@@ -292,6 +292,10 @@ window.Delve = window.Delve || {};
 
  Delve.showItemCard = function(item, source){
   pendingItemAction = { item: item, source: source };
+  // The Equip button belongs to the floor card only; an inventory item is
+  // already yours. Hide it here so it can never leak in from a previous card.
+  const tBtn = $("icTertiaryBtn");
+  if(tBtn) tBtn.style.display = "none";
   const overlay = $("itemCardOverlay");
   const tierCol = Delve.TIERS.colors[item.tier] || "#cfd8e0";
   const tierName = Delve.TIERS.names[item.tier] || "";
@@ -361,40 +365,70 @@ window.Delve = window.Delve || {};
 
   const primary = $("icPrimaryBtn");
   const secondary = $("icSecondaryBtn");
+  const tertiary = $("icTertiaryBtn");
 
   if(source === "floor"){
    const full = Delve.G.inventory.length >= (Delve.inventoryCap ? Delve.inventoryCap() : Delve.CONFIG.inventorySlots);
-   primary.textContent = full ? "No Room" : "Pick Up";
+   // Where the item is lying. Captured once here: both Pick Up and Equip need it,
+   // and the pending action is replaced if another card opens.
+   const fx = item.x, fy = item.y;
+   // A floor item that can be worn gets a THIRD button: Pick Up, Equip, Leave.
+   // Equipping straight from the floor is the whole point of inspecting it —
+   // the card has just told you it is better than what you have, so making you
+   // put it in the bag first is a step with no decision in it.
+   const wearable = item.slot !== "consumable";
+   if(tertiary){
+    tertiary.style.display = wearable ? "" : "none";
+    tertiary.textContent = "Equip";
+   }
+   primary.textContent = full ? "No Room" : (wearable ? "Pick Up" : "Take");
    primary.disabled = full;
    secondary.textContent = "Leave";
    secondary.onclick = closeItemCard;
+
+   // Walk onto the tile, if it is one step away and walkable. Shared by both
+   // actions so Pick Up and Equip reach the world the same way.
+   const stepOnto = function(){
+    const G = Delve.G;
+    if(!G || fx === undefined || fy === undefined) return;
+    if(Delve.mdist(fx, fy, G.px, G.py) !== 1) return;
+    const cell = G.grid[fy] && G.grid[fy][fx];
+    const walkable = cell === Delve.T.FLOOR || cell === Delve.T.GRASS || cell === Delve.T.DOOR;
+    if(!walkable) return;
+    G.px = fx; G.py = fy;
+    if(Delve.sfx) Delve.sfx("footstep");
+    Delve.collectGold(fx, fy);
+   };
+   const takeOffFloor = function(){
+    if(fx === undefined || fy === undefined) return;
+    Delve.G.items = Delve.G.items.filter(function(i){ return !(i.x === fx && i.y === fy); });
+   };
+
    primary.onclick = function(){
     if(full) return;
     const it = Object.assign({}, pendingItemAction.item);
-    const x = it.x, y = it.y; delete it.x; delete it.y;
-    // Picking up moves you onto the tile, so the card and the world agree: the
-    // item is gone from the floor AND from under your feet. Only step if the
-    // tile is adjacent and walkable — a ranged pickup from across the room would
-    // skip the walking the game is made of.
-    const G = Delve.G;
-    if(G && x !== undefined && y !== undefined && Delve.mdist(x, y, G.px, G.py) === 1){
-     const cell = G.grid[y] && G.grid[y][x];
-     const walkable = cell === Delve.T.FLOOR || cell === Delve.T.GRASS || cell === Delve.T.DOOR;
-     if(walkable){
-      G.px = x; G.py = y;
-      if(Delve.sfx) Delve.sfx("footstep");
-      Delve.collectGold(x, y);
-     }
-    }
-    Delve.G.items = Delve.G.items.filter(function(i){ return !(i.x === x && i.y === y); });
+    stepOnto();
+    takeOffFloor();
     it.isNew = true;
     Delve.G.inventory.push(it);
     if(Delve.logPickup) Delve.logPickup(it.name, it.tier);
     Delve.flash("Picked up " + it.name);
-    // Walking onto the tile is a turn like any other.
     if(Delve.enemiesTurn) Delve.enemiesTurn();
     Delve.updateHUD(); Delve.draw(); closeItemCard();
    };
+
+   if(tertiary){
+    tertiary.onclick = function(){
+     const it = Object.assign({}, pendingItemAction.item);
+     stepOnto();
+     takeOffFloor();
+     // equipItem swaps out whatever was in the slot and returns it to the bag,
+     // so an upgrade costs no inventory space.
+     Delve.equipItem(it);
+     if(Delve.enemiesTurn) Delve.enemiesTurn();
+     Delve.updateHUD(); Delve.draw(); closeItemCard();
+    };
+   }
   } else {
    if(item.slot === "consumable"){
     primary.textContent = "Use";

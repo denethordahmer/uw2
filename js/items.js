@@ -555,7 +555,27 @@ window.Delve = window.Delve || {};
   const ceiling = item.strCeiling || fam.strCeiling;
   const mx = item.itemMax + Math.min(str, ceiling);
   const mn = (item.shape || fam.shape) * item.itemMax;
-  lines.push({ label:"Damage", value: Math.round(mn) + " - " + Math.round(mx), delta:0 });
+
+  // The damage line used to carry delta 0, so the ONE number that matters when
+  // picking up a weapon never coloured — equipping your first weapon showed a
+  // white "Damage 5 - 12". It is now compared against what is in hand: the
+  // equipped weapon's band, or fists when the slot is empty.
+  let dDelta = 0;
+  if(eq){
+   let curMn, curMx;
+   if(eq.weapon && eq.weapon.itemMax){
+    const cfam = FAM(eq.weapon.style);
+    const cceil = eq.weapon.strCeiling || cfam.strCeiling;
+    curMx = eq.weapon.itemMax + Math.min(str, cceil);
+    curMn = (eq.weapon.shape || cfam.shape) * eq.weapon.itemMax;
+   } else {
+    // Fists, matching Delve.weaponBand()'s fallback exactly.
+    const b = Delve.weaponBand ? Delve.weaponBand() : { min: str, max: str };
+    curMn = b.min; curMx = b.max;
+   }
+   dDelta = Math.round(((mn + mx) / 2) - ((curMn + curMx) / 2));
+  }
+  lines.push({ label:"Damage", value: Math.round(mn) + " - " + Math.round(mx), delta: dDelta });
   lines.push({ label:"Strength cap", value: "+" + ceiling, delta:0 });
  }
 

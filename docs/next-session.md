@@ -124,6 +124,27 @@ first), exit 0. `node tools/check-order.js`
     kill drop chance in `rollKillDrop`; `shardBonus` ("Bonus Shards") multiplies a kill's
     shard payout in `killRewards`. Both used to roll on gear and be summed into
     `itemBuffs` with nothing reading the total.
+17. **Equip straight from the floor card.** A wearable floor item now shows THREE
+    buttons — **Pick Up / Equip / Leave** — via a new `#icTertiaryBtn` in `index.html`,
+    `test.html` and `game.css`. Equip steps onto the tile, removes the item from the
+    floor, calls `equipItem` (which returns the replaced piece to the bag, so an upgrade
+    costs no inventory space), and takes a turn. The button is hidden for consumables
+    and on every inventory card; `showItemCard` resets it on open so it cannot leak
+    between cards. A refactor bug here (`x`/`y` referenced after being captured) was
+    caught by the test before shipping.
+18. **Weapon damage was measured wrong twice over. Fixes:**
+    **(a)** The weapon's `Damage` row was hardcoded `delta: 0`, so the one number that
+    decides a weapon never coloured — equipping your first weapon showed white stats.
+    It is now compared against the equipped weapon's real band, or against fists.
+    **(b)** Bare fists dealt exactly `str` (6 at starting Strength), which made ~22% of
+    tier-1 weapons and ~25% of tier-2 ones **worse than having nothing equipped**.
+    `weaponBand()` fists are now `0.30·str .. 0.55·str` (≈2–3 at start), so any real
+    weapon is an upgrade. **(c)** `makeGear` subtracted the Strength lift from the
+    weapon's point budget, so a floor-1 weapon came out at `itemMax 0.1` — every early
+    weapon was the same junk and its whole damage was the Strength term. That
+    subtraction is removed; weapons now spread (floor 1 itemMax median 1.3, max 5.0,
+    38 distinct values; floor 15 median 8.4, max 16.5). TTK stays inside the 0.55–3.6 s
+    band the suite asserts at every checked floor.
 
 **To ship, the owner must upload:** the whole tree, **plus `music/`** (currently
 untracked), and the updated `.github/workflows/syntax-check.yml` (copies in

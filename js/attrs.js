@@ -109,7 +109,17 @@ function nodeWardSum(type, field){
   const G = Delve.G;
   const w = (G && G.equip) ? G.equip.weapon : null;
   const str = Delve.strPts();
-  if(!w || !w.itemMax) return { min: str, max: str, style: "sword" };  // fists
+  // Bare fists are a FALLBACK, not a weapon. They used to deal exactly `str`
+  // (6 at the starting Strength), which made a third of tier-1 weapons — and a
+  // quarter of tier-2 ones — literally worse than having nothing equipped, so a
+  // new player's first weapon could be a downgrade. Fists now sit at roughly a
+  // third of a starting weapon and still scale gently with Strength, so any real
+  // weapon is an upgrade and the card's green +damage is always true.
+  if(!w || !w.itemMax){
+   const fMin = Math.max(1, Math.round(str * 0.30));
+   const fMax = Math.max(fMin + 1, Math.round(str * 0.55));
+   return { min: fMin, max: fMax, style: "fists" };
+  }
   const fam = ((C().WEAPON_FAMILIES || {})[w.style]) || { shape: 0.65, strCeiling: 16 };
   const shape = Number(w.shape) || fam.shape;
   const ceiling = Number(w.strCeiling) || fam.strCeiling;

@@ -423,6 +423,10 @@ body{
   padding:14px;font-size:17px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:"UwUI", system-ui, sans-serif;letter-spacing:.02em;
 }
 #icPrimaryBtn:disabled{ background:#2f3d48;color:#83939f;cursor:default; }
+#icTertiaryBtn{
+  flex:1;background:#2a4a6e;color:#dbeaff;border:1px solid #6fa8dc55;border-radius:12px;
+  padding:14px;font-size:17px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:"UwUI", system-ui, sans-serif;letter-spacing:.02em;
+}
 #icSecondaryBtn{
   flex:1;background:#141b23;color:#ff9a9a;border:1px solid #ff9a9a44;border-radius:12px;
   padding:14px;font-size:17px;font-weight:800;cursor:pointer;touch-action:manipulation;font-family:"UwUI", system-ui, sans-serif;letter-spacing:.02em;

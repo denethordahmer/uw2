@@ -290,7 +290,7 @@ window.Delve = window.Delve || {};
    const critAdj = 1 + (FAM(item.style).critBonus || 0) * 0.5;
    // The band carries a speed-normalised Strength lift, so it comes out of the
    // budget first: a weapon never sells the same point twice.
-   const raw = (wPts / famSpeed / critAdj - strTerm / famSpeed) / (1 + item.shape);
+   const raw = (wPts / famSpeed / critAdj) / (1 + item.shape);
    item.itemMax = Math.round(Math.max(0.1, raw) * 10) / 10;
   } else {
    const aff = (Delve.SLOT_AFFINITY || {})[base.slot] || { hp:0.6, red:0.4 };
