@@ -70,6 +70,7 @@ window.Delve = window.Delve || {};
   // ── systems ────────────────────────────────────────────────
   "js/traits.js",
   "js/combat.js",
+  "js/pursuit.js",           // one step per player action for awake monsters
   "js/movement.js",
   "js/rewards.js",
   "js/encounters.js",           // floor events + ambushes

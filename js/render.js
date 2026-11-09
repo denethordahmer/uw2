@@ -147,13 +147,44 @@ const DEATH_LIFE = 460;
   drawSprite(ctx, "soldier", cx+(ox||0), cy+(oy||0), ts, hurt, false, attack, null);
  }
 
- function drawMob(ctx, m, cx, cy, ts){
+ // A monster's step is one tile, but it is DRAWN as a slide across the gap, so
+ // the square grid underneath never becomes visible. MOVE_MS is short enough
+ // that the next step never waits on it. There are no walk frames: the bob and
+ // lean below sell the walk on every monster and boss at once.
+ const MOVE_MS = 130;
+
+ function mobEase(m){
+  if(m.mvAt === undefined || m.mvFromX === undefined) return null;
+  const t = (Date.now() - m.mvAt) / MOVE_MS;
+  if(t >= 1 || t < 0) return null;
+  // ease-out: fast off the mark, settling into the tile
+  const k = 1 - (1-t) * (1-t);
+  return { x: m.mvFromX + (m.x - m.mvFromX) * k,
+           y: m.mvFromY + (m.y - m.mvFromY) * k,
+           moving: true };
+ }
+
+ function drawMob(ctx, m, cx, cy, ts, ease){
   // A boss's art covers a w x h block of tiles; its own tile is the bottom-left
   // of that block, so a wide body straddles its columns evenly.
   const size = m.isBoss ? (m.size || { w:1, h:1 }) : null;
   const bw = size ? size.w : 1, bh = size ? size.h : 1;
   const ax = cx + (bw - 1) * ts * 0.5;
   drawShadow(ctx, ax, cy, ts, bw);
+
+  // Walk without walk frames: while easing between tiles, bob the body a little
+  // and lean it into the direction of travel. One sine on the step's progress,
+  // phased so the body is lowest as it lands.
+  let wx = 0, wy = 0;
+  if(ease && ease.moving){
+   const t = (Date.now() - m.mvAt) / MOVE_MS;
+   const phase = Math.min(1, Math.max(0, t));
+   wy = -Math.sin(phase * Math.PI) * ts * 0.06;          // up, then down
+   const dx = m.x - (m.mvFromX === undefined ? m.x : m.mvFromX);
+   const dy = m.y - (m.mvFromY === undefined ? m.y : m.mvFromY);
+   const len = Math.abs(dx) + Math.abs(dy) || 1;
+   wx = (dx / len) * Math.sin(phase * Math.PI) * ts * 0.035;   // lean forward
+  }
 
   const hurt = m.hitFlash && Date.now()-m.hitFlash < 130;
   const atk = attacking(m);
@@ -172,7 +203,7 @@ const DEATH_LIFE = 460;
    // Act-2 form: a boss whose rib-shield broke swaps to its exposed sprite,
    // permanently (§6.16). Every other mob draws its own kind as before.
    (m.isBoss && m.shieldBroken && m.spriteOpen && Delve.SPR[m.spriteOpen]) ? m.spriteOpen : (m.kind||"goblin"),
-   ax+rx, cy+ry, ts, hurt, m.elite, atk, size);
+   ax+rx+wx, cy+ry+wy, ts, hurt, m.elite, atk, size);
 
   if(m.elite){ ctx.save(); ctx.strokeStyle=Delve.CONFIG.elite.glow||"#ffd75e"; ctx.lineWidth=1.5; ctx.globalAlpha=0.7; ctx.beginPath(); ctx.arc(ax+rx, cy+ry-ts*0.1, ts*0.42*bw, 0, Math.PI*2); ctx.stroke(); ctx.restore(); }
   if(m.effects && m.effects.length){
@@ -575,8 +606,10 @@ const DEATH_LIFE = 460;
   // monsters
   drawDeaths(ctx,camX,camY,ts,vw,vh);
   G.monsters.forEach(m=>{
-   if(m.x<camX||m.y<camY||m.x>=camX+vw||m.y>=camY+vh) return;
-   drawMob(ctx,m,(m.x-camX)*ts+ts/2,(m.y-camY)*ts+ts/2,ts);
+   const e = mobEase(m);
+   const mx = e ? e.x : m.x, my = e ? e.y : m.y;
+   if(mx<camX-1||my<camY-1||mx>=camX+vw+1||my>=camY+vh+1) return;
+   drawMob(ctx,m,(mx-camX)*ts+ts/2,(my-camY)*ts+ts/2,ts,e);
   });
 
   // boss
@@ -700,6 +733,11 @@ const DEATH_LIFE = 460;
   if(G.playerHit && Date.now()-G.playerHit < ATTACK_MS*2) return true;
   if(attacking(G.boss)) return true;
   for(const m of (G.monsters || [])){ if(attacking(m)) return true; }
+  // A monster between two tiles must keep repainting until it lands, or the
+  // step would show as a jump cut when the idle timer next fires.
+  for(const m of (G.monsters || [])){
+   if(m.mvAt !== undefined && Date.now()-m.mvAt < MOVE_MS) return true;
+  }
   return false;
  }
  setInterval(function(){

@@ -458,7 +458,12 @@ window.Delve = window.Delve || {};
  if(G.boss && !G.inCombat) ambientMob(G.boss);
  for(const m of G.monsters){
  if(G.hp <= 0 || G.dead || G.runEnded) break;
- if(!G.inCombat) ambientMob(m);
+ if(G.inCombat) continue;
+ // A monster that closes the gap spends its turn walking, so it cannot also
+ // strike: one step OR one swing per player action. pursuitStep handles the
+ // awake/line-of-sight test and returns false for anything still asleep.
+ const walked = Delve.pursuitStep ? Delve.pursuitStep(m) : false;
+ if(!walked) ambientMob(m);
  }
  };
 

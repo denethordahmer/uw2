@@ -34,6 +34,13 @@ Delve.CONFIG = {
  bossEvery: 10,
  healOnDescendPct: 0.5,
 
+ // ---------- PURSUIT (js/pursuit.js) ----------
+ // A monster that noticed you takes one step per player action. radius is how
+ // close it must be, with line of sight, to notice; leash caps how far it will
+ // stray from where it woke, so nothing follows you across the floor or stands
+ // on the stairs. wakeOnDamage: hitting one from across the room wakes it.
+ PURSUIT: { radius:5, leash:9, wakeOnDamage:true },
+
  // ---------- REST MECHANIC ----------
  restHealPct: 0.06,
  restMinHeal: 1,

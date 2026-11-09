@@ -58,6 +58,16 @@ first), exit 0. `node tools/check-order.js`
    31–40 → 4). No HTML5 `loop`: 2s tail fade-out, then `ended` picks the next bed and
    fades in; 700 ms cross-fade on ward change. Mute and the music slider are mirrored
    onto the `<audio>` element (it sits outside the WebAudio graph).
+10. **Pursuit (monsters step toward you)** — new file `js/pursuit.js`, loaded right
+    after `combat.js`. `enemiesTurn()` tries `Delve.pursuitStep(m)` first; if the monster
+    took a step it does not also attack that turn. A monster stays asleep until it has
+    line of sight inside `CONFIG.PURSUIT.radius` (5) or the player hits it, and it will not
+    stray more than `leash` (9) tiles from where it woke. Only FLOOR / GRASS / DOOR are
+    steppable, so chests, gold, stairs and water are never blocked or covered.
+    The step is one tile, but `render.js` eases the sprite across the gap over `MOVE_MS`
+    (130 ms) with a small bob and forward lean — **no walk frames exist, and none are
+    needed**; that easing is what keeps the square grid invisible. `mobEase()` +
+    `animating()` keep repainting until the monster lands, so a step never shows as a jump.
 
 **To ship, the owner must upload:** the whole tree, **plus `music/`** (currently
 untracked), and the updated `.github/workflows/syntax-check.yml` (copies in
