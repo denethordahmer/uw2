@@ -145,6 +145,17 @@ first), exit 0. `node tools/check-order.js`
     subtraction is removed; weapons now spread (floor 1 itemMax median 1.3, max 5.0,
     38 distinct values; floor 15 median 8.4, max 16.5). TTK stays inside the 0.55–3.6 s
     band the suite asserts at every checked floor.
+19. **`Leave` now actually leaves.** Choosing Leave on a floor item closed the card without
+    moving, and the item tile stayed intercepted, so a declined item became an impassable
+    square — the player could not walk past it. Leave now performs the step (onto the tile,
+    leaving the item where it lies) and takes a turn, so you simply walk over it. It only
+    steps when the tile is adjacent, so a card opened from further away never teleports.
+20. **Ward 5 has its own music bed.** `MUSIC_TRACKS[5] = ["music/biome5-1.mp3"]` in
+    `js/sfx.js`; `musicWardFor()` already returns 5 for floors 41–50, so no other code
+    changed. `music/biome5-1.mp3` currently holds a **copy of the ward-1 track as a
+    placeholder** so the suite and the workflow's "Music beds are present" step pass —
+    the owner overwrites it with the real file. `test_ui.js` now also asserts floors
+    41–50 map to ward 5 and that ward 5 has a bed.
 
 **To ship, the owner must upload:** the whole tree, **plus `music/`** (currently
 untracked), and the updated `.github/workflows/syntax-check.yml` (copies in

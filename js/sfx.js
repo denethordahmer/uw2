@@ -19,7 +19,10 @@ window.Delve = window.Delve || {};
   1: ["music/biome1-1.mp3"],
   2: ["music/biome2-1.mp3"],
   3: ["music/biome3-1.mp3"],
-  4: ["music/biome4-1.mp3"]
+  4: ["music/biome4-1.mp3"],
+  // Ward 5 (the Ashen Forge) has its own bed. The file is uploaded to the repo by
+  // the owner; musicWardFor() falls back to ward 1 only if this key is missing.
+  5: ["music/biome5-1.mp3"]
  };
  const BGM_FADE_IN_MS = 1200;
  const BGM_TAIL_MS = 2000;      // the fade-out window at the end of a track

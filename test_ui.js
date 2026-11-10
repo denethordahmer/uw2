@@ -1106,7 +1106,7 @@ ok(registry.get("heirloomBox").style.display === "none", "retreating offers no h
 // -- 26. Music -------------------------------------------------
 console.log("\n-- music -----------------------------------------------");
 const tracks = D.musicTracks();
-ok([1,2,3,4].every(w => Array.isArray(tracks[w]) && tracks[w].length > 0),
+ok([1,2,3,4,5].every(w => Array.isArray(tracks[w]) && tracks[w].length > 0),
    "every ward has at least one music bed");
 const missingBeds = [];
 Object.keys(tracks).forEach(w => tracks[w].forEach(p => {
@@ -1119,6 +1119,7 @@ ok(D.musicWardFor(1) === 1 && D.musicWardFor(10) === 1, "floors 1-10 play the fi
 ok(D.musicWardFor(11) === 2 && D.musicWardFor(20) === 2, "floors 11-20 play the second bed");
 ok(D.musicWardFor(21) === 3 && D.musicWardFor(30) === 3, "floors 21-30 play the third bed");
 ok(D.musicWardFor(31) === 4 && D.musicWardFor(40) === 4, "floors 31-40 play the fourth bed");
+ok(D.musicWardFor(41) === 5 && D.musicWardFor(50) === 5, "floors 41-50 play the fifth bed");
 ok(["sfxStartAmbience","sfxStopAmbience","sfxSetWard"].every(n => typeof D[n] === "function"),
    "the three ambience entry points exist");
 let musicThrew = false;

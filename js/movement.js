@@ -41,9 +41,10 @@ window.Delve = window.Delve || {};
  else G.lastDir = "up";
 
  const cell = g[ty][tx];
- // A floor item is a decision, not a pickup: tapping it shows what it is, and
- // the card's Pick Up button moves you onto the tile and takes it. This also
- // stops any path, so walking over loot never silently hoovers it up.
+ // A floor item is a decision, not a pickup: tapping it shows what it is. The
+ // card then resolves it — Pick Up takes it, Equip wears it, and Leave WALKS
+ // ONTO IT and leaves it there. The card used to just close, so a loot tile was
+ // impassable once you declined it and the player got stuck against it.
  if(Delve.itemAt && Delve.showItemCard && !G.inCombat && Delve.itemAt(tx, ty)){
   G._path = null;
   if(G._pathTimer){ clearInterval(G._pathTimer); G._pathTimer = null; }

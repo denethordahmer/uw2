@@ -384,7 +384,23 @@ window.Delve = window.Delve || {};
    primary.textContent = full ? "No Room" : (wearable ? "Pick Up" : "Take");
    primary.disabled = full;
    secondary.textContent = "Leave";
-   secondary.onclick = closeItemCard;
+   secondary.onclick = function(){
+    // Leave means "not this one": the step still happens and the item stays on
+    // the floor. Closing the card alone left the tile impassable, so a player
+    // who declined an item could not walk past it.
+    const G = Delve.G;
+    if(G && fx !== undefined && fy !== undefined && Delve.mdist(fx, fy, G.px, G.py) === 1){
+     const cell = G.grid[fy] && G.grid[fy][fx];
+     const walkable = cell === Delve.T.FLOOR || cell === Delve.T.GRASS || cell === Delve.T.DOOR;
+     if(walkable){
+      G.px = fx; G.py = fy;
+      if(Delve.sfx) Delve.sfx("footstep");
+      Delve.collectGold(fx, fy);
+      if(Delve.enemiesTurn) Delve.enemiesTurn();
+     }
+    }
+    Delve.updateHUD(); Delve.draw(); closeItemCard();
+   };
 
    // Walk onto the tile, if it is one step away and walkable. Shared by both
    // actions so Pick Up and Equip reach the world the same way.
