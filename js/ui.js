@@ -861,8 +861,15 @@ window.Delve = window.Delve || {};
    : "\"Take a look. Everything's honestly priced.\"";
   const healCost = Delve.shopHealCost(G);
   const hb = $("shopHealBtn");
-  hb.textContent = "❤️ Restore 50% HP — " + healCost + "g";
-  hb.disabled = G.gold < healCost || G.hp >= Delve.maxHp();
+  // A shop stocks a limited number of heals (CONFIG.shop.healStock), so gold
+  // buys sustain but cannot buy immortality. The button stays visible and reads
+  // "sold out" when the stock is gone, rather than vanishing.
+  const stock = Delve.shopHealStockLeft ? Delve.shopHealStockLeft(G) : 1;
+  const healName = Math.round((Delve.CONFIG.shop.healPct || 0.5) * 100);
+  hb.textContent = stock > 0
+   ? "❤️ Restore " + healName + "% HP — " + healCost + "g (" + stock + " left)"
+   : "❤️ No heals left in this shop";
+  hb.disabled = stock <= 0 || G.gold < healCost || G.hp >= Delve.maxHp();
   // ── Buy side ──────────────────────────────────────────────
   // A shop row shows the ITEM, not just its name: tier, damage/armour, every
   // rolled stat with the same green/red delta the item card uses, and a
@@ -1041,8 +1048,10 @@ window.Delve = window.Delve || {};
  function doShopHeal(){
   const G = Delve.G;
   const cost = Delve.shopHealCost(G);
+  if(Delve.shopHealStockLeft && Delve.shopHealStockLeft(G) <= 0) return;
   if(G.gold < cost || G.hp >= Delve.maxHp()) return;
   G.gold -= cost;
+  if(Delve.spendShopHeal) Delve.spendShopHeal(G);
   const heal = Math.round(Delve.maxHp()*Delve.CONFIG.shop.healPct*(Delve.healMult ? Delve.healMult() : 1));
   G.hp = Math.min(Delve.maxHp(), G.hp+heal);
   Delve.recordStat("goldSpentShop", cost);

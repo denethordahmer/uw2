@@ -705,8 +705,9 @@ window.Delve = window.Delve || {};
  Delve.addShake(2);
  if(Delve.sfx) Delve.sfx(m.elite ? "elite_kill" : "kill", { monster: m.kind });
  if(Delve.rollKillDrop) Delve.rollKillDrop(m.x, m.y, { name:m.name, elite:!!m.elite });
- // Potions are their own roll (L5): 7% per kill, independent of gear.
- const potionChance = ((C().ITEMS || {}).drop || {}).potion || 0;
+ // Potions are their own roll (L5), independent of gear, and taper with depth
+ // (CONFIG.ITEMS.drop.potionByWard via Delve.potionDropChance).
+ const potionChance = Delve.potionDropChance ? Delve.potionDropChance(G.floor) : (((C().ITEMS || {}).drop || {}).potion || 0);
  if(Delve.dropPotion && Math.random() < potionChance){
   Delve.dropPotion(m.x, m.y, 2, { kind:"monster", name:m.name, elite:!!m.elite });
  }

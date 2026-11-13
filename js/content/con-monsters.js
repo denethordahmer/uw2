@@ -121,7 +121,7 @@ window.Delve = window.Delve || {};
    name:"The Warden",
    title:"Guardian of the Undercroft",
    flavour:"He has watched these stones since before your grandfather was born.\nHe will not step aside.",
-   hp:100, atk:9, speed:0.65, chainHitEvery:3,
+   hp:100, atk:11, speed:0.65, chainHitEvery:3,
    // (no shardBonusPct — bosses pay a flat, depth-scaled amount; CONFIG.economy.bossShardsPerWard)
    sprite:"boss_warden",   // key registered in content/bosssprites.js
    accent:"#7ee0ff",       // boss intro tint — matches his pale-blue eyes
@@ -131,7 +131,7 @@ window.Delve = window.Delve || {};
    name:"The Thorn Sovereign",
    title:"Heart of the Blackvein",
    flavour:"It was ancient before the corruption found it.\nNow it walks, and it has been waiting.",
-   hp:160, atk:14, speed:0.70, chainHitEvery:2,
+   hp:160, atk:20, speed:0.70, chainHitEvery:2,
    // (no shardBonusPct — bosses pay a flat, depth-scaled amount; CONFIG.economy.bossShardsPerWard)
    sprite:"boss_thorn",    // FIX #27: previously fell back to boss_warden
    accent:"#a8e84a",
@@ -141,7 +141,7 @@ window.Delve = window.Delve || {};
    name:"The Pale Tempest",
    title:"Heart of the Blizzard",
    flavour:"The storm did not arrive. It woke.",
-   hp:220, atk:18, speed:0.72, chainHitEvery:2,
+   hp:220, atk:30, speed:0.72, chainHitEvery:2,
    // (no shardBonusPct — bosses pay a flat, depth-scaled amount; CONFIG.economy.bossShardsPerWard)
    sprite:"boss_tempest",  // registered in content/bosssprites.js
    accent:"#a8e8ff",       // the blizzard's own light
@@ -151,7 +151,7 @@ window.Delve = window.Delve || {};
    name:"The Bonefather",
    title:"Lord of the Marrow",
    flavour:"Every rib was once a promise.\nHe kept them all.",
-   hp:280, atk:22, speed:0.72, chainHitEvery:2,
+   hp:280, atk:40, speed:0.72, chainHitEvery:2,
    // (no shardBonusPct — bosses pay a flat, depth-scaled amount; CONFIG.economy.bossShardsPerWard)
    sprite:"boss_bonefather",            // Act 1: the ribs sealed
    spriteOpen:"boss_bonefather_open",   // Act 2: ribs shattered, heart exposed
@@ -163,7 +163,7 @@ window.Delve = window.Delve || {};
    name:"The Forge Titan",
    title:"Master of the Molten Core",
    flavour:"The fire has burned for a thousand years.\nIt will not stop for you.",
-   hp:340, atk:26, speed:0.65, chainHitEvery:3,
+   hp:340, atk:50, speed:0.65, chainHitEvery:3,
    sprite:"boss_titan",                 // registered in content/con-bosssprites.js
    accent:"#ff6a00",                    // the molten core
    size:{ w:2, h:2 }

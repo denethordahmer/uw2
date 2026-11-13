@@ -110,9 +110,34 @@ window.Delve = window.Delve || {};
  };
  };
 
+ // ── Depth damage curve ───────────────────────────────────────
+ // One multiplier on every monster's and boss's ATTACK, applied at spawn time.
+ // `enemyDmgPerWard` is 15%, so ward 1 is unchanged and ward 5 hits for 1.6×.
+ // This lives here rather than in levels.js because the boss path also needs it,
+ // and both spawns already read js/rewards.js for their stat lookups.
+ Delve.depthAtk = function(atk, floor){
+  const per = (Delve.CONFIG && Delve.CONFIG.enemyDmgPerWard) || 0;
+  if(!per) return Math.max(1, Math.round(atk));
+  const f = Math.max(1, Number(floor) || 1);
+  const ward = Math.max(1, Math.ceil(f / 10));
+  return Math.max(1, Math.round(atk * (1 + per * (ward - 1))));
+ };
+
  Delve.floorClearBonus = function(){
  const G = Delve.G, eco = Delve.CONFIG.economy;
  return (eco.floorClearBonus || 0) + (eco.floorClearBonusPerFloor || 0) * G.floor;
+ };
+
+ // Potion drop chance for the floor the player is on. Tapers by ward (see
+ // CONFIG.ITEMS.drop.potionByWard) so deep floors cannot be patched up by the
+ // next few kills. Falls back to the flat `potion` value when no table exists.
+ Delve.potionDropChance = function(floor){
+ const d = ((Delve.CONFIG.ITEMS || {}).drop) || {};
+ const table = d.potionByWard;
+ if(!table) return d.potion || 0;
+ const f = (floor === undefined || floor === null) ? ((Delve.G && Delve.G.floor) || 1) : floor;
+ const ward = Math.max(1, Math.min(5, Math.ceil(f / 10)));
+ return (table[ward] !== undefined) ? table[ward] : (d.potion || 0);
  };
 
  Delve.makeElite = function(m){

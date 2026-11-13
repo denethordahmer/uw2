@@ -252,6 +252,34 @@ first), exit 0. `node tools/check-order.js`
     `bleedExtra` in `applyEffect`, `chestExtra` in `openChest`, `sellBonus` in
     `sellValue`, `statusResist` in `applyPlayerEffect`, `bloodPrice` in `castAbility`,
     `twinFang` every third swing. A full run now reaches rank 5 and touches all 24 lines.
+27. **Unreachable rooms (owner report).** The room graph marks two rooms "linked" and
+    then cuts a door only where `intersectLine` finds a shared wall at least three tiles
+    long. When rooms meet at a corner or a one-tile overlap it returns null, the door is
+    skipped, and the room stays painted and "connected" — a sealed chamber, and sometimes
+    an unreachable staircase. Measured before the fix: **26 unreachable rooms and 3
+    unreachable stairs across 120 floors**.
+    Fix is `ensureReachable(G)`, called last in `genFloor`: flood-fill from the player,
+    then join anything stranded. It also repairs a VOID cell sitting **inside** a painted
+    room (a neighbour's walls can overwrite a small room's floor, leaving a chamber with
+    no walkable tile at all). Routes are tried nearest-first as L-shapes, straight lines,
+    and a dog-leg, and a route is only committed when every tile on it is free — the
+    first version carved through protected tiles and reported success without verifying,
+    which looped on the same target and punched holes outside the map. A last-resort
+    fallback opens the room's own wall toward the player, capped to 8 tiles and never
+    touching the outer ring.
+    **Measured after: 0 unreachable rooms in 120 floors, 1 floor in 400 with a sealed
+    pocket** (a room enclosed entirely by protected tiles, where the repair correctly
+    gives up rather than mangle the map). 4754 rooms checked.
+28. **Gear drop rate cut to one third (owner request).** `gearBase` 0.30 → **0.10** per
+    kill and `gearPerLuck` 0.03 → **0.01**, so depth cannot claw the rate back. Potions
+    stay at 14% (sustain, not reward), chests stay at 0.75, and the floor-1 starter gear
+    is untouched. `test_items.js` now asserts the 8-14% window instead of the old 28-36%.
+29. **Item sprites audited — all correct.** Every slot (head, body, hands, feet, cloak,
+    amulet, ring, offhand), all five weapon families at four tiers, and all four
+    consumable kinds render distinct art; 68 registered keys, every content slot covered,
+    no fallback in use. The "helmet that looked like a red potion" is most likely an item
+    lying **beside** a potion, since floor loot shares a tile with its gold pile and the
+    band halo sits under both.
 
 **To ship, the owner must upload:** the whole tree, **plus `music/`** (currently
 untracked), and the updated `.github/workflows/syntax-check.yml` (copies in
@@ -286,6 +314,49 @@ the outstanding confirmation, together with whatever the owner reports back.
    enough equipment to have choices*, not that hoarding is a money strategy.
 
 ## Measured facts (verified this session)
+
+**Difficulty rebalance (this session).** The owner's playtester finished all 50 floors
+without dying and reported "rich with all legendaries by level 30, with no Luck bought".
+Both were real bugs, not tuning taste:
+
+- **Rarity label was the quality number.** `js/itemgen.js` set `item.tier` from
+  `bandOf(quality)`, and quality is `2.5 × floor`. Mean quality passes 60 on floor 24, so
+  from there **every drop printed "Legendary"** whatever the rarity roll said. The weighted
+  table in `CONFIG.loot` (and therefore Luck, elites, chests, bosses) was never consulted
+  for the label. Fixed: `Delve.rarityLabel(quality, rolledTier)` takes the label from the
+  ROLL; `makeGear` accepts `opts.tier` as that roll and uses it for the label AND the
+  affix count. Calls with no roll (shop stock, pinned starting gear) cap at Rare.
+  Measured after the fix, normal kill at luck 1: 0.03% legendary on floor 1, 0.20% on
+  floor 10, 0.85% on floor 50. Treasure chest: 1.2% at floor 30, 1.9% at floor 50.
+- **`rollKillDrop` computed a tier and threw it away.** It now passes `rollTier` through,
+  with the elite/boss source multiplier applied.
+
+**Sustain was the reason nobody died.** Four leaks, all closed:
+
+| Leak | Before | Now |
+|---|---|---|
+| Staircase heal | 50% flat, every floor | 30% falling to 20% by ward 5 (`healOnDescendFalloff`) |
+| Potions | 14% flat | 14% / 14% / 10% / 7% / 7% by ward (`ITEMS.drop.potionByWard`) |
+| Shop heal | unlimited 50% heals | 2 per shop (`CONFIG.shop.healStock`, `G.shop.healsBought`) |
+| Monster damage | linear only | +15% per ward (`enemyDmgPerWard`, `Delve.depthAtk`) |
+
+**Boss attack was below the floor's monsters.** Ward 5 boss hit for 26 while a floor-50
+Molten Brute hit for 67, so the boss was the safest fight in the ward. Boss `atk` values are
+now 11 / 20 / 30 / 40 / 50 raw, which `Delve.depthAtk` takes to 11 / 23 / 39 / 58 / 80.
+
+**Gold.** `goldCurveK` 3.0 → 1.0. A measured 50-floor run paid ~13,100 gold; it now pays
+~7,900. Shop prices are unchanged, so gold is a real constraint in the late wards.
+
+**Where the knobs live:** `js/config.js` — `healOnDescendPct`, `healOnDescendFalloff`,
+`enemyDmgPerWard`, `shop.healStock`, `economy.goldCurveK`, `ITEMS.drop.potionByWard`.
+Sim harness used: `/tmp/bal/bot.js` (drives the real `startCombat`/`descend`/`openChest`
+code with a fake clock).
+
+**Open:** 10 bot runs (no permanent upgrades) reached avg depth 13.7 before and 17.1 after,
+with deaths still clustering at floors 23–24. The bot cannot spend attributes, use
+abilities or pick a smarter route, so it is a floor on the real curve. The property still
+to confirm on device is the intended one: **each run gets measurably further** as shards go
+into the permanent tree.
 
 **Drops** (20k kills per floor, luck 0):
 - Kill drop chance is **18%/kill** (not 15.5%: `luckPts()` adds ~1 luck), i.e. **~2.5

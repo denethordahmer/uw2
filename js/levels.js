@@ -130,7 +130,7 @@ window.Delve = window.Delve || {};
    x:x, y:y,
    tile: G.grid[y][x],
    maxHp: openScale(G, row.hp + Math.floor((G.floor-1) * row.hpPerFloor), "monsterHpPct"),
-   atk: openScale(G, row.atk + Math.floor(G.floor * row.atkPerFloor), "monsterAtkPct"),
+   atk: openScale(G, Delve.depthAtk(row.atk + Math.floor(G.floor * row.atkPerFloor), G.floor), "monsterAtkPct"),
    speed: row.speed,
    xp: row.xp, shards: row.shards, gold: row.gold,
    // Roster flags the kill path reads off the INSTANCE must be carried across.
@@ -324,7 +324,9 @@ window.Delve = window.Delve || {};
   // the stall faces the door and the room has a focal point. The tile in front
   // of him is always open floor, which is where the player stops to trade.
   const merchant = { x:c.x, y:y0 };
-  G.shop = { x:merchant.x, y:merchant.y, stock:null,
+  // healsBought is per shop: the room is rebuilt fresh on each shop floor, so
+  // this is where the limited heal stock (CONFIG.shop.healStock) is counted.
+  G.shop = { x:merchant.x, y:merchant.y, stock:null, healsBought:0,
              room:{ x:x0, y:y0, w:SHOP_HALF*2+1, h:SHOP_HALF*2+1 } };
   G.shop.merchant = { x:merchant.x, y:merchant.y };
   // Merchant stands at the back of the chamber, shelf props along the side walls.
@@ -493,7 +495,7 @@ window.Delve = window.Delve || {};
   G.decor = [];   // arena props (Batch 8): decoration only, never tiles
   G.groundCover = [];   // biome floor clusters (Batch 16): decoration only, never tiles
   G.puddles = [];       // wall-anchored water (js/puddles.js): shape data, never saved
-  G.shop = { x:-1, y:-1 };
+  G.shop = { x:-1, y:-1, healsBought:0 };
   G.stairs = null;
   // One optional floor event and the ambush budget are per-floor, never inherited.
   G.floorEvent = null;
@@ -724,7 +726,7 @@ window.Delve = window.Delve || {};
      const d = Delve.mdist(cand.cx, cand.cy, G.px, G.py);
      const onStairs = G.stairs && cand.cx === G.stairs.x && cand.cy === G.stairs.y;
      if(G.grid[cand.cy][cand.cx] === T().FLOOR && !leq(d, 3) && !onStairs){
-      G.shop = { x:cand.cx, y:cand.cy, stock:null };
+      G.shop = { x:cand.cx, y:cand.cy, stock:null, healsBought:0 };
       break;
      }
     }
@@ -1006,7 +1008,173 @@ window.Delve = window.Delve || {};
   } catch (e) {
     if (Delve.logSystem) Delve.logSystem("Floor event skipped: " + e.message);
   }
+
+  // ── Reachability repair (last) ──
+  // The room graph marks two rooms "linked" and then cuts a door only where they
+  // share a wall at least three tiles long. When they meet at a corner or a
+  // one-tile overlap, intersectLine returns null and the door is skipped — but
+  // the room stays painted and "connected". The result was a floor with sealed
+  // chambers, and occasionally an unreachable staircase.
+  //
+  // Rather than trust the graph, measure the floor: flood from the player and
+  // punch a corridor from the nearest reachable tile to anything stranded.
+  ensureReachable(G);
  };
+
+ // Flood-fill from the player over walkable tiles, then connect every stranded
+ // pocket back to the main region with a short straight-ish corridor. Runs on
+ // every floor; a healthy floor costs one pass and changes nothing.
+ function ensureReachable(G){
+  const T_ = T();
+  const h = G.grid.length, w = G.grid[0].length;
+  const walkable = function(t){ return t !== T_.WALL && t !== T_.VOID; };
+
+  const flood = function(){
+   const seen = Array.from({ length:h }, function(){ return new Uint8Array(w); });
+   if(!G.grid[G.py] || !walkable(G.grid[G.py][G.px])) return seen;
+   const q = [[G.px, G.py]];
+   seen[G.py][G.px] = 1;
+   while(q.length){
+    const p = q.pop(), x = p[0], y = p[1];
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    for(let i = 0; i < 4; i++){
+     const nx = x + dirs[i][0], ny = y + dirs[i][1];
+     if(nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+     if(seen[ny][nx]) continue;
+     if(!walkable(G.grid[ny][nx])) continue;
+     seen[ny][nx] = 1; q.push([nx, ny]);
+    }
+   }
+   return seen;
+  };
+
+  // Carve a corridor from (ax,ay) to (bx,by). Tries the two L-shaped routes and
+  // keeps whichever actually opens a path; protected tiles (stairs, chests,
+  // monsters, the shop) are never overwritten, so a route blocked by one is
+  // simply rejected rather than half-carved. Returns true when the tiles were
+  // actually opened.
+  const protect = function(t){
+   return t === T_.STAIR || t === T_.MONSTER || t === T_.BOSS || t === T_.CHEST ||
+          t === T_.BARREL || t === T_.GOLD || t === T_.DOOR;
+  };
+  const carveRoute = function(points){
+   const cells = [];
+   for(let i = 0; i < points.length - 1; i++){
+    let x = points[i].x, y = points[i].y;
+    const nx = points[i+1].x, ny = points[i+1].y;
+    while(x !== nx || y !== ny){
+     if(x !== nx) x += (nx > x) ? 1 : -1;
+     else y += (ny > y) ? 1 : -1;
+     if(x <= 0 || y <= 0 || x >= w-1 || y >= h-1) return false;
+     if(protect(G.grid[y][x])) return false;
+     cells.push({ x:x, y:y });
+    }
+   }
+   for(const c of cells) G.grid[c.y][c.x] = T_.FLOOR;
+   return cells.length > 0;
+  };
+
+  // At most a few repairs per floor: if the floor were this broken, something
+  // else is wrong and an endless loop would be worse than a sealed room.
+  for(let pass = 0; pass < 12; pass++){
+   const seen = flood();
+   // Anything the flood missed that is either walkable, OR a VOID cell sitting
+   // inside a painted room, is stranded. The second case is the stubborn one: a
+   // room painted to a 4x4 interior can end up with VOID where its floor should
+   // be when a neighbouring room's walls overwrote it, leaving a chamber with no
+   // walkable tile at all — nothing to connect, and nothing to flood into. Those
+   // cells are restored to floor, which gives the repair something to join.
+   let target = null;
+   for(let y = 1; y < h-1 && !target; y++){
+    for(let x = 1; x < w-1; x++){
+     if(seen[y][x]) continue;
+     const t = G.grid[y][x];
+     const inRoom = G.rooms.some(function(r){
+      return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+     });
+     if(walkable(t) || (t === T_.VOID && inRoom)){ target = { x:x, y:y }; break; }
+    }
+   }
+   if(!target) return;    // nothing stranded: healthy floor
+
+   // A VOID target inside a room becomes floor first, so the corridor has
+   // somewhere to arrive.
+   if(G.grid[target.y][target.x] === T_.VOID) G.grid[target.y][target.x] = T_.FLOOR;
+
+   // Try reached tiles nearest-first, and for each try both L routes. The first
+   // combination that actually opens tiles wins; anything that would cross a
+   // protected tile is skipped, so the corridor is never half-built.
+   const reached = [];
+   for(let y = 1; y < h-1; y++){
+    for(let x = 1; x < w-1; x++){
+     if(seen[y][x]) reached.push({ x:x, y:y,
+      d: Math.abs(x - target.x) + Math.abs(y - target.y) });
+    }
+   }
+   reached.sort(function(a, b){ return a.d - b.d; });
+
+   // Try reached tiles nearest-first, and for each try both L routes AND a
+   // straight line on either axis. The straight routes matter for narrow rooms:
+   // an L needs a clear corner, while a 2-wide chamber often has one clean
+   // column leading to it.
+   let done = false;
+   for(let i = 0; i < reached.length && !done; i++){
+    const b = reached[i];
+    done =
+     carveRoute([{ x:b.x, y:b.y }, { x:target.x, y:b.y }, { x:target.x, y:target.y }]) ||
+     carveRoute([{ x:b.x, y:b.y }, { x:b.x, y:target.y }, { x:target.x, y:target.y }]) ||
+     carveRoute([{ x:b.x, y:b.y }, { x:target.x, y:target.y }]) ||
+     carveRoute([{ x:b.x, y:b.y }, { x:b.x, y:target.y }, { x:target.x, y:target.y }]);
+    if(done) break;
+    // Last resort: a dog-leg via the midpoint of the bounding box, which gets
+    // around a room whose only free approach is offset from both ends.
+    const mx = Math.round((b.x + target.x) / 2);
+    const my = Math.round((b.y + target.y) / 2);
+    done = carveRoute([{ x:b.x, y:b.y }, { x:mx, y:b.y }, { x:mx, y:my }, { x:target.x, y:my }, { x:target.x, y:target.y }]);
+   }
+   if(!done){
+    // Open the target's own wall toward the player. The room border is stone by
+    // construction, so this is always possible and never crosses anything. Two
+    // rules keep it honest: never touch the map's outer ring (that is how a
+    // corridor used to punch through the black edge), and never report success
+    // the flood has not confirmed — an unverified "done" made this loop forever
+    // on the same target, opening tiles outside the map.
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    dirs.sort(function(a, b){
+     const da = Math.abs((target.x+a[0]) - G.px) + Math.abs((target.y+a[1]) - G.py);
+     const db = Math.abs((target.x+b[0]) - G.px) + Math.abs((target.y+b[1]) - G.py);
+     return da - db;
+    });
+    let opened = false;
+    for(const d of dirs){
+     let x = target.x, y = target.y;
+     const cells = [];
+     let joined = false;
+     for(let step = 0; step < 8; step++){
+      x += d[0]; y += d[1];
+      if(x <= 0 || y <= 0 || x >= w-1 || y >= h-1) break;
+      const t = G.grid[y][x];
+      if(walkable(t)){ joined = true; break; }     // reached open floor
+      if(t !== T_.WALL && t !== T_.VOID) break;    // protected: this way is out
+      cells.push({ x:x, y:y });
+     }
+     // Only commit when the tunnel actually reaches open floor. Opening stone
+     // and calling it a day is what reported success while the room stayed
+     // sealed — and repeated for every remaining pass.
+     if(joined && cells.length){
+      for(const c of cells) G.grid[c.y][c.x] = T_.FLOOR;
+      opened = true;
+      break;
+     }
+    }
+    if(!opened) return;   // no direction connects; stop rather than spin
+    // Confirm: if the target is still unreachable, stop instead of repeating the
+    // same doomed attempt for every remaining pass.
+    const after = flood();
+    if(!after[target.y] || !after[target.y][target.x]) return;
+   }
+  }
+ }
 
  // monster spawn helper: respects safety radius and tile state
  function spawnMonster(G, x, y, band){
@@ -1033,7 +1201,7 @@ window.Delve = window.Delve || {};
    x:x, y:y,
    tile: tile,
    maxHp: openScale(G, row.hp + Math.floor((G.floor-1) * row.hpPerFloor), "monsterHpPct"),
-   atk: openScale(G, row.atk + Math.floor(G.floor * row.atkPerFloor), "monsterAtkPct"),
+   atk: openScale(G, Delve.depthAtk(row.atk + Math.floor(G.floor * row.atkPerFloor), G.floor), "monsterAtkPct"),
    speed: row.speed,
    xp: row.xp, shards: row.shards, gold: row.gold,
    // Roster flags the kill path reads off the INSTANCE must be carried across.

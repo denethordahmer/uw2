@@ -52,7 +52,8 @@ window.Delve = window.Delve || {};
   return Math.max(1, Math.min(q.cap || 100, Math.round(mean + gauss() * sigma)));
  };
 
- // Display band only. tier stays 1-4 so colours / status tables / sfx keep working.
+ // Numeric quality bucket. Used ONLY to pick a base name/silhouette (a "Longsword"
+ // on floor 6, a "Dawnblade" on floor 40). It is not the item's rarity label.
  Delve.bandOf = function(quality){
   const b = IT().bands || [20, 40, 60];
   const q = Number(quality) || 1;
@@ -60,6 +61,23 @@ window.Delve = window.Delve || {};
   if(q < b[1]) return 2;
   if(q < b[2]) return 3;
   return 4;
+ };
+
+ // ── Rarity label ──────────────────────────────────────────────
+ // The band name a player sees (Common / Uncommon / Rare / Legendary) comes from
+ // the LOOT ROLL — the weighted rarity table in CONFIG.loot, which Luck and the
+ // source multiplier both move. It used to be copied from `bandOf(quality)`, so
+ // from floor 24 up, where mean quality passes 60, EVERY drop came out labelled
+ // Legendary whatever the roll and whatever Luck said.
+ //
+ // Quality still decides how STRONG the item is (its point budget and its base
+ // name); rarity decides how good it looks and how many affixes it carries.
+ // Calls that carry no roll (shop stock, pinned starting gear) cap at Rare, so a
+ // Legendary only ever comes from a real roll.
+ Delve.rarityLabel = function(quality, rolledTier){
+  const r = Number(rolledTier);
+  if(isFinite(r) && r > 0) return Math.max(1, Math.min(4, Math.round(r)));
+  return Math.min(3, Delve.bandOf(quality));
  };
 
  Delve.pointsOfQuality = function(quality){
@@ -248,13 +266,19 @@ window.Delve = window.Delve || {};
    : Delve.qualityOf(fl, luck);
   if(opts.qualityBonus) quality = Math.min(100, quality + opts.qualityBonus);
   const band = Delve.bandOf(quality);
-  const wantedTier = opts.tier || band;
+  // `opts.tier` is the RARITY ROLL from Delve.rollTier (what the source earned),
+  // `band` is the quality bucket. The base name comes from the better of the two
+  // so a lucky deep roll still reads as treasure; the LABEL comes from the roll
+  // via rarityLabel, which is what stops every late drop turning Legendary.
+  const rolled = (isFinite(opts.tier) && opts.tier > 0) ? Math.min(4, Math.round(opts.tier)) : null;
+  const wantedTier = rolled ? Math.max(rolled, Math.min(3, band)) : band;
   const base = pickBase(slot, wantedTier) || { id:"scrap_" + slot, name:"Scrap", slot:slot, tier:band };
   const P = Delve.pointsOfQuality(quality);
+  const label = Delve.rarityLabel(quality, rolled);
 
   const item = {
    id: base.id, baseId: base.id, baseName: base.name, name: base.name,
-   slot: base.slot, tier: band, quality: quality, points: P,
+   slot: base.slot, tier: label, quality: quality, points: P,
    lore: base.lore, flavour: base.flavour, affixes: []
   };
   if(base.keep) item.keep = true;
@@ -267,7 +291,10 @@ window.Delve = window.Delve || {};
   }
   if(base.status) item.status = base.status;
 
-  const affixes = Delve.rollAffixes(base.slot, band, P);
+  // Affix count follows the LABEL, so a Legendary is genuinely richer than an
+  // Uncommon of the same quality. With the old quality-derived tier this was
+  // moot: everything was Legendary anyway.
+  const affixes = Delve.rollAffixes(base.slot, label, P);
   let affixPts = 0;
   affixes.forEach(function(a){
    applyAffix(item, a);

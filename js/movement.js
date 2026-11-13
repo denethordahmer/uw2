@@ -234,7 +234,13 @@ window.Delve = window.Delve || {};
  Delve.descend = function(){
  const G = Delve.G, cfg = C();
  if(!G || G.dead || G.runEnded) return; // C-017 guard
- G.hp = Math.min(Delve.maxHp(), G.hp + Math.round(Delve.maxHp() * cfg.healOnDescendPct * (Delve.healMult ? Delve.healMult() : 1))); // Hearty Stew / floorHeal: consume one charge on descend.
+ // Staircase heal: it starts at healOnDescendPct and shrinks with depth, so the
+ // staircase is an early-game cushion rather than a free reset on every ward.
+ // Ward 1 pays 30%, ward 5 pays 20% (CONFIG.healOnDescendFalloff).
+ const ward = (Delve.getWard ? Delve.getWard(G.floor) : null) || { id:1 };
+ const wardIdx = Math.max(0, Math.min(4, (ward.id || 1) - 1));
+ const depthPct = Math.max(0, (cfg.healOnDescendPct || 0.3) * (1 - (cfg.healOnDescendFalloff || 0) * (wardIdx / 4)));
+ G.hp = Math.min(Delve.maxHp(), G.hp + Math.round(Delve.maxHp() * depthPct * (Delve.healMult ? Delve.healMult() : 1))); // Hearty Stew / floorHeal: consume one charge on descend.
  if(G.floorHealLeft > 0){
  G.floorHealLeft--;
  const stew = Math.round(3 * (Delve.healMult ? Delve.healMult() : 1));

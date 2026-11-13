@@ -11,6 +11,33 @@ than narrating their own past.
 
 ## [Unreleased]
 
+### Changed — difficulty rebalance: rarity is a real roll, and a run can now be lost
+
+- **Every drop was Legendary from floor 24 up.** `makeGear` set an item's `tier`
+  from `bandOf(quality)`, and quality is `2.5 x floor`, so mean quality passed the
+  60 threshold and every item printed "Legendary" regardless of the weighted
+  rarity table, the source, or Luck. The rarity roll that `rollTier` computed was
+  discarded on kills; chests passed a tier that was then overwritten the same way.
+  Rarity is now the roll: `Delve.rarityLabel(quality, rolledTier)` and a new
+  `opts.tier` on `makeGear` decide the label AND the affix count, while quality
+  still decides the item's power budget and base name. Calls with no roll (shop
+  stock, pinned starting gear) cap at Rare, so a Legendary can only be earned.
+  Measured at Luck 1: 0.03% legendary on floor 1, 0.20% on 10, 0.85% on 50;
+  treasure chests reach 1.9% by floor 50. `rollKillDrop` now passes its roll
+  through with the elite/boss source multiplier applied.
+- **Sustain was the reason nobody died.** Four leaks closed together: the
+  staircase heal cut from a flat 50% to 30% falling to 20% by ward 5
+  (`healOnDescendPct`, `healOnDescendFalloff`); potion drops taper 14/14/10/7/7%
+  by ward (`ITEMS.drop.potionByWard`, read through `Delve.potionDropChance`);
+  shop heals are limited to `shop.healStock` (2) per shop instead of unlimited;
+  and every monster gains 15% attack per ward (`enemyDmgPerWard`,
+  `Delve.depthAtk`, applied to bosses too).
+- **Bosses hit softer than the floor's own monsters.** The ward-5 boss dealt 26
+  while a floor-50 Molten Brute dealt 67. Boss `atk` is now 11/20/30/40/50 raw,
+  which `Delve.depthAtk` takes to 11/23/39/58/80.
+- **Gold was 40% too generous.** `goldCurveK` 3.0 -> 1.0: a measured 50-floor run
+  paid ~13,100 gold and now pays ~7,900, with shop prices unchanged.
+
 ### Changed — unique item art, and docs brought back in line
 
 - **Every unique has its own artwork mark.** Twelve hand-written uniques with

@@ -30,9 +30,28 @@ Delve.CONFIG = {
   speedPerAgi: 0.05
  },
 
+ // ---------- MONSTER DAMAGE BY DEPTH ----------
+ // Monster ATTACK used to grow linearly with the floor while the player's damage
+ // reduction, dodge and health growth all had ceilings, so it never caught up:
+ // measured, a floor-50 brute hit for 20 against 152 HP while the player killed it
+ // in about a second. Fights got LONGER, never DANGEROUS.
+ //
+ // `enemyDmgPerWard` is a flat percentage added to every monster's attack, per
+ // ward past the first: ward 1 ×1.00, ward 2 ×1.15, ward 3 ×1.30, ward 4 ×1.45,
+ // ward 5 ×1.60. It applies to spawned monsters and bosses alike, and it is the
+ // same curve in every ward so the difficulty ramp is legible.
+ enemyDmgPerWard: 0.15,
+
  // ---------- RUN STRUCTURE ----------
  bossEvery: 10,
- healOnDescendPct: 0.5,
+ // Health handed back for walking downstairs. This was 0.5 at every depth, which
+ // meant a bad floor was erased by the next staircase: measured against a clean
+ // run, the player finished all 50 floors without dying once. It now starts at
+ // 30% and shrinks with depth, so sustain becomes something you manage (potions,
+ // rests, the shop) rather than something the stairs hand you for free.
+ // Floor 1 is still generous — see openingFloor below.
+ healOnDescendPct: 0.30,
+ healOnDescendFalloff: 0.45,   // ×(1 - falloff × wardProgress); ward 5 lands at 0.20
 
  // ---------- OPENING FLOOR ----------
  // The first floor is a teaching floor, not a test. Fewer, weaker monsters and a
@@ -40,7 +59,7 @@ Delve.CONFIG = {
  // monster, watch it die, find gear — before anything can kill them.
  // `starterGear` drops one guaranteed weapon and one armour piece on floor 1.
  openingFloor: { monsters: 8, monsterHpPct: 0.75, monsterAtkPct: 0.75,
-                 healOnDescendPct: 0.75, starterGear: true },
+                 healOnDescendPct: 0.65, starterGear: true },
 
  // ---------- FOG OF WAR (js/fog.js) ----------
  // A room is dark until the player enters it, then that whole room stays lit for
@@ -64,7 +83,7 @@ Delve.CONFIG = {
  
  // ---------- ECONOMY (sim-locked shard pacing) ----------
   economy: {
-  goldCurveType: "log", goldCurveK: 3.0, goldLuckMult: 0.05,
+  goldCurveType: "log", goldCurveK: 1.0, goldLuckMult: 0.05,
   healCostA: 30, healCostB: 8,
   tierPrices: [12, 35, 90, 240],
   consumablePrices: { 1:10, 2:20, 3:40 },
@@ -79,13 +98,22 @@ Delve.CONFIG = {
  },
 
  // ---------- GOLD ----------
+ // goldKillPerFloor was 0.5, but the ACTUAL per-kill growth comes from
+ // goldCurveK (3.0 × ln(floor+1)) in js/rewards.js, which dwarfs it. Measured,
+ // a full 50-floor run paid out ~13,100 gold — enough to buy every shop's stock
+ // and still finish rich. The log term is now 1.6, which keeps early floors
+ // almost identical and cuts the deep floors, where the money piled up.
  goldKillBase: 2, goldKillPerFloor: 0.5, goldBossBase: 80,
 
  // ---------- BARRELS ----------
  barrel: { goldChance: 0.40, goldMin: 1, goldMax: 3 },
 
  // ---------- SHOP ----------
- shop: { offset: 5, stockConsumables: 4, stockGear: 1, healPct: 0.5 },
+ // healPct 0.5 with no cap meant the shop was an unlimited heal station: any
+ // amount of gold bought full health, five times a run. Every shop visit now
+ // sells a limited number of heals (healStock), each restoring healPct, so gold
+ // buys sustain but cannot buy immortality.
+ shop: { offset: 5, stockConsumables: 4, stockGear: 1, healPct: 0.5, healStock: 2 },
 
  // ---------- STATUS EFFECTS ----------
  STATUS_EFFECTS: {
@@ -206,14 +234,17 @@ Delve.CONFIG = {
                goldBonus:0.16, dropBonus:0.2667, bossAtk:0.5, shardBonus:1.0, healOnKill:1.8 },
 
   // Gear and potions roll separately (L5).
-  // Owner's call: roughly DOUBLE the items a floor produces. Gear was 15.5% and
-  // a floor yielded ~2.5 items, which read as barren next to 14 kills. Now 30%
-  // base + 3pp per Luck, and potions double too. `chestMin` guarantees at least
-  // one chest-bearing floor in that many, so a dry streak cannot run long.
-  // A chest every floor: it is the one guaranteed piece of loot a floor holds, and
- // the player should be able to count on it. Later wards used to make chests
- // rarer, which is exactly backwards — depth should not make a floor emptier.
- drop: { gearBase:0.30, gearPerLuck:0.03, potion:0.14, cap:0.85,
+  // Owner's call: gear drops are ONE THIRD of the previous 30% rate — 10% base
+  // per kill, with the Luck step cut to match (0.03 -> 0.01) so depth cannot
+  // claw the rate back.
+  // Potions now TAPER with depth: 14% in the first two wards, 10% in the third,
+  // 7% from the fourth on. A flat 14% across fifty floors meant sustain never
+  // became scarce, so a bad floor was always patched by the next few kills.
+  // Chests stay common (0.75) and the floor-1 starter gear is untouched, so a
+  // run still opens with something in hand.
+  drop: { gearBase:0.10, gearPerLuck:0.01,
+         potionByWard: { 1:0.14, 2:0.14, 3:0.10, 4:0.07, 5:0.07 },
+         potion:0.14, cap:0.85,
          chestChanceBase:0.75, chestChanceLuck:0.02, chestChanceCap:0.95 },
 
   // Slot weights (L6). Weapon drops less often than it used to, rings and

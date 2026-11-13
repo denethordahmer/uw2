@@ -155,8 +155,13 @@ window.Delve = window.Delve || {};
  let bonus = 0;
  if(opts.elite) bonus += 8 * (S.elite || 1);
  if(opts.boss) bonus += 12 * (S.boss || 1);
- const tier = opts.minTier ? Math.max(opts.minTier, Delve.bandOf(Delve.qualityOf(G.floor, Delve.luckPts()) + bonus)) : null;
- const item = Delve.makeItem(tier || undefined, { qualityBonus: bonus });
+ // The rarity roll decides the LABEL. Before this, rollTier was never consulted
+ // on a kill at all — the label came from quality alone, so a floor-30 rat could
+ // drop a "Legendary" and Luck changed nothing about it.
+ const rarityMult = opts.boss ? (S.boss || 1) : (opts.elite ? (S.elite || 1) : 1);
+ let tier = Delve.rollTier(G.floor, rarityMult);
+ if(opts.minTier) tier = Math.max(opts.minTier, tier);
+ const item = Delve.makeItem(tier, { qualityBonus: bonus });
  if(!item) return false;
  item.x = x; item.y = y;
  Delve.stampProvenance(item, { kind:"monster", name:opts.name || "foe", elite:!!opts.elite });
@@ -709,6 +714,26 @@ window.Delve = window.Delve || {};
 
  Delve.shopHealCost = function(G){
  return Math.max(1, Math.round(Delve.healCost(G.floor)*(1-Delve.luckDiscount())));
+ };
+
+ // ── Limited shop heals ───────────────────────────────────────
+ // The shop used to sell unlimited 50% heals, which made every shop floor a full
+ // reset and removed any reason to manage health. `G.shop.healsBought` counts the
+ // heals taken at THIS shop; the stock resets because G.shop is rebuilt for each
+ // shop floor.
+ Delve.shopHealStockLeft = function(G){
+  G = G || Delve.G;
+  if(!G || !G.shop) return 0;
+  const cap = (Delve.CONFIG.shop && Delve.CONFIG.shop.healStock) || 2;
+  return Math.max(0, cap - (G.shop.healsBought || 0));
+ };
+
+ Delve.spendShopHeal = function(G){
+  G = G || Delve.G;
+  if(!G || !G.shop) return false;
+  if(Delve.shopHealStockLeft(G) <= 0) return false;
+  G.shop.healsBought = (G.shop.healsBought || 0) + 1;
+  return true;
  };
 
  // ── Shop floor helper ─────────────────────────────────────────

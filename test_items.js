@@ -130,6 +130,37 @@ ok(outOfRange === 0, "quality always in 1..100");
 ok(D.bandOf(19) === 1 && D.bandOf(20) === 2 && D.bandOf(40) === 3 && D.bandOf(60) === 4, "bands 20/40/60");
 
 // ── 2. Generation invariants ───────────────────────────────────────────────
+// Rarity is the ROLL, not the quality number. Before this was fixed, tier came
+// from bandOf(quality) and quality is 2.5 x floor, so every drop from floor 24 up
+// was labelled Legendary no matter what the roll said or what Luck was.
+newRun(30,1);
+(function rarityIsRolled(){
+  const N = 3000;
+  let leg = 0, rare = 0, plain = 0;
+  for(let i = 0; i < N; i++){
+    const it = D.makeItem(D.rollTier(30, 1), {});
+    if(!it) continue;
+    if(it.tier === 4) leg++; else if(it.tier === 3) rare++; else plain++;
+  }
+  ok(leg / N < 0.03, "legendary stays rare on a deep floor (" + (100*leg/N).toFixed(2) + "% of 3000)");
+  ok(plain / N > 0.55, "most deep-floor drops are still ordinary (" + (100*plain/N).toFixed(0) + "%)");
+  // A rolled tier must survive into the item: a tier-4 roll is always Legendary.
+  let mismatch = 0;
+  for(let i = 0; i < 300; i++){
+    const it = D.makeItem(4, {});
+    if(it && it.tier !== 4) mismatch++;
+  }
+  ok(mismatch === 0, "a tier-4 roll always comes out Legendary (" + mismatch + " misses)");
+  // With no roll supplied (shop stock, pinned starting gear) the label caps at
+  // Rare, so a Legendary can only ever be earned.
+  let uncalled = 0;
+  for(let i = 0; i < 300; i++){
+    const it = D.makeGear("body", 45, {});
+    if(it && it.tier === 4) uncalled++;
+  }
+  ok(uncalled === 0, "gear made without a rarity roll never reaches Legendary (" + uncalled + ")");
+})();
+
 newRun(15,5);
 let overBudget = 0, badBand = 0, noArt = 0, badAffixes = 0;
 for(let i=0;i<4000;i++){
@@ -137,14 +168,17 @@ for(let i=0;i<4000;i++){
   const it = D.makeGear(null, fl, {});
   if(!it) continue;
   if(it.points > D.pointsOfQuality(it.quality) + 0.01) overBudget++;
-  if(it.tier !== D.bandOf(it.quality)) badBand++;
+  if(it.tier > Math.min(3, D.bandOf(it.quality))) badBand++;
   if(!D.itemSprite(it)) noArt++;
   const cap = {1:0,2:1,3:2,4:3}[it.tier];
   if((it.affixes||[]).length > cap) badAffixes++;
   if(it.name.indexOf("undefined") >= 0) ok(false, "name has undefined: " + it.name);
 }
 ok(overBudget === 0, "no item exceeds its point budget (" + overBudget + ")");
-ok(badBand === 0, "display band always matches quality (" + badBand + ")");
+// The rarity LABEL is the loot roll, capped by quality. A plain kill at depth
+// must not print "Legendary" just because quality passed 60 — that bug made
+// every drop legendary from floor 24 up.
+ok(badBand === 0, "unrolled items never exceed the quality-derived label cap (" + badBand + ")");
 ok(noArt === 0, "every generated item has art (" + noArt + ")");
 ok(badAffixes === 0, "affix count never exceeds the band cap (" + badAffixes + ")");
 
@@ -194,9 +228,9 @@ D.qualityOf = savedQualityOf;
 newRun(5,3);
 const kills = 20000; let gear = 0;
 for(let i=0;i<kills;i++) if(D.rollKillDrop(1,1,{name:"x"})) gear++;
-// Owner's call: roughly double the old 18%. Floor 5 with Luck 1 now sits near
-// 30% + luck, so the window is 0.28..0.36.
-ok(gear/kills > 0.28 && gear/kills < 0.36, "gear drop rate ~33% (got " + (100*gear/kills).toFixed(1) + "%)");
+// Owner's call: gear drops cut to one third of the old ~30% rate. Floor 5 with
+// Luck 1 now lands near 10-11%, so the window is 0.08..0.14.
+ok(gear/kills > 0.08 && gear/kills < 0.14, "gear drop rate ~11% (got " + (100*gear/kills).toFixed(1) + "%)");
 const slotShare = {};
 for(let i=0;i<30000;i++){ const s = D.rollSlot(); slotShare[s] = (slotShare[s]||0)+1; }
 ok(Math.abs(slotShare.weapon/30000 - 0.23) < 0.03, "weapon ~23% of gear (got " + (100*slotShare.weapon/30000).toFixed(1) + "%)");
@@ -717,6 +751,42 @@ try {
 }
 ok(integrationOk, "a generated floor grows and bakes end to end" +
    (integrationMsg ? " (" + integrationMsg + ")" : ""));
+
+// ── difficulty & balance locks ─────────────────────────────────────────────
+// The numbers below are the ones that decide whether a run can be survived. They
+// were all changed together to fix "finished 50 floors without dying", so each is
+// pinned here rather than left to drift back.
+console.log("\n-- difficulty & balance -------------------------------");
+
+newRun(20,8);
+(function(){
+  const C = D.CONFIG;
+  // Sustain must get tighter with depth, never looser.
+  ok(C.healOnDescendPct < 0.5, "the staircase heal is below the old 50% (" + C.healOnDescendPct + ")");
+  ok(C.healOnDescendFalloff > 0, "the staircase heal falls off with depth");
+  const p1 = D.potionDropChance(5), p3 = D.potionDropChance(25), p5 = D.potionDropChance(45);
+  ok(p1 >= p3 && p3 >= p5, "potion drops taper by ward (" + p1 + " / " + p3 + " / " + p5 + ")");
+  ok(p5 < 0.10, "deep wards drop potions at under 10% (" + p5 + ")");
+  // Shop heals are finite.
+  ok((C.shop.healStock || 0) > 0 && C.shop.healStock < 10, "a shop stocks a limited number of heals (" + C.shop.healStock + ")");
+  D.G.shop = { x:1, y:1, stock:[], healsBought:0 };
+  ok(D.shopHealStockLeft(D.G) === C.shop.healStock, "a fresh shop starts with full heal stock");
+  D.spendShopHeal(D.G); D.spendShopHeal(D.G);
+  ok(D.shopHealStockLeft(D.G) === 0, "heal stock runs out");
+  ok(D.spendShopHeal(D.G) === false, "and cannot be overspent");
+  // Monster damage climbs with depth.
+  ok(C.enemyDmgPerWard > 0, "monsters gain damage per ward (" + C.enemyDmgPerWard + ")");
+  const a1 = D.depthAtk(100, 5), a5 = D.depthAtk(100, 45);
+  ok(a5 > a1, "ward 5 monsters hit harder than ward 1 (" + a1 + " vs " + a5 + ")");
+  // Bosses out-hit the ward's ordinary monsters: that was the whole complaint.
+  const bossAtk = {};
+  for(const w of [1,2,3,4,5]){
+    const bd = C.BOSS_DEFS[w];
+    bossAtk[w] = D.depthAtk(bd.atk, w*10);
+  }
+  ok(bossAtk[5] > bossAtk[1] * 3, "boss damage scales with ward (" + JSON.stringify(bossAtk) + ")");
+  ok(bossAtk[5] >= 70, "the last boss hits for at least 70 (" + bossAtk[5] + ")");
+})();
 
 // ── finish-pass regressions ────────────────────────────────────────────────
 // Four defects found by the finish-up audit. Each check fails on the old code.

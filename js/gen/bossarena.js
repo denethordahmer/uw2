@@ -166,7 +166,9 @@ window.Delve = window.Delve || {};
    id:"boss", isBoss:true, x:bx, y:by,
    name:bossDef.name || "The Warden", kind:bossDef.sprite || "boss_warden",
    maxHp:bossDef.hp || cfg.bossHpBase, hp:bossDef.hp || cfg.bossHpBase,
-   atk:bossDef.atk || cfg.bossAtkBase,
+   // Boss damage follows the same per-ward curve as ordinary monsters, so a
+   // ward-5 boss cannot end up hitting softer than a random deep mob.
+   atk:(Delve.depthAtk ? Delve.depthAtk(bossDef.atk || cfg.bossAtkBase, G.floor) : (bossDef.atk || cfg.bossAtkBase)),
    speed:bossDef.speed || cfg.bossSpeed,
    chainHitEvery:bossDef.chainHitEvery || 3, chainHitCount:0,
    // Boss shield (Batch 18): the Bonefather's ribcage soaks damage first and
