@@ -150,12 +150,82 @@ first), exit 0. `node tools/check-order.js`
     square — the player could not walk past it. Leave now performs the step (onto the tile,
     leaving the item where it lies) and takes a turn, so you simply walk over it. It only
     steps when the tile is adjacent, so a card opened from further away never teleports.
+    **Root cause (owner report #2):** the intercept lived in the PATH-WALKER
+    (`tryActOnStep`) as well, so walking along a corridor stopped dead on the loot
+    tile and cleared the path. The intercept now exists only in `tryAct` (a tap),
+    and it accepts the player's OWN tile as well as adjacent ones. Walking never
+    stops for loot and never collects it (`tryActOnStep` and both step handlers
+    had auto-pickup removed), so an item can never block passage and "Leave" means
+    what it says. Tapping your own tile picks up loot you walked over.
 20. **Ward 5 has its own music bed.** `MUSIC_TRACKS[5] = ["music/biome5-1.mp3"]` in
     `js/sfx.js`; `musicWardFor()` already returns 5 for floors 41–50, so no other code
     changed. `music/biome5-1.mp3` currently holds a **copy of the ward-1 track as a
     placeholder** so the suite and the workflow's "Music beds are present" step pass —
     the owner overwrites it with the real file. `test_ui.js` now also asserts floors
     41–50 map to ward 5 and that ward 5 has a bed.
+21. **Three beds per ward, in order, with a written break between them.** `MUSIC_TRACKS`
+    now lists `biomeN-1/2/3.mp3` for each of the five wards (15 files). The musician
+    does not need to write an ending: `bgmTick` runs the last **2 s** as the fade-out,
+    `bgmEnded` then holds **2 s** of silence via `queueNextTrack`/`BGM_GAP_MS`, and the
+    next bed fades **in over 2 s** (`BGM_FADE_IN_MS`, was 1.2 s). Tracks rotate in
+    playlist order and wrap 1→2→3→1 — deliberately **not** shuffled, because a ward is
+    three movements of one piece. `nextTrackInWard()` is the single rotation rule, used
+    by the gap timer, `sfxStartAmbience` and the autoplay-unlock retry. A ward change
+    still short-circuits with a 700 ms cross-fade and starts that ward at movement 1;
+    `stopBgm` clears any queued gap so a stopped game cannot restart the music. Timings
+    are exported as `Delve.musicTimings()` and asserted in `test_ui.js`.
+22. **Music silent in the Android WebView until the volume slider was touched.**
+    The WebView can resolve `play()` while the element stays internally silent, so
+    the fade ran to the correct volume on a track nobody could hear; touching the
+    slider bypassed the fade and fixed it. `watchAudible(el)` now runs after every
+    bed starts: if the element claims to be playing but its volume is still ~0
+    after 1.8 s, the target volume is set directly. Works in a browser too (no-op).
+23. **The shop is a real room now, and shows real stats.** Two changes from the
+    owner's report ("just a list of names and prices").
+    **(a) Shop chamber (`carveShopChamber` / `buildShopAt` in `levels.js`).** A shop
+    floor no longer drops the merchant in a corner of a random room. It carves a
+    **uniform 5x5 interior** (7x7 with the wall ring) into a leaf room away from the
+    spawn and the stairs, opens **exactly one door**, and drives a short corridor from
+    that door until it reaches floor that is genuinely **reachable from the spawn**
+    (a BFS reachability map — "there is floor over there" was not enough, because BSP
+    leaves glassy slivers that join nothing, which is what walled the merchant in). Up
+    to 8 candidate centres are tried before falling back. If the carve fails entirely
+    the old corner placement still runs. Barrels, chests and monsters are all excluded
+    from the chamber, so nothing blocks the stall or attacks you while shopping. The
+    room is registered with `G.rooms` as `type:"shop"` so fog of war treats it properly.
+    Merchant stands at the **back wall** with always-open floor in front of him.
+    **(b) Dressing.** Three new world sprites in `con-worldart.js`: `prop_shopCounter`
+    (goods on the counter at the merchant's tile), `prop_shopCrate` (all four corners)
+    and `prop_shopLantern` (hanging over the counter), plus the warden banner over the
+    door. All painted decor — never tiles, never blocking.
+    **(c) Shop UI (`buildShop` in `ui.js`).** Each row now shows the tier and slot, the
+    base name under the affixed name, **every stat line with the same green/red deltas
+    as the item card**, the flavour text, and a **Buy + Equip** pair (Equip equips
+    straight from the shop, returning what it replaced to the bag). The sell list shows
+    stats too. Rows reuse `Delve.itemStatLines()` so the shop can never drift from the
+    card. New `Delve.SLOT_NAME()` maps slot keys to player-facing names.
+24. **Stat-line formatting fixes (`itemStatLines`).** Deltas were printed in raw units
+    next to formatted values — `"+3%"` beside `"+0.03"`, and `Damage Reduction 0.26`,
+    `Maximum Health 2.93`, `Luck 1.11`. Each stat now declares how its delta renders
+    (`pct` adds the % sign, whole stats round), and every row carries a `deltaText`
+    string that both the card and the shop render verbatim. The separate "Affix" row was
+    removed: it repeated the stat that already had its own row.
+25. **Ability balance (owner: "abilities have been underwhelming").** Measured, not
+    guessed. The problem was not the ability list, it was two numbers:
+    **(a) Energy per kill was 1.** A 4-cost cast needed four kills, while a plain
+    attack is free. Now **3** — one kill funds most of a cast.
+    **(b) Twelve abilities scaled off attack power**, which is 3 at the start. Crushing
+    Blow dealt `atk × 2` = 6 for 6 energy; Whirlwind dealt 2.5 per enemy for 8. Both
+    were worse than hitting normally. Every damaging ability now uses **flat damage**
+    from its `data.dmg` (plus `perRankDmg` per rank), so it stays meaningful as the
+    weapon improves.
+    Rebalanced to ~1.5–3.0 damage per energy: Cleave 8 + 5 splash for 4, Crushing Blow
+    16 for 6, Cinderbolt 9 for 4 (ignores armour), Lunge 10 for 5, Whirlwind 7 to every
+    adjacent for 6, Leech 10 for 5 healing half, Meteor 14 + 10 splash for 9.
+    **Stone Skin** 6→5 energy and 2→3 turns; **Rally** heals 45% and now grants a turn
+    of damage reduction. `test_ui.js` gained a balance floor: `energyPerKill >= 2`, and
+    **no damaging ability may deal less than one free swing** — a trap-card guard.
+    Touch range is unchanged, but the four new abilities sketched earlier are NOT built.
 
 **To ship, the owner must upload:** the whole tree, **plus `music/`** (currently
 untracked), and the updated `.github/workflows/syntax-check.yml` (copies in

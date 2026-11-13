@@ -179,6 +179,174 @@ window.Delve = window.Delve || {};
   return Delve.G ? spawnMonsterKind(Delve.G, x, y, kind) : null;
  };
 
+ // ── Shop chamber ─────────────────────────────────────────────
+ // A shop floor used to put the shopkeeper in a corner of whatever room the RNG
+ // picked. Now the shop gets its OWN chamber: a fixed interior size, exactly one
+ // door, and a merchant's stall dressed into it, so the room reads as a shop from
+ // the doorway. The chamber is carved into a leaf room that is not the entrance,
+ // the exit or the boss arena.
+ //
+ // Sized 5x5 interior (7x7 outer wall) every time: uniform, as the owner asked,
+ // and small enough to see the whole stall at once on a phone.
+ const SHOP_HALF = 2;           // interior half-extent -> 5x5 inside, 7x7 with walls
+
+ function carveShopChamber(G, rooms, entrance, exitOut){
+  if(!Delve.isShopFloor || !Delve.isShopFloor(G.floor)) return null;
+  if(!rooms || !rooms.length) return null;
+
+  // Candidate centres: any FLOOR tile with two clear tiles either side in all
+  // four directions, away from spawn and the stairs, and in a room the player
+  // has to walk to rather than one they start in.
+  const ok = [];
+  for(let y = SHOP_HALF + 1; y < G.gridH - SHOP_HALF - 1; y++){
+   for(let x = SHOP_HALF + 1; x < G.gridW - SHOP_HALF - 1; x++){
+    if(G.grid[y][x] !== T().FLOOR) continue;
+    if(Delve.mdist(x, y, G.px, G.py) < 4) continue;
+    if(G.stairs && Delve.mdist(x, y, G.stairs.x, G.stairs.y) < 3) continue;
+    // must sit inside a painted room interior, not a corridor
+    let inRoom = false;
+    for(const r of rooms){
+     if(x > r.x && x < r.x + r.w - 1 && y > r.y && y < r.y + r.h - 1){ inRoom = true; break; }
+    }
+    if(!inRoom) continue;
+    ok.push({ x:x, y:y });
+   }
+  }
+  if(!ok.length) return null;
+
+  // Try several candidate centres before giving up: a centre whose four sides all
+  // face unconnected rock cannot host a one-door room, and the caller would then
+  // fall back to a shopkeeper in a corner.
+  for(let attempt = 0; attempt !== 8; attempt++){
+   if(!ok.length) return null;
+   const pickIdx = Delve.rng(0, ok.length - 1);
+   const chosen = ok.splice(pickIdx, 1)[0];
+   const built = buildShopAt(G, rooms, chosen);
+   if(built) return built;
+  }
+  return null;
+ }
+
+ function buildShopAt(G, rooms, c){
+  const x0 = c.x - SHOP_HALF, x1 = c.x + SHOP_HALF;
+  const y0 = c.y - SHOP_HALF, y1 = c.y + SHOP_HALF;
+
+  // Uniform chamber: solid wall ring, clear floor inside.
+  for(let y = y0 - 1; y <= y1 + 1; y++){
+   for(let x = x0 - 1; x <= x1 + 1; x++){
+    const edge = (x === x0-1 || x === x1+1 || y === y0-1 || y === y1+1);
+    G.grid[y][x] = edge ? T().WALL : T().FLOOR;
+   }
+  }
+
+  // Exactly ONE door. Try each of the four sides in turn and keep the first that
+  // actually leads somewhere: the door tile is opened, and a short corridor is
+  // driven outward until it meets open floor. A side that only faces solid rock
+  // is skipped, which is what previously left the merchant walled in.
+  const sides = [
+   { dx:-1, dy:0 }, { dx:1, dy:0 }, { dx:0, dy:-1 }, { dx:0, dy:1 }
+  ];
+  // Prefer the side facing the player.
+  sides.sort(function(a, b){
+   const score = function(d){ return -(Math.sign(G.px - c.x) === d.dx) - (Math.sign(G.py - c.y) === d.dy); };
+   return score(a) - score(b);
+  });
+
+  // Reachability from the player, computed once. A door must open toward a tile
+  // that is genuinely connected to the spawn: "there is floor over there" is not
+  // enough, because BSP leaves glassy slivers of floor that belong to no room and
+  // join nothing. That sliver is what walled the merchant in.
+  const reach = (function(){
+   const seen = new Uint8Array(G.gridW * G.gridH);
+   const q = [G.py * G.gridW + G.px];
+   seen[q[0]] = 1;
+   for(let qi = 0; qi < q.length; qi++){
+    const cur = q[qi];
+    const cx = cur % G.gridW, cy = (cur - cx) / G.gridW;
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    for(const d of dirs){
+     const nx = cx + d[0], ny = cy + d[1];
+     if(nx <= 0 || ny <= 0 || nx >= G.gridW-1 || ny >= G.gridH-1) continue;
+     const ni = ny * G.gridW + nx;
+     if(seen[ni]) continue;
+     const t = G.grid[ny][nx];
+     if(t !== T().FLOOR && t !== T().DOOR && t !== T().GRASS && t !== T().STAIR) continue;
+     seen[ni] = 1;
+     q.push(ni);
+    }
+   }
+   return seen;
+  })();
+
+  let door = null;
+  for(const sd of sides){
+   // Door sits in the chamber's wall ring.
+   const doorX = c.x + sd.dx * (SHOP_HALF + 1);
+   const doorY = c.y + sd.dy * (SHOP_HALF + 1);
+   if(doorX <= 0 || doorY <= 0 || doorX >= G.gridW-1 || doorY >= G.gridH-1) continue;
+
+   // Walk outward from the door looking for floor/void we can join. Wall is
+   // replaced all the way, so the door always opens onto the rest of the map.
+   const path = [];
+   let x = doorX + sd.dx, y = doorY + sd.dy;
+   let reachedFloor = false;
+   for(let i = 0; i < 8; i++, x += sd.dx, y += sd.dy){
+    if(x <= 0 || y <= 0 || x >= G.gridW-1 || y >= G.gridH-1) break;
+    const t = G.grid[y][x];
+    if(t === T().FLOOR || t === T().GRASS || t === T().DOOR || t === T().STAIR){
+     // Only counts if that tile is connected to where the player starts.
+     reachedFloor = !!reach[y * G.gridW + x];
+     break;
+    }
+    if(t === T().MONSTER || t === T().CHEST || t === T().BARREL) break;
+    path.push({ x:x, y:y });   // WALL or VOID we will open
+   }
+   if(!reachedFloor) continue;   // this side leads nowhere; try the next
+
+   // Seal the whole ring first: the host room may have its own doors sitting on
+   // this wall, and those would read as extra entrances to the stall. Then cut
+   // exactly one.
+   for(let y = y0-1; y <= y1+1; y++){
+    for(let x = x0-1; x <= x1+1; x++){
+     const edge = (x === x0-1 || x === x1+1 || y === y0-1 || y === y1+1);
+     if(edge) G.grid[y][x] = T().WALL;
+     else G.grid[y][x] = T().FLOOR;
+    }
+   }
+   G.grid[doorY][doorX] = T().DOOR;
+   for(const t of path) G.grid[t.y][t.x] = T().FLOOR;
+   door = { x:doorX, y:doorY, dx:sd.dx, dy:sd.dy };
+   break;
+  }
+  if(!door) return null;   // no side connects, so let the caller fall back
+
+  // The merchant stands at the BACK of the chamber, on the fixed wall row, so
+  // the stall faces the door and the room has a focal point. The tile in front
+  // of him is always open floor, which is where the player stops to trade.
+  const merchant = { x:c.x, y:y0 };
+  G.shop = { x:merchant.x, y:merchant.y, stock:null,
+             room:{ x:x0, y:y0, w:SHOP_HALF*2+1, h:SHOP_HALF*2+1 } };
+  G.shop.merchant = { x:merchant.x, y:merchant.y };
+  // Merchant stands at the back of the chamber, shelf props along the side walls.
+  G.decor = G.decor || [];
+  const put = function(x, y, key, layer){ G.decor.push({ x:x, y:y, key:key, layer:layer || "floor" }); };
+  // The stall: counter at the merchant's feet (he stands behind it), crates
+  // stacked at the back corners, a lantern hung over the counter. All painted
+  // on the tile, never blocking.
+  put(merchant.x, merchant.y, "prop_shopCounter", "floor");
+  // Crates sit in the four CORNERS. The merchant stands mid-back-wall, so the
+  // tile below him stays clear: that is the tile the player walks onto to talk.
+  put(x0, y0, "prop_shopCrate", "floor");
+  put(x1, y0, "prop_shopCrate", "floor");
+  put(x0, y1, "prop_shopCrate", "floor");
+  put(x1, y1, "prop_shopCrate", "floor");
+  put(merchant.x, merchant.y - 1, "prop_shopLantern", "wall");
+  // A banner over the doorway is the shop's sign, readable from the approach.
+  if(door) put(door.x, Math.max(1, door.y - 1), "prop_bannerWarden", "wall");
+
+  return G.shop;
+ }
+
  // Candidate rooms for a special floor: skip spawn room, stairs, shop.
  function specialRooms(G, rooms){
   return rooms.slice(1).filter(function(r){
@@ -544,18 +712,33 @@ window.Delve = window.Delve || {};
   G.stairs = { x:exitOut.cx, y:exitOut.cy };
   G.grid[exitOut.cy][exitOut.cx] = T().STAIR;
 
-  // shop floors (5, 15, 25...): place the shopkeeper off spawn and off stairs
+  // shop floors (5, 15, 25...): the shop gets its OWN chamber — a uniform 5x5
+  // room, one door, merchant's stall inside — rather than a corner of a random
+  // room. Falls back to the old corner placement only if no space can be carved.
   if(Delve.isShopFloor && Delve.isShopFloor(G.floor)){
-   for(let t = 0; t !== rooms.length; t++){
-    const cand = rooms[Delve.rng(0, rooms.length-1)];
-    if(!cand) continue;
-    const d = Delve.mdist(cand.cx, cand.cy, G.px, G.py);
-    const onStairs = G.stairs && cand.cx === G.stairs.x && cand.cy === G.stairs.y;
-    if(G.grid[cand.cy][cand.cx] === T().FLOOR && !leq(d, 3) && !onStairs){
-     G.shop = { x:cand.cx, y:cand.cy, stock:null };
-     break;
+   const carved = carveShopChamber(G, rooms, rooms[0], exitOut);
+   if(!carved){
+    for(let t = 0; t !== rooms.length; t++){
+     const cand = rooms[Delve.rng(0, rooms.length-1)];
+     if(!cand) continue;
+     const d = Delve.mdist(cand.cx, cand.cy, G.px, G.py);
+     const onStairs = G.stairs && cand.cx === G.stairs.x && cand.cy === G.stairs.y;
+     if(G.grid[cand.cy][cand.cx] === T().FLOOR && !leq(d, 3) && !onStairs){
+      G.shop = { x:cand.cx, y:cand.cy, stock:null };
+      break;
+     }
     }
    }
+  }
+
+  // The shop chamber is carved after G.rooms is built, so register its interior
+  // here — otherwise the merchant's room would stay under the fog until the
+  // player was standing on top of the stall.
+  if(G.shop && G.shop.room){
+   const sr = G.shop.room;
+   G.rooms.push({ x:sr.x, y:sr.y, w:sr.w, h:sr.h,
+                  cx:sr.x + Math.floor(sr.w / 2), cy:sr.y + Math.floor(sr.h / 2),
+                  type:"shop" });
   }
 
   // ── Organic patches (layer1 Phase 8) ──
@@ -571,9 +754,15 @@ window.Delve = window.Delve || {};
     if(G.grid[by][bx] === T().FLOOR && !leq(Delve.mdist(bx,by,G.px,G.py), 4)) openTiles.push({x:bx,y:by});
    }
   }
+  const inShopRoom = function(x, y){
+   const r = G.shop && G.shop.room;
+   if(!r) return false;
+   return x >= r.x - 1 && x <= r.x + r.w && y >= r.y - 1 && y <= r.y + r.h;
+  };
   for(let i = 0; i !== barrelCount && openTiles.length !== 0; i++){
    const pick = openTiles.splice(Math.floor(Math.random()*openTiles.length), 1)[0];
    if(G.grid[pick.y][pick.x] !== T().FLOOR) continue;
+   if(inShopRoom(pick.x, pick.y)) continue;   // keep the stall clear
    G.barrels.push({ x:pick.x, y:pick.y });
    G.grid[pick.y][pick.x] = T().BARREL;
   }
@@ -585,10 +774,19 @@ window.Delve = window.Delve || {};
    : Math.min(ward.treasureChanceCap || DC.chestChanceCap || 0.60,
               (DC.chestChanceBase || 0.30) + (DC.chestChanceLuck || 0.02) * Delve.luckPts());
   if(prob(chestChance) && openTiles.length !== 0){
-   const s = openTiles.splice(Math.floor(Math.random()*openTiles.length), 1)[0];
-   if(G.grid[s.y][s.x] === T().FLOOR){
-    G.grid[s.y][s.x] = T().CHEST;
-    G.chests.push({ x:s.x, y:s.y, open:false });
+   // `openTiles` is collected AFTER the shop chamber is carved, so the chamber's
+   // floor is in the pool. A chest inside the stall blocks the room and can even
+   // seal the merchant in, so it is filtered out here.
+   let pick = null;
+   for(let t = 0; t !== openTiles.length; t++){
+    const cand = openTiles.splice(Math.floor(Math.random()*openTiles.length), 1)[0];
+    if(G.grid[cand.y][cand.x] !== T().FLOOR) continue;
+    if(inShopRoom(cand.x, cand.y)) continue;
+    pick = cand; break;
+   }
+   if(pick){
+    G.grid[pick.y][pick.x] = T().CHEST;
+    G.chests.push({ x:pick.x, y:pick.y, open:false });
    }
   }
 
@@ -818,6 +1016,12 @@ window.Delve = window.Delve || {};
   // edge sealing. That single throw caused both reported bugs.
   if(!G.grid[y] || G.grid[y][x] === undefined) return null;
   if(leq(Delve.mdist(x,y,G.px,G.py), 2)) return null;
+  // Nothing spawns inside the shop chamber: a merchant with a monster on his
+  // doorstep would mean being attacked while shopping.
+  if(G.shop && G.shop.room){
+   const r = G.shop.room;
+   if(x >= r.x - 1 && x <= r.x + r.w && y >= r.y - 1 && y <= r.y + r.h) return null;
+  }
   const tile = G.grid[y][x];
   if(tile !== T().FLOOR && tile !== T().GRASS) return null;
   const kind = Delve.pickWeighted(band.weights);

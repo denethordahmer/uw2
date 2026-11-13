@@ -487,11 +487,22 @@ body{
 #shopScreen{ display:none;padding:22px 18px calc(22px + env(safe-area-inset-bottom)); }
 #shopStock, #shopSellList{ display:flex;flex-direction:column;gap:10px;width:100%;max-width:460px; }
 .shop-item{
-  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
   background:#141b23;border:1px solid #2a3440;border-radius:14px;padding:12px 14px;
 }
 .shop-item .si-name{ font-weight:800;font-size:15px;text-align:left; }
 .shop-item .si-desc{ font-size:12px;color:#9fb3c5;text-align:left;margin-top:2px; }
+.shop-item .si-base{ font-size:12px;color:#8fa4b8;text-align:left;margin-top:1px;font-style:italic; }
+.shop-item .si-info{ flex:1;min-width:0; }
+.shop-item .si-stats{ margin-top:8px; }
+.shop-item .si-stats .ic-stat-row{ font-size:12px;padding:3px 0; }
+.shop-item .si-flavour{ font-size:11px;color:#7f94a8;font-style:italic;margin-top:6px; }
+.shop-item .si-btns{ display:flex;flex-direction:column;gap:6px;align-self:flex-start;margin-left:10px; }
+.shop-item .shop-equip{
+  background:#2a4a6e;color:#dbeaff;border:1px solid #6fa8dc55;border-radius:10px;
+  padding:8px 12px;font-size:13px;font-weight:800;cursor:pointer;touch-action:manipulation;
+}
+.shop-item .shop-equip:disabled{ background:#26333d;color:#7c8b97; }
 .shop-buy{ flex-shrink:0; }
 #shopHealBtn{ width:100%;max-width:460px; }
 

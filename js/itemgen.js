@@ -2,7 +2,7 @@ window.Delve = window.Delve || {};
 (function(){
 
  // ── itemgen.js : item CONSTRUCTION (quality -> budget -> stats -> affixes) ──
- // The continuous-quality model from docs/results/items_overhaul.md: one pool
+ // The continuous-quality model: one pool
  // of POINTS decides an item's power. Quality sets the budget, the slot decides
  // which stats spend it, affixes carve a slice out of it, and nothing is added
  // on top — so two items of equal quality are worth the same whichever stats
@@ -24,7 +24,7 @@ window.Delve = window.Delve || {};
  Delve.itemGen = Delve.itemGen || {};
 
  // ══════════════════════════════════════════════════════════════
- //  CONTINUOUS-QUALITY ITEM GENERATION (docs/results/items_overhaul.md)
+ //  CONTINUOUS-QUALITY ITEM GENERATION
  //  One budget of POINTS decides an item's power. Quality sets the
  //  budget, the slot decides which stats spend it, affixes carve a slice
  //  out of it. Nothing is added on top, so two items of equal quality are

@@ -908,6 +908,41 @@ window.Delve = window.Delve || {};
  reg("tombSealed", buildTombOssuary);
  reg("tombOpen",   buildTombOpen);
 
+ // ── THE TRADING POST (shop chamber) ─────────────────────────
+ // Dressed to read as a shop from the doorway: a wooden stall counter, stacked
+ // crates, and a hanging lantern over it. Painted only — nothing here blocks.
+ function buildShopCounter(){
+  const c=mk(24,24),x=gx(c);
+  R(x,2,13,20,9,"#6b4a2c");R(x,2,13,20,1,"#8a6440");        // counter top
+  R(x,2,21,20,1,"#4a3220");
+  R(x,4,16,2,5,"#5a3e24");R(x,18,16,2,5,"#5a3e24");         // legs
+  R(x,5,10,14,3,"#3f5060");R(x,5,10,14,1,"#5d7386");        // goods on top
+  R(x,7,8,3,2,"#c9a227");R(x,12,8,3,2,"#9fbf7f");R(x,17,8,2,2,"#b06a4a");
+  return c;
+ }
+ function buildShopCrate(){
+  const c=mk(24,24),x=gx(c);
+  R(x,3,11,18,11,"#6b4a2c");R(x,3,11,18,1,"#8a6440");       // crate body
+  R(x,3,21,18,1,"#4a3220");
+  R(x,3,11,18,1.5,"#3f5060");                                // iron band
+  R(x,10,13,1.5,8,"#4a3220");R(x,15,13,1.5,8,"#4a3220");     // slats
+  R(x,5,14,5,4,"#c9a227");                                   // coins spilling
+  return c;
+ }
+ function buildShopLantern(){
+  const c=mk(24,36),x=gx(c);
+  R(x,11,1,2,7,"#2f3a44");                                   // chain
+  R(x,7,8,10,2,"#4a525e");R(x,7,8,10,1,"#6d7a88");           // top plate
+  R(x,8,10,8,10,"#2a333c");                                   // glass housing
+  R(x,9,12,6,6,"#f0b860");                                    // the flame
+  R(x,11,13,2,4,"#fff0c0");
+  R(x,7,20,10,2,"#4a525e");R(x,7,20,10,1,"#6d7a88");         // base plate
+  return c;
+ }
+ reg("prop_shopCounter", buildShopCounter);
+ reg("prop_shopCrate",   buildShopCrate);
+ reg("prop_shopLantern", buildShopLantern);
+
  // The registration above must land in SPR: rebuild the sprite set. The boss
  // sprite file does the same thing — this mirrors it.
  Delve.rebuildSprites();

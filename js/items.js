@@ -71,6 +71,27 @@ window.Delve = window.Delve || {};
  };
 
  // ── Provenance ────────────────────────────────────────────────
+ // Player-facing names for the gear slots. Used by the shop and the item card so
+ // a slot never shows up as a raw key like "ring1".
+ Delve.SLOT_NAME = function(slot){
+  switch(slot){
+   case "weapon": return "Weapon";
+   case "body": return "Body";
+   case "head": return "Head";
+   case "hands": return "Hands";
+   case "feet": return "Feet";
+   case "legs": return "Legs";
+   case "cloak": return "Cloak";
+   case "offhand": return "Offhand";
+   case "ring1":
+   case "ring2":
+   case "ring": return "Ring";
+   case "neck": return "Neck";
+   case "consumable": return "Consumable";
+   default: return slot ? String(slot).charAt(0).toUpperCase() + String(slot).slice(1) : "";
+  }
+ };
+
  // The item lying on a tile, or null. Floor loot does not set a tile, so this is
  // the only way to ask; js/movement.js uses it to turn a tap into an item card.
  Delve.itemAt = function(x, y){
@@ -534,7 +555,11 @@ window.Delve = window.Delve || {};
  const lines = [];
  const eq = Delve.G && Delve.G.equip;
 
- function cmp(field, label, fmt){
+ // A row's delta must be shown in the SAME units as its value. Before this,
+ // percentage stats read "+3%" next to a raw "+0.03" delta, and fractional
+ // stats printed as "0.26" / "2.93" instead of "26%" / "3". `dkind` says how to
+ // render the delta: "pct" -> +N%, "raw" -> plain number, default -> number.
+ function cmp(field, label, fmt, dkind){
  const val = item[field] || 0;
  if(!val) return;
  let delta = 0;
@@ -544,9 +569,20 @@ window.Delve = window.Delve || {};
  (eq[item.slot]) ? (eq[item.slot][field] || 0) : 0;
  delta = val - cur;
  }
- lines.push({ label: label, value: fmt ? fmt(val) : val, delta: delta });
+ // Deltas are rounded to whole units and carry the same suffix as the value, so
+ // a percentage row never shows "+38" and a health row never shows "+3.42".
+ let deltaText = "";
+ if(delta !== 0){
+  if(dkind === "pct") deltaText = (delta > 0 ? "+" : "") + Math.round(delta * 100) + "%";
+  else deltaText = (delta > 0 ? "+" : "") + Math.round(delta);
+ }
+ lines.push({ label: label, value: fmt ? fmt(val) : val, delta: Math.round(delta), deltaText: deltaText });
  }
  const pct = function(v){ return "+" + Math.round(v * 100) + "%"; };
+ // Damage Reduction and Maximum Health are fractional internally; show the
+ // numbers a player can actually use.
+ const pctPlain = function(v){ return Math.round(v * 100) + "%"; };
+ const whole = function(v){ return Math.round(v); };
 
  // Weapon: the actual damage band, not a single number (L10).
  if(item.itemMax){
@@ -575,7 +611,8 @@ window.Delve = window.Delve || {};
    }
    dDelta = Math.round(((mn + mx) / 2) - ((curMn + curMx) / 2));
   }
-  lines.push({ label:"Damage", value: Math.round(mn) + " - " + Math.round(mx), delta: dDelta });
+  lines.push({ label:"Damage", value: Math.round(mn) + " - " + Math.round(mx), delta: dDelta,
+               deltaText: dDelta === 0 ? "" : (dDelta > 0 ? "+" : "") + dDelta });
   lines.push({ label:"Strength cap", value: "+" + ceiling, delta:0 });
  }
 
@@ -585,25 +622,25 @@ window.Delve = window.Delve || {};
   lines.push({ label:"Quality", value: bandName + " (" + Math.round(item.quality) + "/100)", delta:0 });
  }
 
- (item.affixes || []).forEach(function(a){
-  lines.push({ label:"Affix", value: a.text, delta:0 });
- });
+ // Affix names are NOT listed separately: every affix's stat already appears as
+ // its own row, so an "Affix: +1 Attack Power" line printed the same number
+ // twice. The prefix in the item's name is what tells you an affix is there.
  if(item.proc || item.unique){
   lines.push({ label:"Unique", value: item.flavour || "", delta:0 });
  }
 
- cmp("atk", "Attack Power");
- cmp("red", "Damage Reduction");
- cmp("hp", "Maximum Health");
- cmp("luck", "Luck");
- cmp("crit", "Critical Chance", pct);
- cmp("dodge", "Dodge Chance", pct);
- cmp("dropBonus", "Item Find", pct);
- cmp("goldBonus", "Gold Find", pct);
- cmp("shardBonus", "Bonus Shards");
- cmp("bossAtk", "Damage vs Ward Bosses");
- cmp("speedBonus", "Attack Speed", pct);
- cmp("healOnKill", "Life Steal on Kill");
+ cmp("atk", "Attack Power", whole);
+ cmp("red", "Damage Reduction", pctPlain, "pct");
+ cmp("hp", "Maximum Health", whole);
+ cmp("luck", "Luck", whole);
+ cmp("crit", "Critical Chance", pct, "pct");
+ cmp("dodge", "Dodge Chance", pct, "pct");
+ cmp("dropBonus", "Item Find", pct, "pct");
+ cmp("goldBonus", "Gold Find", pct, "pct");
+ cmp("shardBonus", "Bonus Shards", whole);
+ cmp("bossAtk", "Damage vs Ward Bosses", whole);
+ cmp("speedBonus", "Attack Speed", pct, "pct");
+ cmp("healOnKill", "Life Steal on Kill", whole);
 
  if(item.healPct) lines.push({ label:"Restores", value: Math.round(Delve.maxHp() * item.healPct) + " Health", delta:0 });
  if(item.healFlat) lines.push({ label:"Restores", value: item.healFlat + " Health", delta:0 });

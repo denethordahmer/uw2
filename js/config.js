@@ -134,7 +134,11 @@ Delve.CONFIG = {
  // Abilities are uncapped: 0 means "no limit". They are the long-term run
  // progression now, so addAbility appends and never drops the oldest.
  levelMaxAbilities: 0,
- energyPerKill: 1,
+ // Energy per kill was 1, which made abilities nearly unusable: a 4-cost spell
+ // needed four kills, and a plain attack is free. Measured against the original
+ // numbers, ONE kill now funds most of a single ability instead of a quarter of
+ // one. This is the single most important number in the ability economy.
+ energyPerKill: 3,
  // Energy cap = starting pool + this. 10 + 90 = 100, the old hardcoded cap.
  energyCapOverStart: 90,
 
@@ -183,7 +187,7 @@ Delve.CONFIG = {
   }
  },
 
- // ---------- ITEMS OVERHAUL (docs/results/items_overhaul.md) ----------
+ // ---------- ITEMS OVERHAUL ----------
  // Every number here is sim-locked. Change it only with a new sim run.
  ITEMS: {
   // Quality: continuous 1-100. Floor is the dominant term, Luck a real second.

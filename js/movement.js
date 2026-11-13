@@ -33,7 +33,9 @@ window.Delve = window.Delve || {};
  }
 
  if(!g[ty] || g[ty][tx] === undefined) return;
- if(Math.abs(tx-G.px) + Math.abs(ty-G.py) !== 1){ Delve.flash("Too far"); return; }
+ // The tile you stand on is legal to tap: that is how you pick up loot you chose
+ // to walk over. Everything else must be an orthogonal neighbour.
+ if(!(tx === G.px && ty === G.py) && Math.abs(tx-G.px) + Math.abs(ty-G.py) !== 1){ Delve.flash("Too far"); return; }
 
  if(tx > G.px) G.lastDir = "right";
  else if(tx < G.px) G.lastDir = "left";
@@ -41,11 +43,13 @@ window.Delve = window.Delve || {};
  else G.lastDir = "up";
 
  const cell = g[ty][tx];
- // A floor item is a decision, not a pickup: tapping it shows what it is. The
- // card then resolves it — Pick Up takes it, Equip wears it, and Leave WALKS
- // ONTO IT and leaves it there. The card used to just close, so a loot tile was
- // impassable once you declined it and the player got stuck against it.
- if(Delve.itemAt && Delve.showItemCard && !G.inCombat && Delve.itemAt(tx, ty)){
+ // A TAP on loot is the decision. Tapping the tile you stand on, or an adjacent
+ // one, opens the item card; Pick Up / Equip / Leave resolve it. Walking (the
+ // path-walker in tryActOnStep) never stops for loot and never collects it, so
+ // an item can never block a corridor.
+ if(Delve.itemAt && Delve.showItemCard && !G.inCombat && !G.targetingAbility &&
+    (tx === G.px && ty === G.py || Delve.mdist(tx, ty, G.px, G.py) === 1) &&
+    Delve.itemAt(tx, ty)){
   G._path = null;
   if(G._pathTimer){ clearInterval(G._pathTimer); G._pathTimer = null; }
   Delve.showItemCard(Delve.itemAt(tx, ty), "floor");
@@ -76,8 +80,10 @@ window.Delve = window.Delve || {};
  G.px = tx; G.py = ty;
  if(Delve.sfx) Delve.sfx("footstep");
  Delve.collectGold(tx, ty);
- const idx = G.items.findIndex(i => i.x===tx && i.y===ty);
- if(idx >= 0){ const it = G.items.splice(idx,1)[0]; Delve.pickupItem(it); }
+ // Walking over loot does NOT take it. Taking is a tap (see tryAct), so a
+ // player can always cross a pile in a corridor without being made to decide,
+ // and an item they chose to leave stays exactly where it was. Tapping your own
+ // tile opens the card for anything under your feet.
  // A floor event sits on plain floor and opens when stepped on. The card
  // blocks the map, so enemies do not also get a turn behind it.
  if(Delve.eventAt && Delve.eventAt(tx, ty) && Delve.openFloorEvent && Delve.openFloorEvent()){
@@ -124,16 +130,11 @@ window.Delve = window.Delve || {};
  else G.lastDir = "up";
 
  const cell = g[ty][tx];
- // A floor item is a decision, not a pickup: tapping it shows what it is, and
- // the card's Pick Up button moves you onto the tile and takes it. This also
- // stops any path, so walking over loot never silently hoovers it up.
- if(Delve.itemAt && Delve.showItemCard && !G.inCombat && Delve.mdist(tx, ty, G.px, G.py) === 1 && Delve.itemAt(tx, ty)){
-  G._path = null;
-  if(G._pathTimer){ clearInterval(G._pathTimer); G._pathTimer = null; }
-  Delve.showItemCard(Delve.itemAt(tx, ty), "floor");
-  Delve.updateHUD();
-  return;
- }
+ // NO item intercept while walking a path. A path that merely passed over loot
+ // used to stop dead at the item and clear the path, so the player was left a
+ // tile short every time — in a corridor that reads as "the item blocks the
+ // way". Loot is only a decision when you TAP it (see tryAct). Walking over it
+ // leaves it where it lies, which is what choosing to leave an item means.
  if(cell === T().MONSTER){
  const m = G.monsters.find(m => m.x===tx && m.y===ty);
  if(m){ G._path = null; Delve.startCombat(m); }
@@ -152,8 +153,10 @@ window.Delve = window.Delve || {};
  G.px = tx; G.py = ty;
  if(Delve.sfx) Delve.sfx("footstep");
  Delve.collectGold(tx, ty);
- const idx = G.items.findIndex(i => i.x===tx && i.y===ty);
- if(idx >= 0){ const it = G.items.splice(idx,1)[0]; Delve.pickupItem(it); }
+ // Walking over loot does NOT take it. Taking is a tap (see tryAct), so a
+ // player can always cross a pile in a corridor without being made to decide,
+ // and an item they chose to leave stays exactly where it was. Tapping your own
+ // tile opens the card for anything under your feet.
  // Walking onto a floor event stops the path and opens its card.
  if(Delve.eventAt && Delve.eventAt(tx, ty) && Delve.openFloorEvent && Delve.openFloorEvent()){
   G._path = null;

@@ -3,33 +3,43 @@ window.Delve = window.Delve || {};
 "use strict";
 
  // ── Background music ───────────────────────────────────────
- // The beds are plain MP3s in music/ — one array per ward, so a second or third
- // take (biome1-2.mp3 …) is one new string and nothing else. Playback is
- // deliberately NOT an HTML5 loop: the track fades out over its last ~2s, and on
- // `ended` a new one is picked and faded back in from silence. Volume mirrors
- // the music slider and the global mute, so both controls keep working.
- // Ward 5's bed is deliberately ABSENT until the file exists: musicWardFor()
- // falls back to ward 1 when a ward has no entry, so floors 41-50 play the
- // Upper Ruins bed rather than going silent. Adding
- //   5: ["music/biome5-1.mp3"]
- // here is all that is needed once the track is uploaded — and the CI step
- // "Music beds are present" will then require the file, so it cannot ship
- // referenced-but-missing.
+ // Three beds per ward in music/ — biomeN-1.mp3, biomeN-2.mp3, biomeN-3.mp3.
+ // Playback is deliberately NOT an HTML5 loop. One cycle is:
+ //
+ //   track plays ── last 2s: fade to silence ── 2s of silence ── 2s fade in
+ //                ── next track in the ward
+ //
+ // So the last two seconds of every bed are a fade-OUT, then a two-second break
+ // of nothing, then the next bed fades IN over two seconds. The musician does not
+ // have to write an ending: whatever the tail of the file is, the engine fades it
+ // and inserts the gap itself.
+ //
+ // Tracks rotate in order, not at random: a ward is three movements of one piece,
+ // and shuffling them would break the progression the composer wrote. The order
+ // is the order in the MUSIC_TRACKS array, wrapping 1 → 2 → 3 → 1.
+ //
+ // The order and the timings are exported read-only (Delve.musicTimings) so the
+ // suite can assert them without reading source.
  const MUSIC_TRACKS = {
-  1: ["music/biome1-1.mp3"],
-  2: ["music/biome2-1.mp3"],
-  3: ["music/biome3-1.mp3"],
-  4: ["music/biome4-1.mp3"],
-  // Ward 5 (the Ashen Forge) has its own bed. The file is uploaded to the repo by
-  // the owner; musicWardFor() falls back to ward 1 only if this key is missing.
-  5: ["music/biome5-1.mp3"]
+  1: ["music/biome1-1.mp3", "music/biome1-2.mp3", "music/biome1-3.mp3"],
+  2: ["music/biome2-1.mp3", "music/biome2-2.mp3", "music/biome2-3.mp3"],
+  3: ["music/biome3-1.mp3", "music/biome3-2.mp3", "music/biome3-3.mp3"],
+  4: ["music/biome4-1.mp3", "music/biome4-2.mp3", "music/biome4-3.mp3"],
+  5: ["music/biome5-1.mp3", "music/biome5-2.mp3", "music/biome5-3.mp3"]
  };
- const BGM_FADE_IN_MS = 1200;
- const BGM_TAIL_MS = 2000;      // the fade-out window at the end of a track
- const BGM_SWITCH_MS = 700;     // cross-fade when the ward changes
+ const BGM_FADE_IN_MS = 2000;   // fade UP at the start of a bed
+ const BGM_TAIL_MS = 2000;      // fade DOWN over the bed's last two seconds
+ const BGM_GAP_MS = 2000;       // silence between one bed and the next
+ const BGM_SWITCH_MS = 700;     // a ward change does not wait for the full gap
 
  let bgmEl = null, bgmWard = 0, bgmTrack = null;
  let bgmFadeTimer = null, bgmFadingOut = false, bgmEnding = false, bgmPending = false;
+ let bgmGapTimer = null;
+
+ // Read-only, for the suite and for ?diag=1 debugging.
+ Delve.musicTimings = function(){
+  return { fadeInMs:BGM_FADE_IN_MS, tailMs:BGM_TAIL_MS, gapMs:BGM_GAP_MS, switchMs:BGM_SWITCH_MS };
+ };
 
  // Floors 1-10 → ward 1, 11-20 → 2, and so on, straight from the ward table.
  function musicWardFor(floor){
@@ -77,13 +87,25 @@ window.Delve = window.Delve || {};
   }, 50);
  }
 
- function pickTrack(ward){
+ // Next bed in the ward, in playlist order, wrapping round. Kept separate from
+ // the play call so the gap timer and the `ended` handler share one rule.
+ function nextTrackInWard(ward){
   const list = musicTracksFor(ward);
   if(!list.length) return null;
-  if(list.length === 1) return list[0];
-  let next = list[Math.floor(Math.random() * list.length)];
-  if(next === bgmTrack) next = list[(list.indexOf(next) + 1) % list.length];
-  return next;
+  const cur = (bgmTrack === null) ? -1 : list.indexOf(bgmTrack);
+  return list[(cur + 1) % list.length];
+ }
+
+ // Start the next bed after the configured silence. This is the only place the
+ // gap is waited out; a ward change and a stop cancel it.
+ function queueNextTrack(delayMs){
+  if(bgmGapTimer) clearTimeout(bgmGapTimer);
+  bgmGapTimer = setTimeout(function(){
+   bgmGapTimer = null;
+   if(!bgmEl || bgmFadingOut) return;
+   const src = nextTrackInWard(bgmWard);
+   if(src) playBgm(src, BGM_FADE_IN_MS);
+  }, Math.max(0, delayMs === undefined ? BGM_GAP_MS : delayMs));
  }
 
  function bgmTick(){
@@ -95,15 +117,16 @@ window.Delve = window.Delve || {};
   const left = (d - el.currentTime) * 1000;
   if(left <= BGM_TAIL_MS && left > 150){
    bgmEnding = true;
-   fadeBgm(0, left);                 // ~2s of tail, then silence at the very end
+   fadeBgm(0, left);                 // the last two seconds are the fade-out
   }
  }
 
  function bgmEnded(){
   bgmEnding = false;
   if(bgmFadingOut) return;
-  bgmTrack = null;                   // force a fresh pick: never the same twice in a row
-  playBgm(pickTrack(bgmWard), BGM_FADE_IN_MS);
+  // The tail fade has already run. Hold silence for the gap, then fade the next
+  // movement up from nothing.
+  queueNextTrack(BGM_GAP_MS);
  }
 
  function ensureBgm(){
@@ -140,17 +163,40 @@ window.Delve = window.Delve || {};
    p.then(function(){
     bgmPending = false;
     fadeBgm(musicTargetVolume(), fadeMs || BGM_FADE_IN_MS);
+    watchAudible(el);
    }).catch(function(){
     // Autoplay blocked (no gesture yet): retried from the next pointerdown.
     bgmPending = true;
    });
   } else {
    fadeBgm(musicTargetVolume(), fadeMs || BGM_FADE_IN_MS);
+   watchAudible(el);
   }
+ }
+
+ // Android's WebView can resolve play() while the element stays internally
+ // silent, so the fade runs to the right volume on a track nobody can hear.
+ // The player's workaround was touching the volume slider, which sets the volume
+ // directly and bypasses the fade. This does the same thing automatically: if the
+ // element reports it is playing but its volume is still ~0 after the fade should
+ // have finished, set the volume outright once.
+ function watchAudible(el){
+  const target = musicTargetVolume();
+  if(target <= 0.001) return;
+  setTimeout(function(){
+   if(!bgmEl || bgmEl !== el) return;          // a different bed took over
+   if(el.paused || bgmFadingOut || bgmEnding) return;
+   if((Number(el.volume) || 0) < 0.02){
+    setBgmVolume(target);
+    if(prefs.muted === false && Delve.logSystem) Delve.logSystem("Music was silent; set volume directly.");
+   }
+  }, 1800);
  }
 
  function stopBgm(ms, then){
   bgmEnding = false;
+  // A gap timer would otherwise start the next bed after the game went quiet.
+  if(bgmGapTimer){ clearTimeout(bgmGapTimer); bgmGapTimer = null; }
   if(!bgmEl || bgmEl.paused){ if(then) then(); return; }
   bgmFadingOut = true;
   fadeBgm(0, ms, function(){
@@ -720,27 +766,47 @@ window.Delve = window.Delve || {};
  Delve.sfxStartAmbience = function(){
   if(!bgmWard) bgmWard = musicWardFor((Delve.G && Delve.G.floor) || 1);
   if(bgmEl && !bgmEl.paused){ applyMusicVolume(); return; }
-  playBgm(bgmTrack || pickTrack(bgmWard), BGM_FADE_IN_MS);
+  // Resume the movement that was playing, or start the ward from its first bed.
+  playBgm(bgmTrack || nextTrackInWard(bgmWard), BGM_FADE_IN_MS);
  };
 
  Delve.sfxStopAmbience = function(ms){
   stopBgm(ms === undefined ? 800 : ms);
  };
 
+ // Called by the Android shell when audio focus is lost (a call, another player
+ // taking over) and regained. Loss fades the music out and remembers that the
+ // music was playing, so regaining focus resumes it; a button-press pause later
+ // is never overridden by a stale resume.
+ let bgmDuckedBySystem = false;
+ Delve.sfxDuck = function(on){
+  const duck = !!on;
+  if(duck === bgmDuckedBySystem) return;
+  bgmDuckedBySystem = duck;
+  if(duck){
+   if(bgmEl && !bgmEl.paused){ bgmEnding = false; fadeBgm(0, 400); }
+  } else if(bgmEl && !bgmEl.paused){
+   fadeBgm(musicTargetVolume(), BGM_FADE_IN_MS);
+  }
+ };
+
  Delve.sfxSetWard = function(id){
   const n = Math.round(Number(id) || 0);
   const ward = MUSIC_TRACKS[n] ? n : musicWardFor(1);
   if(ward === bgmWard && bgmEl && !bgmEl.paused){ applyMusicVolume(); return; }
+  // A ward change begins that ward at its first movement, and short-circuits any
+  // gap the previous ward was waiting out.
+  if(bgmGapTimer){ clearTimeout(bgmGapTimer); bgmGapTimer = null; }
   bgmWard = ward;
   stopBgm(BGM_SWITCH_MS, function(){
    bgmTrack = null;
-   playBgm(pickTrack(bgmWard), BGM_FADE_IN_MS);
+   playBgm(nextTrackInWard(bgmWard), BGM_FADE_IN_MS);
   });
  };
 
  // ── Gesture unlock + lifecycle ──────────────────────────────
  function unlock(){
-  if(bgmPending){ bgmPending = false; playBgm(bgmTrack || pickTrack(bgmWard), BGM_FADE_IN_MS); }
+  if(bgmPending){ bgmPending = false; playBgm(bgmTrack || nextTrackInWard(bgmWard), BGM_FADE_IN_MS); }
   const c = getCtx();
   if(c && c.state === "running"){
    document.removeEventListener("pointerdown", unlock);

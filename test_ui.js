@@ -492,7 +492,21 @@ ok(stockRows.length > 0 && stockRows.length === D.G.shop.stock.length,
 ok(textOf("shopGreeting").length > 0, "a greeting is rendered");
 ok(textOf("shopHealBtn").indexOf("Restore") >= 0, "heal button is labelled");
 
-const buyBtn = stockRows[0].children[1];
+// The buy side now renders a button GROUP (Buy + Equip) in the row's second
+// cell, so find buttons by class instead of by child index. ui.js assigns
+// `className` directly, so match on that string rather than classList.
+const buttonsIn = (node) => {
+ const out = [];
+ const walk = (n) => {
+  if(!n) return;
+  const cls = String(n.className || "");
+  if(/(^|\s)btn(\s|$)/.test(cls)) out.push(n);
+  (n.children || []).forEach(walk);
+ };
+ walk(node);
+ return out;
+};
+const buyBtn = buttonsIn(stockRows[0])[0];
 const goldBeforeBuy = D.G.gold, bagBefore = D.G.inventory.length;
 resetCalls(); buyBtn.click();
 ok(D.G.gold < goldBeforeBuy, "buying spends gold");
@@ -502,7 +516,7 @@ ok(D.G.shop.stock.filter(e => e.sold).length >= 1, "the bought entry is marked s
 const sellRows = registry.get("shopSellList").children;
 ok(sellRows.length >= 1, "sell list rendered (" + sellRows.length + ")");
 const goldBeforeSell = D.G.gold, bagBeforeSell = D.G.inventory.length;
-sellRows[0].children[1].click();
+buttonsIn(sellRows[0])[0].click();
 ok(D.G.gold > goldBeforeSell, "selling earns gold");
 ok(D.G.inventory.length === bagBeforeSell - 1, "the sold item leaves the bag");
 
@@ -866,13 +880,37 @@ arena();
 D.G.monsters = [{ id:"c", x:6, y:5, hp:500, effects:[] }];
 const atkNow = D.atk();
 cast("crushing_blow", 6, 5);
-ok(500 - D.G.monsters[0].hp === Math.round(atkNow * 2), "Crushing Blow hits for twice attack power");
+// Flat damage now, not a multiple of attack power: scaling off attack made this
+// ability weaker the earlier you got it. It must still clearly beat a free swing.
+ok(500 - D.G.monsters[0].hp >= Math.round(atkNow * 2),
+   "Crushing Blow hits for at least twice a plain attack");
 
 arena();
 D.G.energy = 10;
 D.G.monsters = [{ id:"s", x:8, y:5, hp:500, effects:[] }];
 cast("siphon", 8, 5);
 ok(D.G.energy === 8, "Siphon nets -2 energy (cost 5, refund 3): " + D.G.energy);
+
+// ── Ability balance floor ───────────────────────────────────
+// Abilities used to scale off attack power, which made the heavy hitters weaker
+// than a free swing at low levels. These two checks hold the economy in place:
+// energy per kill must fund most of a cast, and every damaging ability must beat
+// a plain attack, or it is a trap card.
+{
+ const plain = Math.max(1, Math.round((D.weaponBand().min + D.weaponBand().max) / 2));
+ const defs = D.CONFIG.TRAITS.abilities;
+ ok(D.CONFIG.energyPerKill >= 2,
+    "one kill funds most of a cast (energyPerKill " + D.CONFIG.energyPerKill + ")");
+ const traps = defs.filter(function(a){
+  const d = a.data || {};
+  const flat = (d.dmg || 0) + (d.splash || 0);
+  if(!flat) return false;                  // utility/defence, not measured here
+  return flat <= plain;                    // must beat one free swing
+ });
+ ok(traps.length === 0,
+    "no damaging ability costs energy to deal less than a free swing" +
+    (traps.length ? " — traps: " + traps.map(function(a){ return a.id; }).join(", ") : ""));
+}
 
 arena();
 D.G.hp = 5;
@@ -1106,8 +1144,15 @@ ok(registry.get("heirloomBox").style.display === "none", "retreating offers no h
 // -- 26. Music -------------------------------------------------
 console.log("\n-- music -----------------------------------------------");
 const tracks = D.musicTracks();
-ok([1,2,3,4,5].every(w => Array.isArray(tracks[w]) && tracks[w].length > 0),
-   "every ward has at least one music bed");
+ok([1,2,3,4,5].every(w => Array.isArray(tracks[w]) && tracks[w].length === 3),
+   "every ward has three music beds");
+// A ward is three movements of one piece, played in order — not shuffled.
+ok([1,2,3,4,5].every(w => tracks[w].every((p, i) => p === "music/biome" + w + "-" + (i+1) + ".mp3")),
+   "each ward's beds are biomeN-1/2/3 in playlist order");
+const timings = D.musicTimings();
+ok(timings.tailMs === 2000, "the last 2s of a bed are the fade-out (" + timings.tailMs + "ms)");
+ok(timings.gapMs === 2000, "2s of silence between beds (" + timings.gapMs + "ms)");
+ok(timings.fadeInMs === 2000, "the next bed fades in over 2s (" + timings.fadeInMs + "ms)");
 const missingBeds = [];
 Object.keys(tracks).forEach(w => tracks[w].forEach(p => {
   const f = path.join(root, p);

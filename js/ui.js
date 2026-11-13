@@ -351,8 +351,10 @@ window.Delve = window.Delve || {};
    lbl.className = "ic-stat-label"; lbl.textContent = l.label;
    const val = document.createElement("span");
    val.className = "ic-stat-value"; val.textContent = l.value;
-   if(l.delta > 0){ val.textContent += "  +" + l.delta; val.style.color = "#7ee08a"; }
-   else if(l.delta < 0){ val.textContent += "  " + l.delta; val.style.color = "#ff9a9a"; }
+   // deltaText already carries its sign and unit (see itemStatLines).
+   if(l.deltaText){ val.textContent += "  " + l.deltaText; }
+   if(l.delta > 0){ val.style.color = "#7ee08a"; }
+   else if(l.delta < 0){ val.style.color = "#ff9a9a"; }
    row.appendChild(lbl); row.appendChild(val);
    body.appendChild(row);
   });
@@ -388,6 +390,11 @@ window.Delve = window.Delve || {};
     // Leave means "not this one": the step still happens and the item stays on
     // the floor. Closing the card alone left the tile impassable, so a player
     // who declined an item could not walk past it.
+    //
+    // Only an ORTHOGONAL neighbour is a legal step. A diagonal tap must not move
+    // — that was the bug that made an item block the passageway: the player
+    // tapped a diagonal item, the card opened, Leave declined to step because
+    // the tile was not adjacent, and the tile stayed refused.
     const G = Delve.G;
     if(G && fx !== undefined && fy !== undefined && Delve.mdist(fx, fy, G.px, G.py) === 1){
      const cell = G.grid[fy] && G.grid[fy][fx];
@@ -856,19 +863,71 @@ window.Delve = window.Delve || {};
   const hb = $("shopHealBtn");
   hb.textContent = "❤️ Restore 50% HP — " + healCost + "g";
   hb.disabled = G.gold < healCost || G.hp >= Delve.maxHp();
+  // ── Buy side ──────────────────────────────────────────────
+  // A shop row shows the ITEM, not just its name: tier, damage/armour, every
+  // rolled stat with the same green/red delta the item card uses, and a
+  // comparable price. It reuses Delve.itemStatLines() rather than re-deriving
+  // stats here, so the shop can never drift out of step with the card.
   const wrap = $("shopStock");
   wrap.innerHTML = "";
+  if(!G.shop.stock.length){
+   const empty = document.createElement("div");
+   empty.className = "si-desc"; empty.textContent = "Sold out.";
+   wrap.appendChild(empty);
+  }
   G.shop.stock.forEach(function(entry){
    const item = entry.item;
    const price = Delve.itemPrice(item);
    const row = document.createElement("div"); row.className = "shop-item";
-   const info = document.createElement("div");
+   const info = document.createElement("div"); info.className = "si-info";
+
+   const tierCol = Delve.TIERS.colors[item.tier] || "#fff";
+   const tierName = Delve.TIERS.names[item.tier] || "";
+
    const nm = document.createElement("div"); nm.className="si-name";
-   nm.style.color = Delve.TIERS.colors[item.tier]||"#fff"; nm.textContent = item.name;
-   const ds = document.createElement("div"); ds.className="si-desc"; ds.textContent = item.lore||item.flavour||"";
-   info.appendChild(nm); info.appendChild(ds);
+   nm.style.color = tierCol; nm.textContent = item.name;
+
+   const ds = document.createElement("div"); ds.className="si-desc";
+   const slotName = (Delve.SLOT_NAME ? Delve.SLOT_NAME(item.slot) : item.slot) || "";
+   ds.textContent = [tierName, slotName].filter(Boolean).join(" · ");
+
+   info.appendChild(nm);
+   if(item.baseName && item.baseName !== item.name){
+    const bn = document.createElement("div"); bn.className="si-base";
+    bn.textContent = item.baseName;
+    info.appendChild(bn);
+   }
+   info.appendChild(ds);
+
+   // Stat list, identical formatting to the item card.
+   const stats = Delve.itemStatLines(item);
+   if(stats.length){
+    const box = document.createElement("div"); box.className = "si-stats";
+    stats.forEach(function(l){
+     const line = document.createElement("div"); line.className = "ic-stat-row";
+     const lbl = document.createElement("span"); lbl.className="ic-stat-label";
+     lbl.textContent = l.label;
+     const val = document.createElement("span"); val.className="ic-stat-value";
+     val.textContent = l.value;
+     if(l.deltaText){ val.textContent += "  " + l.deltaText; }
+     if(l.delta > 0){ val.style.color = "#7ee08a"; }
+     else if(l.delta < 0){ val.style.color = "#ff9a9a"; }
+     line.appendChild(lbl); line.appendChild(val);
+     box.appendChild(line);
+    });
+    info.appendChild(box);
+   }
+   if(item.lore || item.flavour){
+    const fl = document.createElement("div"); fl.className = "si-flavour";
+    fl.textContent = item.lore || item.flavour;
+    info.appendChild(fl);
+   }
+
+   // Buttons: Buy, and Equip for anything wearable that is better than what is
+   // worn. Equipping straight from the shop mirrors the floor card.
+   const btns = document.createElement("div"); btns.className = "si-btns";
    const buy = document.createElement("button"); buy.className="btn shop-buy";
-   buy.textContent = entry.sold?"Sold":price+"g";
+   buy.textContent = entry.sold ? "Sold" : price + "g";
    buy.disabled = entry.sold || G.gold < price;
    buy.addEventListener("click", function(){
     if(entry.sold || G.gold<price) return;
@@ -883,7 +942,30 @@ window.Delve = window.Delve || {};
     Delve.updateHUD();
     Delve.buildShop();
    });
-   row.appendChild(info); row.appendChild(buy);
+   btns.appendChild(buy);
+
+   const wearable = item.slot && item.slot !== "consumable";
+   if(wearable && !entry.sold){
+    const eq = document.createElement("button"); eq.className="btn shop-equip";
+    eq.textContent = "Equip";
+    eq.addEventListener("click", function(){
+     if(entry.sold || G.gold < price) return;
+     G.gold -= price;
+     entry.sold = true;
+     Delve.recordStat("goldSpentShop", price);
+     if(Delve.sfx) Delve.sfx("buy");
+     const bought = Object.assign({}, item);
+     Delve.stampProvenance(bought, { kind:"shop" });
+     // equipItem returns whatever it replaced to the bag, so equipping costs no
+     // inventory space — same rule as the floor card's Equip button.
+     Delve.equipItem(bought);
+     Delve.updateHUD();
+     Delve.buildShop();
+    });
+    btns.appendChild(eq);
+   }
+
+   row.appendChild(info); row.appendChild(btns);
    wrap.appendChild(row);
   });
 
@@ -901,14 +983,33 @@ window.Delve = window.Delve || {};
    inv.forEach(function(item){
     const value = Delve.sellValue(item);
     const row = document.createElement("div"); row.className = "shop-item";
-    const info = document.createElement("div");
+    const info = document.createElement("div"); info.className = "si-info";
     const nm = document.createElement("div"); nm.className = "si-name";
     nm.style.color = Delve.TIERS.colors[item.tier] || "#fff";
     nm.textContent = item.name;
     const ds = document.createElement("div"); ds.className = "si-desc";
     ds.textContent = (Delve.TIERS.names[item.tier] || "") +
+     (Delve.SLOT_NAME && item.slot ? " · " + Delve.SLOT_NAME(item.slot) : "") +
      (typeof item.points === "number" ? " · " + item.points + " pts" : "");
     info.appendChild(nm); info.appendChild(ds);
+    // The sell list shows the same stat lines as the buy side, so the player can
+    // see what they would be giving up before pressing Sell.
+    const stats = Delve.itemStatLines(item);
+    if(stats.length){
+     const box = document.createElement("div"); box.className = "si-stats";
+     stats.forEach(function(l){
+      if(l.label === "Quality") return;   // already in the line above
+      const line = document.createElement("div"); line.className = "ic-stat-row";
+      const lbl = document.createElement("span"); lbl.className="ic-stat-label"; lbl.textContent = l.label;
+      const val = document.createElement("span"); val.className="ic-stat-value"; val.textContent = l.value;
+      if(l.deltaText){ val.textContent += "  " + l.deltaText; }
+      if(l.delta > 0){ val.style.color = "#7ee08a"; }
+      else if(l.delta < 0){ val.style.color = "#ff9a9a"; }
+      line.appendChild(lbl); line.appendChild(val);
+      box.appendChild(line);
+     });
+     info.appendChild(box);
+    }
     const sell = document.createElement("button");
     sell.className = "btn shop-buy";
     sell.textContent = "Sell " + value + "g";
@@ -1303,6 +1404,41 @@ window.Delve = window.Delve || {};
  });
 
  if(/[?&]debug=1/.test(location.search)) Delve.initDebug();
+
+ // ── Android back button contract ───────────────────────────
+ // The native shell calls this and reads the returned string. "exit" means the
+ // system may close the app; anything else means the game consumed the press.
+ // Order matters: dismiss the topmost thing first, and never drop a live run
+ // straight to the launcher.
+ Delve.handleAndroidBack = function(){
+  const G = Delve.G;
+  const open = function(id){ const el = $(id); return el && el.style.display !== "none"; };
+
+  // 1. A card or overlay is on top: close just that.
+  if(open("itemCardOverlay")){ closeItemCard(); return "consumed"; }
+  if(open("statsOverlay")){ Delve.closeStats(); return "consumed"; }
+  if(open("logWindow")){ $("logWindow").style.display = "none"; return "consumed"; }
+  if(open("pauseMenu")){ $("pauseMenu").style.display = "none"; return "consumed"; }
+  if(open("inventoryScreen")){ $("inventoryScreen").style.display = "none"; return "consumed"; }
+  if(open("stairsPrompt")){ $("stairsPrompt").style.display = "none"; return "consumed"; }
+  if(open("shopScreen")){ $("shopScreen").style.display = "none"; return "consumed"; }
+
+  // 2. Title or hub: nothing to protect, so back may leave the app.
+  if(open("titleScreen") || open("hubScreen")) return "exit";
+
+  // 3. A live run: open the pause menu rather than quitting mid-floor.
+  if(G && !G.runEnded && G.hp > 0){
+   $("gearBtn").click();
+   return "consumed";
+  }
+
+  // 4. End screens: back returns to the hub.
+  if(open("deathScreen") || open("victoryScreen")){
+   if(Delve.showHub) Delve.showHub();
+   return "consumed";
+  }
+  return "exit";
+ };
 
  Delve.showHub();
 

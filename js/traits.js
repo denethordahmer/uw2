@@ -347,9 +347,13 @@ window.Delve = window.Delve || {};
 
  case "cleave": {
  if(!mAt || dist !== 1){ Delve.flash("Cleave: tap an adjacent enemy"); return false; }
- const bonus = (d.bonusAtk || 0) + (d.perRank || 0) * ranks;
- const hits = [mAt].concat(adjacentTo(tx, ty).filter(m => m !== mAt));
- hits.forEach(m => hurt(m, atk + bonus));
+ // Flat damage, not attack power: at 3 attack, "attack + 4" dealt 7 for 4 energy
+ // while Cinderbolt dealt 10 at range. Flat numbers stay meaningful as the
+ // weapon improves; attack-scaled ones do not.
+ const dmg = (d.dmg || 8) + (d.perRankDmg || 0) * ranks;
+ const splash = (d.splash || 5) + (d.perRankDmg || 0) * ranks;
+ hurt(mAt, dmg);
+ adjacentTo(tx, ty).forEach(m => { if(m !== mAt && m.hp > 0) hurt(m, splash); });
  break;
  }
 
@@ -369,8 +373,7 @@ window.Delve = window.Delve || {};
  if(G.inCombat && G.combatTarget !== mAt) Delve.endCombat(false);
  G.px = x; G.py = y;
  if(Delve.collectGold) Delve.collectGold(x, y);
- const bonus = (d.bonusAtk || 0) + (d.perRank || 0) * ranks;
- hurt(mAt, atk + bonus);
+ hurt(mAt, (d.dmg || 10) + (d.perRankDmg || 0) * ranks);
  break;
  }
 
@@ -403,10 +406,12 @@ window.Delve = window.Delve || {};
  }
 
  case "whirlwind": {
- const bonus = (d.bonusAtk || 0) + (d.perRank || 0) * ranks;
  const hits = adjacentTo(G.px, G.py);
  if(!hits.length){ Delve.flash("Whirlwind: no enemies adjacent"); return false; }
- hits.forEach(m => hurt(m, atk + bonus));
+ // Flat per-target damage. Scaling off attack power made this the worst ability
+ // in the game: 8 energy for 2.5 damage per enemy.
+ const dmg = (d.dmg || 7) + (d.perRankDmg || 0) * ranks;
+ hits.forEach(m => hurt(m, dmg));
  break;
  }
 
@@ -416,10 +421,13 @@ window.Delve = window.Delve || {};
  break;
 
  case "rally": {
- const pct = (d.healPct || 0.35) + (d.perRankHeal || 0) * ranks;
+ const pct = (d.healPct || 0.45) + (d.perRankHeal || 0) * ranks;
  const heal = Math.round(Delve.maxHp() * pct * (Delve.healMult ? Delve.healMult() : 1));
  G.hp = Math.min(Delve.maxHp(), G.hp + heal);
  G.effects = (G.effects || []).filter(e => e.id !== "bleed");
+ // Rally is a panic button, so it also buys a turn of protection. Healing alone
+ // was worth less than a free potion, which made a 7-energy cast feel like waste.
+ if(d.drTurns) G.stoneSkin = Math.max(G.stoneSkin || 0, d.drTurns);
  Delve.addFloater("+" + heal, G.px, G.py, "#7ee08a");
  Delve.flash("Rally! +" + heal + " HP");
  break;
@@ -430,15 +438,13 @@ window.Delve = window.Delve || {};
  // rejected cast. The shared tail below deducts energy only after a case runs.
  case "crushing_blow": {
  if(!mAt || dist !== 1){ Delve.flash("Crushing Blow: tap an adjacent enemy"); return false; }
- const mult = (d.mult || 1.5) + (d.perRankMult || 0) * ranks;
- hurt(mAt, Math.round(atk * mult), "#ffd75e");
+ hurt(mAt, (d.dmg || 16) + (d.perRankDmg || 0) * ranks, "#ffd75e");
  break;
  }
 
  case "rend": {
  if(!mAt || dist !== 1){ Delve.flash("Rend: tap an adjacent enemy"); return false; }
- const bonus = (d.bonusAtk || 0) + (d.perRank || 0) * ranks;
- hurt(mAt, atk + bonus, "#ef4444");
+ hurt(mAt, (d.dmg || 9) + (d.perRankDmg || 0) * ranks, "#ef4444");
  if(mAt.hp > 0 && Delve.applyEffect) Delve.applyEffect(mAt, "bleed");
  break;
  }
@@ -453,9 +459,8 @@ window.Delve = window.Delve || {};
 
  case "leech": {
  if(!mAt || dist !== 1){ Delve.flash("Leech: tap an adjacent enemy"); return false; }
- const bonus = (d.bonusAtk || 0) + (d.perRank || 0) * ranks;
  const before = mAt.hp;
- hurt(mAt, atk + bonus, "#7ee08a");
+ hurt(mAt, (d.dmg || 10) + (d.perRankDmg || 0) * ranks, "#7ee08a");
  const dealt = Math.max(0, before - Math.max(0, mAt.hp));
  const pct = (d.healPct || 0.5) + (d.perRankHeal || 0) * ranks;
  const heal = Math.round(dealt * pct);
