@@ -13,37 +13,77 @@ window.Delve = window.Delve || {};
   // the Unbroken unique, Brute Force dropped — four cards that only repeated
   // something another card already did.)
   passives: [
+   // 24 lines, 5 ranks each, four tags. Steps are deliberately SMALL: a full run
+   // levels 10-14 times and sees five cards each time, so a card is one increment
+   // of a long climb, not a jackpot. Rank V of a line lands near where the old
+   // rank III did, so the totals are unchanged while the granularity is finer.
+   // `rank` on a card is the rank it GRANTS, and a card may grant 2 or 3 ranks
+   // (see `potency` in traits.js) — that is what "quality" means on the card.
    // EDGE — raw offence
-   { id:"sharpened_edge", name:"Sharpened Edge", tag:"Edge", maxRank:3, rarity:"common",
-     desc:"+2 Attack Power per rank", effects:{ atk:2 }, perRank:{ atk:2 } },
-   { id:"studied_reflexes", name:"Studied Reflexes", tag:"Edge", maxRank:3, rarity:"uncommon",
-     desc:"+6% Critical Chance per rank", effects:{ crit:0.06 }, perRank:{ crit:0.06 } },
-   { id:"swift_hands", name:"Swift Hands", tag:"Edge", maxRank:3, rarity:"uncommon",
-     desc:"+8% Attack Speed per rank", effects:{ speedBonus:0.08 }, perRank:{ speedBonus:0.08 } },
+   { id:"sharpened_edge", name:"Sharpened Edge", tag:"Edge", maxRank:5, rarity:"common",
+     desc:"+1 Attack Power per rank", effects:{ atk:1 }, perRank:{ atk:1 } },
+   { id:"studied_reflexes", name:"Studied Reflexes", tag:"Edge", maxRank:5, rarity:"uncommon",
+     desc:"+3% Critical Chance per rank", effects:{ crit:0.03 }, perRank:{ crit:0.03 } },
+   { id:"swift_hands", name:"Swift Hands", tag:"Edge", maxRank:5, rarity:"uncommon",
+     desc:"+4% Attack Speed per rank", effects:{ speedBonus:0.04 }, perRank:{ speedBonus:0.04 } },
+   { id:"executioner", name:"Executioner", tag:"Edge", maxRank:5, rarity:"rare",
+     desc:"+4% damage to enemies below 30% health, per rank",
+     effects:{ executeBonus:0.04 }, perRank:{ executeBonus:0.04 } },
+   { id:"piercing", name:"Piercing", tag:"Edge", maxRank:5, rarity:"rare",
+     desc:"Attacks ignore 0.5 enemy Damage Reduction per rank",
+     effects:{ pierce:0.5 }, perRank:{ pierce:0.5 } },
+   { id:"momentum", name:"Momentum", tag:"Edge", maxRank:5, rarity:"uncommon",
+     desc:"+3% damage for each consecutive hit on the same enemy, per rank",
+     effects:{ momentum:0.03 }, perRank:{ momentum:0.03 } },
 
    // IRON — survival
-   { id:"thick_hide", name:"Thick Hide", tag:"Iron", maxRank:3, rarity:"common",
-     desc:"+6 Maximum Health per rank", effects:{ maxHp:6 }, perRank:{ maxHp:6 } },
-   { id:"bulwark_plate", name:"Bulwark Plate", tag:"Iron", maxRank:3, rarity:"uncommon",
-     desc:"+1 flat Damage Reduction per rank", effects:{ flatRed:1 }, perRank:{ flatRed:1 } },
-   { id:"evasive", name:"Evasive", tag:"Iron", maxRank:3, rarity:"uncommon",
-     desc:"+4% Dodge per rank", effects:{ dodge:0.04 }, perRank:{ dodge:0.04 } },
+   { id:"thick_hide", name:"Thick Hide", tag:"Iron", maxRank:5, rarity:"common",
+     desc:"+4 Maximum Health per rank", effects:{ maxHp:4 }, perRank:{ maxHp:4 } },
+   { id:"bulwark_plate", name:"Bulwark Plate", tag:"Iron", maxRank:5, rarity:"uncommon",
+     desc:"+0.6 flat Damage Reduction per rank", effects:{ flatRed:0.6 }, perRank:{ flatRed:0.6 } },
+   { id:"evasive", name:"Evasive", tag:"Iron", maxRank:5, rarity:"uncommon",
+     desc:"+2.5% Dodge per rank", effects:{ dodge:0.025 }, perRank:{ dodge:0.025 } },
+   { id:"second_skin", name:"Second Skin", tag:"Iron", maxRank:5, rarity:"rare",
+     desc:"+0.5 flat Damage Reduction and +1 Maximum Health per rank",
+     effects:{ flatRed:0.5, maxHp:1 }, perRank:{ flatRed:0.5, maxHp:1 } },
+   { id:"steadfast", name:"Steadfast", tag:"Iron", maxRank:5, rarity:"uncommon",
+     desc:"+3% Damage Reduction while below half health, per rank",
+     effects:{ lowHpRed:0.03 }, perRank:{ lowHpRed:0.03 } },
+   { id:"sturdy", name:"Sturdy", tag:"Iron", maxRank:5, rarity:"common",
+     desc:"+2 Maximum Health per rank and immunity to knockback",
+     effects:{ maxHp:2, knockbackImmune:true }, perRank:{ maxHp:2 } },
 
    // BLOOD — sustain
-   { id:"bloodthirst", name:"Bloodthirst", tag:"Blood", maxRank:3, rarity:"rare",
-     desc:"Heal 2 HP per kill, per rank", effects:{ healOnKill:2 }, perRank:{ healOnKill:2 } },
-   { id:"field_dressing", name:"Field Dressing", tag:"Blood", maxRank:3, rarity:"uncommon",
-     desc:"Heal 3 HP per floor cleared, per rank", effects:{ healPerFloor:3 }, perRank:{ healPerFloor:3 } },
-   { id:"ember_blood", name:"Ember Blood", tag:"Blood", maxRank:3, rarity:"rare",
-     desc:"+1 Energy per kill, per rank", effects:{ extraEnergyPerKill:1 }, perRank:{ extraEnergyPerKill:1 } },
+   { id:"bloodthirst", name:"Bloodthirst", tag:"Blood", maxRank:5, rarity:"rare",
+     desc:"Heal 1.5 HP per kill, per rank", effects:{ healOnKill:1.5 }, perRank:{ healOnKill:1.5 } },
+   { id:"field_dressing", name:"Field Dressing", tag:"Blood", maxRank:5, rarity:"uncommon",
+     desc:"Heal 2 HP per floor cleared, per rank", effects:{ healPerFloor:2 }, perRank:{ healPerFloor:2 } },
+   { id:"ember_blood", name:"Ember Blood", tag:"Blood", maxRank:5, rarity:"rare",
+     desc:"+0.6 Energy per kill, per rank", effects:{ extraEnergyPerKill:0.6 }, perRank:{ extraEnergyPerKill:0.6 } },
+   { id:"bloodletter", name:"Bloodletter", tag:"Blood", maxRank:5, rarity:"uncommon",
+     desc:"Bleed you inflict lasts 1 extra turn per rank",
+     effects:{ bleedExtra:1 }, perRank:{ bleedExtra:1 } },
+   { id:"last_gasp", name:"Last Gasp", tag:"Blood", maxRank:5, rarity:"rare",
+     desc:"+5% damage while below 25% health, per rank",
+     effects:{ lowHpDmg:0.05 }, perRank:{ lowHpDmg:0.05 } },
+   { id:"reaver", name:"Reaver", tag:"Blood", maxRank:5, rarity:"uncommon",
+     desc:"Heal 1 HP on a critical hit, per rank",
+     effects:{ healOnCrit:1 }, perRank:{ healOnCrit:1 } },
 
    // GREED — run economy
-   { id:"coin_pusher", name:"Coin Pusher", tag:"Greed", maxRank:3, rarity:"common",
-     desc:"+10% Gold Find per rank", effects:{ goldMult:0.10 }, perRank:{ goldMult:0.10 } },
-   { id:"deep_sight", name:"Deep Sight", tag:"Greed", maxRank:3, rarity:"rare",
-     desc:"+5% Item Find per rank", effects:{ dropBonus:0.05 }, perRank:{ dropBonus:0.05 } },
-   { id:"fortunes_nod", name:"Fortune's Nod", tag:"Greed", maxRank:3, rarity:"common",
-     desc:"+1 Luck per rank", effects:{ luck:1 }, perRank:{ luck:1 } }
+   { id:"coin_pusher", name:"Coin Pusher", tag:"Greed", maxRank:5, rarity:"common",
+     desc:"+6% Gold Find per rank", effects:{ goldMult:0.06 }, perRank:{ goldMult:0.06 } },
+   { id:"deep_sight", name:"Deep Sight", tag:"Greed", maxRank:5, rarity:"rare",
+     desc:"+3% Item Find per rank", effects:{ dropBonus:0.03 }, perRank:{ dropBonus:0.03 } },
+   { id:"fortunes_nod", name:"Fortune's Nod", tag:"Greed", maxRank:5, rarity:"common",
+     desc:"+0.6 Luck per rank", effects:{ luck:0.6 }, perRank:{ luck:0.6 } },
+   { id:"prospector", name:"Prospector", tag:"Greed", maxRank:5, rarity:"uncommon",
+     desc:"+8% chance a chest holds an extra item, per rank",
+     effects:{ chestExtra:0.08 }, perRank:{ chestExtra:0.08 } },
+   { id:"pawnbroker", name:"Pawnbroker", tag:"Greed", maxRank:5, rarity:"common",
+     desc:"+12% sell value per rank", effects:{ sellBonus:0.12 }, perRank:{ sellBonus:0.12 } },
+   { id:"scavenger", name:"Scavenger", tag:"Greed", maxRank:5, rarity:"common",
+     desc:"+2 gold per kill, per rank", effects:{ goldPerKill:2 }, perRank:{ goldPerKill:2 } }
   ],
 
   // Set bonuses, counted in total RANKS within a tag (not in passives owned),
@@ -59,7 +99,11 @@ window.Delve = window.Delve || {};
    { id:"vampiric_strike", name:"Vampiric Strike", desc:"Critical hits heal for half the damage dealt", unique:true, effects:{ vampiric:true } },
    { id:"wardens_oath", name:"Warden's Oath", desc:"Second Wind heals 50% instead of 30%", unique:true, effects:{ secondWindHealOverride:0.50 } },
    { id:"unbroken", name:"Unbroken", desc:"Survive one killing blow at 1 HP, once", unique:true, effects:{ unbroken:true } },
-   { id:"deep_pockets", name:"Deep Pockets", desc:"+50% Gold Find for the rest of the run", unique:true, effects:{ goldMult:0.50 } }
+   { id:"deep_pockets", name:"Deep Pockets", desc:"+50% Gold Find for the rest of the run", unique:true, effects:{ goldMult:0.50 } },
+   { id:"blood_price", name:"Blood Price", desc:"An ability you cannot afford costs 3 HP instead of energy", unique:true, effects:{ bloodPrice:true } },
+   { id:"twin_fang", name:"Twin Fang", desc:"Every third attack strikes twice", unique:true, effects:{ twinFang:true } },
+   { id:"grave_ward", name:"Grave Ward", desc:"Bleed, poison and burn you suffer last half as long", unique:true, effects:{ statusResist:0.5 } },
+   { id:"ironclad_oath", name:"Ironclad Oath", desc:"You can no longer dodge, but Damage Reduction is doubled", unique:true, effects:{ noDodge:true, redMult:2.0 } }
   ],
    abilities: [
    // `data` carries the numbers castAbility uses; `perRank*` fields are per-rank

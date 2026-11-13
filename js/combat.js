@@ -12,6 +12,10 @@ window.Delve = window.Delve || {};
  // Chance for an enemy with an on-hit status to actually apply it.
  const ON_HIT_STATUS_CHANCE = 0.15;
 
+ // Trait buffs, reachable from every function in this file. The later local
+ // `tb` inside enemiesTurn shadows nothing; this is the module-level one.
+ const TB = () => (Delve.traitBuffs ? Delve.traitBuffs() : {});
+
  // Hit-stop (§Batch 15): freeze the swing loop for a few frames so an impact reads. Kept on
  // G rather than in a timer because the combat loop is the only thing that reads it — and
  // that loop deliberately does not advance its swing timers while frozen, so the pause is
@@ -195,6 +199,23 @@ window.Delve = window.Delve || {};
  const fs = Delve.firstStrikeBonus();
  if(fs && !m.hasActed) dmg += fs;
 
+ // ── Trait damage modifiers (the 5-rank passive lines) ──
+ // Executioner: bonus damage against a wounded target.
+ if(m.maxHp > 0 && (m.hp / m.maxHp) < 0.30 && TB().executeBonus) dmg = Math.round(dmg * (1 + TB().executeBonus));
+ // Last Gasp: bonus damage while the PLAYER is nearly dead.
+ if(G.hp < Delve.maxHp() * 0.25 && TB().lowHpDmg) dmg = Math.round(dmg * (1 + TB().lowHpDmg));
+ // Momentum: each consecutive swing on the same enemy adds a little.
+ if(TB().momentum){
+  if(m._lastHitTarget === true) m._momentumStacks = Math.min(10, (m._momentumStacks || 0) + 1);
+  else m._momentumStacks = 0;
+  m._lastHitTarget = true;
+  dmg = Math.round(dmg * (1 + TB().momentum * (m._momentumStacks || 0)));
+ } else {
+  m._lastHitTarget = true;
+ }
+ // Piercing: subtract from the target's flat armour later, via a flag.
+ m._pierce = TB().pierce || 0;
+
  // Unique proc: Gravemaker hits harder on a wounded target.
  const wielded = G.equip && G.equip.weapon;
  if(wielded && wielded.proc === "execute" && m.maxHp > 0 && (m.hp / m.maxHp) < 0.30){
@@ -223,6 +244,16 @@ window.Delve = window.Delve || {};
  // Flat monster armour, applied after the shield and after all trait/buff maths,
  // so a heavy plated enemy reads as "needs a heavier hit" at every depth.
  if(Delve.applyMonsterArmour) dealt = Delve.applyMonsterArmour(m, dealt);
+ // Piercing eats into that armour, after the fact: a rank of 0.5 removes half a
+ // point per hit, which is what makes a plated enemy approachable.
+ if(m._pierce) dealt = Math.max(1, Math.round(dealt + m._pierce));
+
+ // Twin Fang: every third swing strikes a second time.
+ G._swingCount = (G._swingCount || 0) + 1;
+ if(TB().twinFang && G._swingCount % 3 === 0 && dealt > 0){
+  dealt *= 2;
+  Delve.addFloater("TWIN", m.x, m.y - 0.9, "#c2ff4d", 1.2);
+ }
 
  if(dealt > 0){
  // Enrage: a monster with `enrageAt` (a HP fraction) gets faster and hits
@@ -260,6 +291,11 @@ window.Delve = window.Delve || {};
  const heal = Math.round(dmg / 2 * (Delve.healMult ? Delve.healMult() : 1));
  G.hp = Math.min(Delve.maxHp(), G.hp + heal);
  Delve.addFloater("+" + heal, G.px, G.py, "#7ee08a");
+ }
+ // Reaver: a crit heals a flat amount, stacking with Vampiric Strike.
+ if(isCrit && TB().healOnCrit){
+  const h = Math.round(TB().healOnCrit * (Delve.healMult ? Delve.healMult() : 1));
+  if(h > 0){ G.hp = Math.min(Delve.maxHp(), G.hp + h); Delve.addFloater("+" + h, G.px, G.py, "#7ee08a"); }
  }
 
  if(m.hp <= 0){
@@ -660,6 +696,11 @@ window.Delve = window.Delve || {};
  // Remember the tile the monster stood on (plain floor or a grass patch) so
  // collecting the pile restores it instead of punching a bare square in a patch.
  G.goldPiles.push({ x: m.x, y: m.y, amount: Math.round(rewards.gold * mult), tile: m.tile || T().FLOOR });
+ // Scavenger: flat gold per kill, dropped as its own pile on the same tile so it
+ // is collected with the rest. Added after the multiplier so it is predictable.
+ if(TB().goldPerKill){
+  G.goldPiles.push({ x: m.x, y: m.y, amount: Math.round(TB().goldPerKill), tile: m.tile || T().FLOOR });
+ }
  g[m.y][m.x] = T().GOLD;
  Delve.addShake(2);
  if(Delve.sfx) Delve.sfx(m.elite ? "elite_kill" : "kill", { monster: m.kind });

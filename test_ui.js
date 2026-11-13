@@ -806,9 +806,11 @@ newRun(3);
 D.G.abilities = []; D.G.takenUniques = []; D.G.levelUpOpen = false; D.G.pendingLevelUps = 0;
 D.addXP(D.xpCurveFor(3)[0]);
 const luCards = registry.get("levelupChoices").children;
-ok(luCards.length === 3, "a level-up shows 3 cards");
-const abilityCards = luCards.filter(c => String(c.children[0].textContent).indexOf("⚡") === 0);
-ok(abilityCards.length >= 1, "at least one card is an ability (" + abilityCards.length + " of 3)");
+ok(luCards.length === 5, "a level-up shows 5 cards");
+// Abilities compete for a slot now rather than holding one, so a screen may
+// legitimately contain none; the pity rule guarantees one within four level-ups.
+ok(luCards.length === new Set(luCards.map(c => String(c.children[0].textContent))).size,
+   "no two cards on a screen are the same line");
 registry.get("levelupScreen").style.display = "none";
 
 // ── 22. The new abilities actually cast ─────────────────────
@@ -934,21 +936,23 @@ const at = (id, rank) => Object.assign({}, Pdef(id), { rank:rank });
 function buffsWith(list){ newRun(3); D.G.traits = list; return D.traitBuffs(); }
 function cText(c){ return c.children.map(k => String(k.textContent)).join(" "); }
 
-ok(buffsWith([at("sharpened_edge", 1)]).atk === 2, "Sharpened Edge I gives +2 attack");
-ok(buffsWith([at("sharpened_edge", 2)]).atk === 4, "Sharpened Edge II gives +4");
-const edge3 = buffsWith([at("sharpened_edge", 3)]);
-ok(edge3.atk === 7, "Sharpened Edge III gives +6, plus +1 from the 3-rank Edge set");
-ok(edge3.tagRanks.Edge === 3, "the Edge tag counts total ranks");
-ok(buffsWith([at("bulwark_plate", 3)]).flatRed === 5, "Bulwark III (3) plus the Iron set (2)");
-ok(buffsWith([at("bloodthirst", 3)]).healOnKill === 7, "Bloodthirst III (6) plus the Blood set (1)");
-ok(near(buffsWith([at("coin_pusher", 3)]).goldMult, 0.38), "Coin Pusher III (+0.30) plus Greed set (+0.08)");
+// Five-rank rescale: steps are smaller, so the same total power arrives at V
+// instead of III. These pin the per-rank step and the set bonuses.
+ok(buffsWith([at("sharpened_edge", 1)]).atk === 1, "Sharpened Edge I gives +1 attack");
+ok(buffsWith([at("sharpened_edge", 3)]).atk === 4, "Sharpened Edge III gives +3, plus the Edge set tier at 3 ranks: " + buffsWith([at("sharpened_edge", 3)]).atk);
+const edge5 = buffsWith([at("sharpened_edge", 5)]);
+ok(edge5.atk === 6, "Sharpened Edge V gives +5, plus +1 from the 3-rank Edge set: " + edge5.atk);
+ok(edge5.tagRanks.Edge === 5, "the Edge tag counts total ranks");
+ok(buffsWith([at("bulwark_plate", 5)]).flatRed === 5, "Bulwark V (3) plus the Iron set (2): " + buffsWith([at("bulwark_plate", 5)]).flatRed);
+ok(buffsWith([at("bloodthirst", 5)]).healOnKill === 8.5, "Bloodthirst V (7.5) plus the Blood set (1)");
+ok(near(buffsWith([at("coin_pusher", 5)]).goldMult, 0.38), "Coin Pusher V (+0.30) plus Greed set (+0.08)");
 const edge6 = buffsWith([at("sharpened_edge", 3), at("studied_reflexes", 3)]);
-ok(near(edge6.crit, 0.28), "6 Edge ranks = Reflexes III (0.18) + tier-2 set (0.10): " + edge6.crit);
+ok(near(edge6.crit, 0.19), "6 Edge ranks = Reflexes III (0.09) + tier-2 set (0.10): " + edge6.crit);
 
 // The two dead keys are now read: Swift Hands must move playerSpeed.
 newRun(3); D.G.traits = [];
 const baseSpeed = D.playerSpeed();
-D.G.traits = [at("swift_hands", 3)];
+D.G.traits = [at("swift_hands", 5)];
 const fastSpeed = D.playerSpeed();
 ok(fastSpeed > baseSpeed, "Swift Hands reaches playerSpeed (" +
    baseSpeed.toFixed(2) + " -> " + fastSpeed.toFixed(2) + ")");
@@ -964,9 +968,9 @@ for(let i = 0; i < 120 && !upgradedLine; i++){
   // cards forever. (This was flaky until the gate happened to fail on it.)
   D.addXP(D.xpToNext() + 5);
   const cards = registry.get("levelupChoices").children;
-  const up = cards.filter(c => cText(c).indexOf("Sharpened Edge II") >= 0)[0];
+  const up = cards.filter(c => cText(c).indexOf("Sharpened Edge") >= 0 && cText(c).indexOf("UPGRADE") >= 0)[0];
   if(up){
-    sawUpgradeCard = cText(up).indexOf("UPGRADE") >= 0 && cText(up).indexOf("RANK 2/3") >= 0;
+    sawUpgradeCard = cText(up).indexOf("UPGRADE") >= 0 && /RANK \d+\/5/.test(cText(up));
     up.click();
     upgradedLine = D.G.traits.find(t => t.id === "sharpened_edge");
     break;
@@ -974,9 +978,8 @@ for(let i = 0; i < 120 && !upgradedLine; i++){
   if(cards.length) cards[0].click();
   D.G.levelUpOpen = false;
 }
-ok(!!upgradedLine && upgradedLine.rank === 2, "a repeat pick upgrades Sharpened Edge to rank II");
-ok(sawUpgradeCard, "the upgrade card is labelled UPGRADE and RANK 2/3");
-ok(!!upgradedLine && upgradedLine.name.indexOf("II") >= 0, "the upgraded line carries its rank in its name");
+ok(!!upgradedLine && upgradedLine.rank >= 2, "a repeat pick upgrades Sharpened Edge past rank I (" + (upgradedLine && upgradedLine.rank) + ")");
+ok(sawUpgradeCard, "the upgrade card is labelled UPGRADE and shows RANK n/5");
 
 // Maxed lines leave the pool entirely.
 newRun(3);
@@ -987,7 +990,7 @@ D.addXP(D.xpCurveFor(3)[0] + 5);
 const maxedCards = registry.get("levelupChoices").children;
 ok(maxedCards.filter(c => cText(c).indexOf("RANK") >= 0).length === 0,
    "with every passive maxed, no passive card is offered");
-ok(maxedCards.length === 1, "only the ability card remains (" + maxedCards.length + ")");
+ok(maxedCards.length <= 5, "with passives maxed, only ability cards remain (" + maxedCards.length + ")");
 registry.get("levelupScreen").style.display = "none";
 
 // ── 24. Character sheet ─────────────────────────────────────

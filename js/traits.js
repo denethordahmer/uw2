@@ -13,13 +13,23 @@ window.Delve = window.Delve || {};
  atk:0, maxHp:0, dodge:0, luck:0, goldMult:0, crit:0,
  bossAtk:0, flatRed:0, healPerFloor:0, healOnKill:0,
  dropBonus:0, speedBonus:0, extraEnergyPerKill:0, agi:0, tou:0, str:0,
- vampiric:false, unbroken:false, secondWindHealOverride:0
+ // New passive lines (5-rank rescale). Every key here must have a consumer or it
+ // is a card that does nothing — see the note at the bottom of this file.
+ executeBonus:0, pierce:0, momentum:0, lowHpRed:0, lowHpDmg:0,
+ bleedExtra:0, healOnCrit:0, chestExtra:0, sellBonus:0, goldPerKill:0,
+ redMult:1, statusResist:0,
+ vampiric:false, unbroken:false, secondWindHealOverride:0,
+ bloodPrice:false, twinFang:false, knockbackImmune:false,
+ noDodge:false
  };
  // One accumulator, so the two special cases stay special in one place.
  const addKey = function(k, v){
  if(!(k in b)) return;
  if(typeof b[k] === "boolean"){ b[k] = !!v; return; }
  if(k === "secondWindHealOverride"){ b[k] = Math.max(b[k], v); return; }
+ // Multipliers start at 1 and compound; additive stats start at 0.
+ if(k === "redMult"){ b[k] = Math.max(b[k], v); return; }
+ if(k === "statusResist"){ b[k] = Math.min(0.9, Math.max(b[k], v)); return; }
  b[k] += v;
  };
  const tagRanks = {};
@@ -131,6 +141,15 @@ window.Delve = window.Delve || {};
  }
 
  // ── Level-up choices ────────────────────────────────────────
+ // FIVE cards, pick one, no reserved slot. A card varies in two ways:
+ //  · WHICH line — a passive, an ability, or (rarely) a unique.
+ //  · HOW MUCH — `potency` 1, 2 or 3 ranks at once, shown as the card's quality
+ //    (Common / Uncommon / Rare). Two cards can be the same line at different
+ //    strengths, so "deepen" is a real alternative to "widen".
+ // Selection is weighted toward lines already owned: the pool is 24 lines deep,
+ // and an unweighted draw almost never finishes a build.
+ const CARDS_PER_LEVEL = 5;
+
  function showLevelUpChoices(){
  const G = Delve.G;
  const cfg = Delve.CONFIG.TRAITS;
@@ -138,54 +157,77 @@ window.Delve = window.Delve || {};
  const uniques = cfg.uniques || [];
  const abilities = cfg.abilities || [];
 
- // 3 different passives — but a line you already own offers its NEXT RANK
- // rather than appearing again as a duplicate, and a maxed line leaves the
- // pool entirely. That is what turns the same card into a build decision.
  const ownedRank = {};
  (G.traits || []).forEach(t => {
  if(t && t.id) ownedRank[t.id] = Math.max(ownedRank[t.id] || 0, t.rank || 1);
  });
- const ROMAN = ["", "I", "II", "III", "IV", "V"];
+
  const options = [];
  passives.forEach(function(p){
  const owned = ownedRank[p.id] || 0;
  const max = p.maxRank || 1;
  if(owned >= max) return;
- const next = owned + 1;
+ // Potency: 1 rank most of the time, 2 sometimes, 3 rarely, never more than
+ // the line has left.
+ const roll = Math.random();
+ const want = roll < 0.60 ? 1 : (roll < 0.90 ? 2 : 3);
+ const add = Math.min(want, max - owned);
  options.push(Object.assign({}, p, {
- rank: next,
- name: next > 1 ? (p.name + " " + (ROMAN[next] || next)) : p.name,
- upgrade: owned > 0
+ rank: owned + add,
+ rankGain: add,
+ potency: add,
+ upgrade: owned > 0,
+ weight: owned > 0 ? 2.0 : 1.0
  }));
  });
- const pool = shuffle(options).slice(0, 3);
 
- // One card is ALWAYS an ability while any remain unlearned. Abilities are
- // uncapped (CONFIG.levelMaxAbilities 0), so they are the run's long-term
- // progression; leaving that to a coin flip made deep runs passives-only.
- // Passives and uniques fill the other two cards.
+ // Weighted draw WITHOUT replacement, so five cards are five different lines and
+ // the same name never appears twice on one screen.
+ const pool = [];
+ const bag = options.slice();
+ while(pool.length < CARDS_PER_LEVEL && bag.length){
+  let total = 0;
+  for(const o of bag) total += (o.weight || 1);
+  let pick = Math.random() * total;
+  let idx = 0;
+  for(let i = 0; i < bag.length; i++){
+   pick -= (bag[i].weight || 1);
+   idx = i;
+   if(pick <= 0) break;
+  }
+  pool.push(bag.splice(idx, 1)[0]);
+ }
+
+ // Abilities now compete for a slot instead of holding one. They keep a modest
+ // weight bump, plus a pity rule: if three level-ups pass with no ability
+ // offered, the next screen forces one.
  const known = (G.abilities || []).map(a => a.id)
  .concat((Delve.save && Delve.save.abilities) || []);
  const cap = Delve.CONFIG.levelMaxAbilities || 0;
  const abilitySlotsOpen = !cap || (G.abilities || []).length < cap;
  const openAbilities = abilities.filter(a => known.indexOf(a.id) < 0);
- if(openAbilities.length && abilitySlotsOpen){
- const pick = openAbilities[Math.floor(Math.random() * openAbilities.length)];
- if(pool.length) pool[0] = pick; else pool.push(pick);
+ if(openAbilities.length && abilitySlotsOpen && pool.length){
+  const since = G._levelsSinceAbility || 0;
+  if(since >= 3 || Math.random() < 0.55){
+   const a = openAbilities[Math.floor(Math.random() * openAbilities.length)];
+   pool[Math.floor(Math.random() * pool.length)] = Object.assign({}, a, { potency:1, rankGain:0 });
+   G._levelsSinceAbility = 0;
+  } else {
+   G._levelsSinceAbility = since + 1;
+  }
  }
 
- // Chance for a unique not yet taken — it replaces one of the two non-ability
- // cards. (This used to pick a random slot twice, so it could overwrite the
- // ability card, or write the same unique into both cards.)
+ // Uniques stay rare, and only from floor 5. One may replace a card.
  const openUniques = uniques.filter(u => !(G.takenUniques || []).includes(u.id));
- if(openUniques.length && Math.random() < 0.25 && pool.length > 1){
- pool[1 + Math.floor(Math.random() * (pool.length - 1))] =
- openUniques[Math.floor(Math.random() * openUniques.length)];
+ if(openUniques.length && G.floor >= 5 && Math.random() < 0.20 && pool.length){
+  pool[Math.floor(Math.random() * pool.length)] =
+   Object.assign({}, openUniques[Math.floor(Math.random() * openUniques.length)], { potency:1, rankGain:0 });
  }
 
  G.levelUpChoices = pool;
  renderLevelUpChoices(pool);
  }
+
 
  function renderLevelUpChoices(choices){
  const G = Delve.G;
@@ -215,10 +257,19 @@ window.Delve = window.Delve || {};
  const TAG_COL = { Edge:"#ff9a6b", Iron:"#7ee0ff", Blood:"#ff7a9c", Greed:"#ffd75e" };
  const meta = document.createElement("div");
  const maxRank = t.maxRank || 1;
+ // Quality is the card's POTENCY — how many ranks it grants at once — which is
+ // the thing that makes two cards of the same line different offers.
+ const gain = t.rankGain || 1;
+ const QCOL = gain >= 3 ? "#c9a8ff" : (gain === 2 ? "#7ee0ff" : "#9fb3c5");
+ const QNAME = gain >= 3 ? "RARE" : (gain === 2 ? "UNCOMMON" : "COMMON");
  meta.style.cssText = "font-size:11px;font-weight:800;letter-spacing:.06em;" +
  "color:" + (TAG_COL[t.tag] || "#a9bccd") + ";margin:2px 0 4px;";
  meta.textContent = t.tag.toUpperCase() + " \u00b7 RANK " + (t.rank || 1) + "/" + maxRank +
  (t.upgrade ? " \u00b7 UPGRADE" : "");
+ const q = document.createElement("span");
+ q.style.cssText = "margin-left:8px;color:" + QCOL + ";";
+ q.textContent = "+" + gain + " " + QNAME;
+ meta.appendChild(q);
  card.appendChild(meta);
  }
  card.appendChild(desc);
@@ -335,7 +386,18 @@ window.Delve = window.Delve || {};
  const G = Delve.G, T = Delve.T;
  if(!G || !ability) return false;
  const cost = abilityCost(ability);
- if((G.energy || 0) < cost){ Delve.flash("Not enough Energy"); return false; }
+ // Blood Price: an unaffordable ability can be paid for with 3 HP instead, as
+ // long as the player has more than that. It is a real trade — you can cast
+ // yourself to death's door, but never through it.
+ const tbNow = Delve.traitBuffs ? Delve.traitBuffs() : {};
+ let paidWithBlood = false;
+ if((G.energy || 0) < cost){
+  if(tbNow.bloodPrice && G.hp > 3){
+   paidWithBlood = true;
+  } else {
+   Delve.flash("Not enough Energy"); return false;
+  }
+ }
 
  const d = abilityData(ability.id);
  const ranks = abilityRanks(ability.id);
@@ -522,7 +584,14 @@ window.Delve = window.Delve || {};
  return false;
  }
 
- G.energy -= cost;
+ if(paidWithBlood){
+  G.hp -= 3;
+  Delve.addFloater("-3", G.px, G.py, "#ff6b5e");
+  Delve.flash("Blood Price! -3 HP");
+  if(G.hp <= 0 && Delve.die) Delve.die();
+ } else {
+  G.energy -= cost;
+ }
  if(Delve.sfx) Delve.sfx("ability_" + ability.id);
  Delve.updateHUD();
  return true;

@@ -226,6 +226,32 @@ first), exit 0. `node tools/check-order.js`
     of damage reduction. `test_ui.js` gained a balance floor: `energyPerKill >= 2`, and
     **no damaging ability may deal less than one free swing** — a trap-card guard.
     Touch range is unchanged, but the four new abilities sketched earlier are NOT built.
+26. **Five level-up cards, 24 passive lines, 8 uniques.** Owner's spec: five options,
+    pick one, no reserved slot, smaller numbers over more ranks, uniques rare, cards
+    vary in potency.
+    **(a) Screen (`showLevelUpChoices`, traits.js).** `CARDS_PER_LEVEL = 5`. A weighted
+    draw **without replacement**, so five cards are always five different lines. A card
+    you already own has weight **2.0** against 1.0 for a new one — with 24 lines an
+    unweighted draw almost never finished a build.
+    **(b) Potency.** A card grants **1, 2 or 3 ranks at once** (60 / 30 / 10%), capped at
+    what the line has left. The card shows `+N` plus COMMON / UNCOMMON / RARE, so two
+    cards of the same line at different strengths are genuinely different offers.
+    Measured over a full 50-floor run: 104 level-ups, potency split 267 / 129 / 19.
+    **(c) Catalogue.** 12 → **24 passive lines**, all **5 ranks**, with steps roughly
+    two-thirds of the old ones (Sharpened Edge +1/rank instead of +2). Rank V lands about
+    where rank III used to, so totals are unchanged while the granularity is finer. New
+    lines: Executioner, Piercing, Momentum, Second Skin, Steadfast, Sturdy, Bloodletter,
+    Last Gasp, Reaver, Prospector, Pawnbroker, Scavenger.
+    **(d) Abilities no longer hold a reserved card.** They compete for a slot (55%
+    chance), with a pity rule forcing one after three level-ups without. Uniques stay at
+    20% and only from **floor 5**; 4 → **8** (Blood Price, Twin Fang, Grave Ward,
+    Ironclad Oath).
+    **(e) Every new key has a consumer** — the trap this codebase has fallen into before:
+    `executeBonus`/`lowHpDmg`/`momentum` in `playerSwing`, `pierce` after monster armour,
+    `lowHpRed`/`redMult`/`noDodge` in attrs, `healOnCrit` and `goldPerKill` on kill,
+    `bleedExtra` in `applyEffect`, `chestExtra` in `openChest`, `sellBonus` in
+    `sellValue`, `statusResist` in `applyPlayerEffect`, `bloodPrice` in `castAbility`,
+    `twinFang` every third swing. A full run now reaches rank 5 and touches all 24 lines.
 
 **To ship, the owner must upload:** the whole tree, **plus `music/`** (currently
 untracked), and the updated `.github/workflows/syntax-check.yml` (copies in

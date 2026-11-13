@@ -10,12 +10,18 @@ window.Delve = window.Delve || {};
  const d = def(id);
  if(!d || !target) return false;
  target.effects = target.effects || [];
+ // Bleed inflicted by the player lasts longer with the Bloodletter passive.
+ // Only bleed, and only on monsters — the player's own bleed is unaffected.
+ let turns = d.turns;
+ if(id === "bleed" && target !== Delve.G && Delve.traitBuffs){
+  turns += Math.round(Delve.traitBuffs().bleedExtra || 0);
+ }
  if(d.stackable){
- target.effects.push({ id: id, turns: d.turns });
+ target.effects.push({ id: id, turns: turns });
  } else {
  const existing = target.effects.find(e => e.id === id);
- if(existing) existing.turns = d.turns;
- else target.effects.push({ id: id, turns: d.turns });
+ if(existing) existing.turns = Math.max(existing.turns, turns);
+ else target.effects.push({ id: id, turns: turns });
  }
  if(Delve.sfx) Delve.sfx("status_proc", { status: id });
  return true;
@@ -77,9 +83,14 @@ window.Delve = window.Delve || {};
  const G = Delve.G, d = def(id);
  if(!G || !d) return;
  G.effects = G.effects || [];
+ // Grave Ward: bleed, poison and burn last half as long on the player. Weaken is
+ // a debuff but not a damage-over-time, so it is deliberately not reduced.
+ const resist = (Delve.traitBuffs && Delve.traitBuffs().statusResist) || 0;
+ const isDot = (id === "bleed" || id === "poison" || id === "burn");
+ const turns = isDot ? Math.max(1, Math.round(d.turns * (1 - resist))) : d.turns;
  const existing = G.effects.find(e => e.id === id);
- if(existing) existing.turns = d.turns;
- else G.effects.push({ id: id, turns: d.turns });
+ if(existing) existing.turns = Math.max(existing.turns, turns);
+ else G.effects.push({ id: id, turns: turns });
  if(Delve.sfx) Delve.sfx("status_" + id);
  };
 

@@ -211,7 +211,9 @@ window.Delve = window.Delve || {};
  Delve.sellValue = function(item){
  if(!item || item.slot === "consumable") return Math.max(1, Math.round((item && item.tier || 1) * 3));
  const pr = IT().price || {};
- return Math.max(1, Math.round(Delve.itemPoints(item) * (pr.sellPerPoint || 4)));
+ // Pawnbroker: a flat bonus to what a piece fetches.
+ const bonus = (Delve.traitBuffs && Delve.traitBuffs().sellBonus) || 0;
+ return Math.max(1, Math.round(Delve.itemPoints(item) * (pr.sellPerPoint || 4) * (1 + bonus)));
  };
 
  // ── Selling (design 5.8) ──────────────────────────────────────

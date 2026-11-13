@@ -197,6 +197,10 @@ function nodeWardSum(type, field){
  Delve.flatRed = function(){
   let r = n(ib().red) + n(tb().flatRed) + nodeTypeSum("flatRed", "red");
   if(Delve.G) r += n(Delve.G.redBuff);
+  // Steadfast: extra reduction only while below half health.
+  if(Delve.G && Delve.G.hp < Delve.maxHp() * 0.5) r += n(tb().lowHpRed);
+  // Ironclad Oath doubles the final figure.
+  r *= n(tb().redMult) || 1;
   return Math.round(r);
  };
 
@@ -205,6 +209,8 @@ function nodeWardSum(type, field){
  // the config's soft caps — keep in sync if balance changes.
  Delve.dodge = function(){
   const s = C().secondaries;
+  // Ironclad Oath trades dodge away entirely.
+  if(tb().noDodge) return 0;
   const itemDodge = n(ib().dodge) + n(ib().weightDodge);
   return Math.min(0.60, Math.min(s.dodgeCap, Delve.agiPts() * s.dodgePerAgi) + itemDodge + n(tb().dodge) + nodeTypeSum("flatDodge", "dodge"));
  };

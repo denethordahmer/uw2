@@ -1150,6 +1150,18 @@ window.Delve = window.Delve || {};
    it.x = x; it.y = y;
    Delve.stampProvenance(it, source);
    G.items.push(it);
+   // Prospector: a chance the chest held one MORE thing. Rolled after the first
+   // item so the bonus is always additive, never a swap.
+   const extra = (Delve.traitBuffs && Delve.traitBuffs().chestExtra) || 0;
+   if(extra > 0 && Math.random() < extra){
+    const t2 = Delve.rollTier(G.floor, (Delve.CONFIG.loot.sourceRarityMult || {}).chest || 1);
+    const it2 = Delve.makeItem(t2, { unique:false, kind:"chest" });
+    it2.x = x; it2.y = y;
+    Delve.stampProvenance(it2, source);
+    G.items.push(it2);
+    Delve.flash("Prospector! The chest held more.");
+    if(Delve.logSystem) Delve.logSystem("Prospector: the chest held a second item.");
+   }
   } else if(prob(0.8)){
    Delve.dropPotion(x, y, 2, source);
   } else {
